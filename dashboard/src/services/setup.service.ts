@@ -34,10 +34,25 @@ export const setupService = {
   // Get user's company ID from users collection
   async getUserCompanyId(userId: string): Promise<string | null> {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        return userDoc.data().companyId || null;
+      // First try to get from token claims
+      const { currentUser } = await import('firebase/auth').then(m => ({ currentUser: m.getAuth().currentUser }));
+      if (currentUser && currentUser.uid === userId) {
+        const idTokenResult = await currentUser.getIdTokenResult();
+        if (idTokenResult.claims.companyId) {
+          return idTokenResult.claims.companyId as string;
+        }
       }
+      
+      // Then try to get from user document
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          return userDoc.data().companyId || null;
+        }
+      } catch (docError) {
+        console.log('User document not found, this is expected for new users');
+      }
+      
       return null;
     } catch (error) {
       console.error('Error getting user company ID:', error);
@@ -54,7 +69,8 @@ export const setupService = {
       }
       return null;
     } catch (error) {
-      console.error('Error getting user document:', error);
+      // This is expected for new users who haven't completed setup
+      console.log('User document not found, this is expected for new users');
       return null;
     }
   },
@@ -104,15 +120,21 @@ export const setupService = {
 
       // Also create in global users collection
       const globalUserRef = doc(db, 'users', userId);
-      await setDoc(globalUserRef, {
-        id: userId,
-        email: userEmail,
-        name: userName,
-        role: 'ADMIN',
-        companyId,
-        active: true,
-        createdAt: serverTimestamp(),
-      });
+      try {
+        await setDoc(globalUserRef, {
+          id: userId,
+          email: userEmail,
+          name: userName,
+          role: 'ADMIN',
+          companyId,
+          active: true,
+          createdAt: serverTimestamp(),
+        });
+        console.log('Global user document created successfully');
+      } catch (globalUserError) {
+        console.error('Error creating global user document:', globalUserError);
+        // Continue anyway - the company is created
+      }
 
       // Call cloud function to update user claims with companyId
       try {

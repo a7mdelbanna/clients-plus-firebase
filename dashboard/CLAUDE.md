@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-07-15)
+## Current Status (Last Updated: 2025-01-15)
 
 ### Completed Features
 1. **Authentication System**
@@ -88,14 +88,50 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
 - ✅ Fixed floating action button to use current theme colors
 - ✅ Added comprehensive error handling and logging
 
-### Remaining Tasks
-1. **Remove Dummy Data**
-   - Replace hardcoded statistics with real company data
-   - Integrate with actual business metrics
-   - Create data aggregation services
+### Recent Additions (2025-01-15)
+1. **Real Company Data in Dashboard**
+   - ✅ Created company.service.ts for fetching real statistics
+   - ✅ Dashboard now shows actual client count, projects, and revenue
+   - ✅ Proper loading states with skeleton UI
+   - ✅ Smart "Quick Start" suggestions for new companies
+   - ✅ Company name displayed in welcome section
 
-2. **Complete Page Implementations**
-   - Clients management page
+2. **Clients Management System**
+   - ✅ Complete CRUD operations for clients
+   - ✅ Firestore security rules for multi-tenant access
+   - ✅ ClientsList component with search, filter, and pagination
+   - ✅ ClientForm with multi-tab interface (Basic, Address, Additional)
+   - ✅ Real-time updates support
+   - ✅ Export/Import placeholders
+   - ✅ Connected dashboard "Add Client" button to navigate to Clients page
+   - ✅ Empty states with actionable CTAs
+   - ✅ Fixed Firestore permission errors with ensureUserDocument utility
+   - ✅ Added automatic user document creation on login
+   - ✅ Added manual fix button for permission issues
+   - ✅ Created and deployed Firestore indexes for clients, projects, and invoices
+   - ✅ Fixed all Grid component warnings by replacing with Box components
+
+3. **Service Management System**
+   - ✅ Complete service management architecture for beauty/salon businesses
+   - ✅ Service categories with CRUD operations
+   - ✅ Services with pricing, duration, and online booking settings
+   - ✅ Multi-tab service creation/editing interface
+   - ✅ Real-time subscriptions for categories and services
+   - ✅ Advanced service options (VAT, follow-up days, auto-deduction)
+   - ✅ Resource management placeholders
+   - ✅ Dynamic multi-language translation system:
+     - Arabic as primary language (always selected)
+     - Choose from 14 available languages
+     - Dynamic translation fields based on selected languages
+     - Flexible data structure supporting unlimited languages
+     - Language selection with interactive chips UI
+   - ✅ Fixed Firestore permission errors for empty collections
+   - ✅ Fixed Firebase addDoc() undefined field errors
+   - ✅ Fixed TypeScript import errors (import type)
+
+### Remaining Tasks
+1. **Complete Page Implementations**
+   - ClientDetail component (view individual client)
    - Projects tracking page
    - Invoices and billing page
    - Calendar integration
@@ -143,10 +179,61 @@ firebase deploy                          # Deploy everything
 ```
 
 ## Common Issues and Solutions
-1. **Permission Errors**: Ensure Firestore security rules are deployed
-2. **Theme Context Errors**: Check that components are wrapped in ThemeProvider
-3. **Redirect Loops**: Clear sessionStorage and check setup status logic
-4. **Missing Imports**: VSCode auto-import may miss MUI components
+1. **Permission Errors**: 
+   - Ensure Firestore security rules are deployed with `firebase deploy --only firestore:rules`
+   - If user sees "Missing or insufficient permissions", they should logout and login again
+   - A "Fix Permissions" button appears on Clients page if permissions are missing
+   - Run `window.fixUserDocument()` in browser console as a manual fix
+
+2. **Firestore Query Permission Errors on Empty Collections**:
+   - **Error**: "Missing or insufficient permissions" when querying empty collections
+   - **Cause**: Security rules checking `resource.data.companyId` fail when no documents exist
+   - **Solution**: Update security rules to use `hasCompanyId()` OR `belongsToCompany(resource.data.companyId)`
+   - **Example Fix**:
+     ```javascript
+     // Before (fails on empty collections):
+     allow read: if isAuthenticated() && belongsToCompany(resource.data.companyId);
+     
+     // After (works on empty collections):
+     allow read: if isAuthenticated() && 
+       (hasCompanyId() || belongsToCompany(resource.data.companyId));
+     ```
+   - **Deploy**: Run `firebase deploy --only firestore:rules` after updating
+
+3. **Company ID Not Found Errors**:
+   - **Cause**: Company ID might be in user document but not in auth token claims
+   - **Solution**: Use fallback approach like the dashboard:
+     ```typescript
+     const idTokenResult = await currentUser.getIdTokenResult();
+     let companyId = idTokenResult.claims.companyId as string;
+     
+     if (!companyId) {
+       // Fallback to getting from user document
+       companyId = await setupService.getUserCompanyId(currentUser.uid);
+     }
+     ```
+
+4. **Theme Context Errors**: Check that components are wrapped in ThemeProvider
+5. **Redirect Loops**: Clear sessionStorage and check setup status logic
+6. **Missing Imports**: VSCode auto-import may miss MUI components
+7. **MUI v7 Grid Issues**: Use Stack and Box with flexbox instead of Grid component
+8. **SelectChangeEvent Import**: Import from '@mui/material/Select' not '@mui/material'
+9. **Type Import Errors**: Use `import type` for TypeScript types (e.g., `import type { User } from 'firebase/auth'`)
+
+10. **Firebase addDoc() Invalid Data Errors**:
+    - **Error**: "Function addDoc() called with invalid data. Unsupported field value: undefined"
+    - **Cause**: Trying to save `undefined` values to Firestore (Firestore doesn't support undefined)
+    - **Solution**: Ensure all optional fields either have a value or are omitted entirely
+    - **Example Fix**:
+      ```typescript
+      // Before (causes error):
+      onlineBookingName: data.useOnlineBookingName ? data.onlineBookingName : undefined,
+      
+      // After (works):
+      onlineBookingName: data.useOnlineBookingName ? data.onlineBookingName : data.name,
+      // OR omit the field entirely when not needed
+      ```
+    - **Best Practice**: Use default values instead of undefined, or conditionally include fields
 
 ## Next Major Features
 - Client management system

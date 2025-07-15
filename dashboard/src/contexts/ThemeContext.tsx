@@ -107,17 +107,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Create theme based on current theme config and dark mode
   const theme = createBusinessTheme(currentTheme, isDarkMode ? 'dark' : 'light');
 
-  if (loading) {
-    // Return default theme while loading
-    return (
-      <MuiThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
-        {children}
-      </MuiThemeProvider>
-    );
-  }
+  // Always provide the context, even while loading
+  const contextValue = {
+    isDarkMode,
+    toggleTheme,
+    currentTheme,
+    setCompanyTheme
+  };
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme, currentTheme, setCompanyTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       <MuiThemeProvider theme={theme}>
         {children}
       </MuiThemeProvider>

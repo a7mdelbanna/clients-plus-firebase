@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
@@ -8,17 +7,25 @@ import Signup from './components/Signup';
 import ForgotPassword from './components/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import LandingPage from './pages/LandingPage';
-import SetupWizardPage from './pages/SetupWizardPage';
 import Settings from './pages/Settings';
+import SettingsMain from './pages/settings/SettingsMain';
+import ServicesPage from './pages/settings/services/ServicesPage';
+import ServiceNewPage from './pages/settings/services/ServiceNewPage';
+import ServiceCategoryPage from './pages/settings/services/ServiceCategoryPage';
+import ServiceEditPage from './pages/settings/services/ServiceEditPage';
 import Profile from './pages/Profile';
+import Clients from './pages/Clients';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
-import AnimatedBackground from './components/AnimatedBackground';
 import DashboardLayout from './layouts/DashboardLayout';
 import PageTransition from './components/PageTransition';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
+import { initializeUserOnAuth } from './utils/initializeUser';
+
+// Initialize user document creation on auth state change
+initializeUserOnAuth();
 
 // RTL support
 import rtlPlugin from 'stylis-plugin-rtl';
@@ -70,7 +77,7 @@ function App() {
                 } />
                 <Route path="/clients" element={
                   <PageTransition>
-                    <div>Clients Page - Coming Soon</div>
+                    <Clients />
                   </PageTransition>
                 } />
                 <Route path="/projects" element={
@@ -80,7 +87,32 @@ function App() {
                 } />
                 <Route path="/settings" element={
                   <PageTransition>
+                    <SettingsMain />
+                  </PageTransition>
+                } />
+                <Route path="/settings/company" element={
+                  <PageTransition>
                     <Settings />
+                  </PageTransition>
+                } />
+                <Route path="/settings/services" element={
+                  <PageTransition>
+                    <ServicesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/services/new" element={
+                  <PageTransition>
+                    <ServiceNewPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/services/category/:categoryId" element={
+                  <PageTransition>
+                    <ServiceCategoryPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/services/edit/:serviceId" element={
+                  <PageTransition>
+                    <ServiceEditPage />
                   </PageTransition>
                 } />
                 <Route path="/profile" element={

@@ -9,6 +9,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
+import { ensureUserDocument } from '../utils/fixUserDocument';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -38,8 +39,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      
+      // Ensure user document exists when user logs in
+      if (user) {
+        await ensureUserDocument();
+      }
+      
       setLoading(false);
     });
 
@@ -47,7 +54,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    // Ensure user document exists after login
+    await ensureUserDocument();
+    // Force token refresh to get updated claims
+    await result.user.getIdToken(true);
+    return result;
   };
 
   const signup = async (email: string, password: string, displayName: string) => {

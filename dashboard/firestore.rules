@@ -10,13 +10,17 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
+    function userExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+    
     function hasCompanyId() {
       return isAuthenticated() && 
-        (request.auth.token.companyId != null || getUserData().companyId != null);
+        (request.auth.token.companyId != null || (userExists(request.auth.uid) && getUserData().companyId != null));
     }
     
     function getUserCompanyId() {
-      return request.auth.token.get('companyId', getUserData().get('companyId', null));
+      return request.auth.token.get('companyId', userExists(request.auth.uid) ? getUserData().get('companyId', null) : null);
     }
     
     function belongsToCompany(companyId) {
@@ -33,8 +37,14 @@ service cloud.firestore {
       // Users can read their own document
       allow read: if isAuthenticated() && request.auth.uid == userId;
       
-      // Users can create/update their own document (needed for signup)
-      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      // Users can create their own document with minimal required fields
+      allow create: if isAuthenticated() && 
+        request.auth.uid == userId &&
+        request.resource.data.id == userId &&
+        request.resource.data.email != null;
+      
+      // Users can update their own document
+      allow update: if isAuthenticated() && request.auth.uid == userId;
       
       // Don't allow deletion
       allow delete: if false;
@@ -111,6 +121,167 @@ service cloud.firestore {
         // Only admins can write
         allow write: if isCompanyAdmin(companyId);
       }
+    }
+    
+    // Clients collection - company-wide resource
+    match /clients/{clientId} {
+      // Users in the company can read clients
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      
+      // Only users in the company can create clients
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      
+      // Users in the company can update their clients
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId && // Can't change company
+        request.resource.data.updatedAt == request.time;
+      
+      // Only admins can delete clients
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+        
+      // Client subcollections
+      match /contacts/{contactId} {
+        allow read: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/clients/$(clientId)).data.companyId);
+        allow write: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/clients/$(clientId)).data.companyId);
+      }
+      
+      match /notes/{noteId} {
+        allow read: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/clients/$(clientId)).data.companyId);
+        allow write: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/clients/$(clientId)).data.companyId);
+      }
+    }
+    
+    // Projects collection - company-wide resource
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Invoices collection - company-wide resource  
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Service Categories collection
+    match /serviceCategories/{categoryId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Services collection
+    match /services/{serviceId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+        
+      // Service staff assignments
+      match /staff/{staffId} {
+        allow read: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/services/$(serviceId)).data.companyId);
+        allow write: if isAuthenticated() && 
+          belongsToCompany(get(/databases/$(database)/documents/services/$(serviceId)).data.companyId);
+      }
+    }
+    
+    // Positions collection
+    match /positions/{positionId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Staff collection
+    match /staff/{staffId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Work Schedule collection
+    match /workSchedules/{scheduleId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Resources collection
+    match /resources/{resourceId} {
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
     }
     
     // Deny all other access by default

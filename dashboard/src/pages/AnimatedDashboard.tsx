@@ -8,6 +8,8 @@ import CountUp from 'react-countup';
 import { useInView } from 'react-intersection-observer';
 import { toast } from 'react-toastify';
 import { setupService } from '../services/setup.service';
+import { companyService } from '../services/company.service';
+import type { CompanyStats } from '../services/company.service';
 import {
   Box,
   Typography,
@@ -15,7 +17,6 @@ import {
   Menu,
   MenuItem,
   Paper,
-  Grid,
   Card,
   CardContent,
   Avatar,
@@ -24,6 +25,7 @@ import {
   Tooltip,
   LinearProgress,
   CircularProgress,
+  Skeleton,
 } from '@mui/material';
 import {
   AccountCircle,
@@ -49,6 +51,18 @@ const AnimatedDashboard: React.FC = () => {
   const theme = useTheme();
   const [ref, inView] = useInView({ triggerOnce: true });
   const [loading, setLoading] = useState(true);
+  const [companyStats, setCompanyStats] = useState<CompanyStats>({
+    totalClients: 0,
+    activeProjects: 0,
+    monthlyRevenue: 0,
+    growthRate: 0,
+    clientsGrowth: '+0%',
+    projectsGrowth: '+0%',
+    revenueGrowth: '+0%',
+    growthRateChange: '+0%'
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [companyName, setCompanyName] = useState<string>('');
 
   useEffect(() => {
     const checkSetup = async () => {
@@ -115,6 +129,44 @@ const AnimatedDashboard: React.FC = () => {
     checkSetup();
   }, [currentUser, navigate]);
 
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      if (!currentUser) return;
+      
+      try {
+        setStatsLoading(true);
+        
+        // Get company ID
+        const idTokenResult = await currentUser.getIdTokenResult();
+        let companyId = idTokenResult.claims.companyId as string;
+        
+        if (!companyId) {
+          companyId = await setupService.getUserCompanyId(currentUser.uid);
+        }
+        
+        if (companyId) {
+          // Fetch company info
+          const companyInfo = await companyService.getCompanyInfo(companyId);
+          if (companyInfo) {
+            setCompanyName(companyInfo.name || '');
+          }
+          
+          // Fetch company stats
+          const stats = await companyService.getCompanyStats(companyId);
+          setCompanyStats(stats);
+        }
+      } catch (error) {
+        console.error('Error fetching company data:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    if (!loading) {
+      fetchCompanyData();
+    }
+  }, [currentUser, loading]);
+
   if (loading) {
     return (
       <Box
@@ -155,44 +207,46 @@ const AnimatedDashboard: React.FC = () => {
   const stats = [
     { 
       title: 'العملاء', 
-      value: 150, 
+      value: companyStats.totalClients, 
       icon: <People />, 
       color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       suffix: '',
-      growth: '+12%',
+      growth: companyStats.clientsGrowth,
     },
     { 
       title: 'المشاريع النشطة', 
-      value: 23, 
+      value: companyStats.activeProjects, 
       icon: <Assignment />, 
       color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       suffix: '',
-      growth: '+5%',
+      growth: companyStats.projectsGrowth,
     },
     { 
       title: 'الإيرادات الشهرية', 
-      value: 45000, 
+      value: companyStats.monthlyRevenue, 
       icon: <AttachMoney />, 
       color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       suffix: ' ر.س',
-      growth: '+18%',
+      growth: companyStats.revenueGrowth,
     },
     { 
       title: 'نسبة النمو', 
-      value: 15, 
+      value: companyStats.growthRate, 
       icon: <TrendingUp />, 
       color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
       suffix: '%',
-      growth: '+3%',
+      growth: companyStats.growthRateChange,
     },
   ];
 
-  const activities = [
-    { title: 'عميل جديد تم إضافته', time: 'منذ 5 دقائق', icon: <People /> },
-    { title: 'مشروع جديد تم إنشاؤه', time: 'منذ 15 دقيقة', icon: <Folder /> },
-    { title: 'فاتورة تم دفعها', time: 'منذ ساعة', icon: <AttachMoney /> },
-    { title: 'اجتماع مجدول', time: 'منذ ساعتين', icon: <CalendarMonth /> },
-  ];
+  const activities = companyStats.totalClients > 0 || companyStats.activeProjects > 0 
+    ? [] // Will be populated from real activities in the future
+    : [
+        { title: 'ابدأ بإضافة عميلك الأول', time: 'الآن', icon: <People /> },
+        { title: 'أنشئ مشروعك الأول', time: 'قريباً', icon: <Folder /> },
+        { title: 'أضف فاتورتك الأولى', time: 'قريباً', icon: <AttachMoney /> },
+        { title: 'جدول اجتماعك الأول', time: 'قريباً', icon: <CalendarMonth /> },
+      ];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -322,6 +376,11 @@ const AnimatedDashboard: React.FC = () => {
                     <Typography variant="body1" color="text.secondary">
                       {currentUser?.email}
                     </Typography>
+                    {companyName && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {companyName}
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                       آخر دخول: اليوم في 09:30 صباحاً
                     </Typography>
@@ -345,9 +404,23 @@ const AnimatedDashboard: React.FC = () => {
           </motion.div>
 
           {/* Stats Cards */}
-          <Grid container spacing={3} sx={{ mb: 4 }} ref={ref}>
+          <Box
+            ref={ref}
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 3,
+              mb: 4,
+            }}
+          >
             {stats.map((stat, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
+              <Box
+                key={index}
+                sx={{
+                  flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' },
+                  minWidth: 0,
+                }}
+              >
                 <motion.div
                   variants={itemVariants}
                   whileHover={{ y: -8 }}
@@ -367,13 +440,17 @@ const AnimatedDashboard: React.FC = () => {
                             {stat.title}
                           </Typography>
                           <Typography variant="h3" component="div" sx={{ my: 2 }}>
-                            {inView && (
-                              <CountUp
-                                end={stat.value}
-                                duration={2}
-                                separator=","
-                                suffix={stat.suffix}
-                              />
+                            {statsLoading ? (
+                              <Skeleton width={100} height={40} />
+                            ) : (
+                              inView && (
+                                <CountUp
+                                  end={stat.value}
+                                  duration={2}
+                                  separator=","
+                                  suffix={stat.suffix}
+                                />
+                              )
                             )}
                           </Typography>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -425,26 +502,63 @@ const AnimatedDashboard: React.FC = () => {
                     </CardContent>
                   </Card>
                 </motion.div>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
 
           {/* Action Buttons and Activities */}
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 3,
+            }}
+          >
+            <Box
+              sx={{
+                flex: { xs: '1 1 100%', md: '1 1 calc(66.666% - 12px)' },
+                minWidth: 0,
+              }}
+            >
               <motion.div variants={itemVariants}>
                 <Paper sx={{ p: 3, height: '100%' }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
                     الإجراءات السريعة
                   </Typography>
-                  <Grid container spacing={2}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 2,
+                    }}
+                  >
                     {[
-                      { title: 'إضافة عميل جديد', icon: <People />, color: '#8B5CF6' },
-                      { title: 'إنشاء مشروع', icon: <Assignment />, color: '#EC4899' },
-                      { title: 'إضافة فاتورة', icon: <AttachMoney />, color: '#10B981' },
-                      { title: 'جدولة اجتماع', icon: <CalendarMonth />, color: '#F59E0B' },
+                      { 
+                        title: 'إضافة عميل جديد', 
+                        icon: <People />, 
+                        color: '#8B5CF6',
+                        action: () => navigate('/clients')
+                      },
+                      { 
+                        title: 'إنشاء مشروع', 
+                        icon: <Assignment />, 
+                        color: '#EC4899',
+                        action: () => toast.info('إنشاء مشروع - قريباً')
+                      },
+                      { 
+                        title: 'إضافة فاتورة', 
+                        icon: <AttachMoney />, 
+                        color: '#10B981',
+                        action: () => toast.info('إضافة فاتورة - قريباً')
+                      },
+                      { 
+                        title: 'جدولة اجتماع', 
+                        icon: <CalendarMonth />, 
+                        color: '#F59E0B',
+                        action: () => toast.info('جدولة اجتماع - قريباً')
+                      },
                     ].map((action, index) => (
-                      <Grid item xs={6} key={index}>
+                      <Box key={index}>
                         <motion.div
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -453,7 +567,7 @@ const AnimatedDashboard: React.FC = () => {
                             fullWidth
                             variant="outlined"
                             startIcon={action.icon}
-                            onClick={() => toast.info(`${action.title} - قريباً`)}
+                            onClick={action.action}
                             sx={{
                               py: 2,
                               borderColor: action.color,
@@ -467,18 +581,23 @@ const AnimatedDashboard: React.FC = () => {
                             {action.title}
                           </Button>
                         </motion.div>
-                      </Grid>
+                      </Box>
                     ))}
-                  </Grid>
+                  </Box>
                 </Paper>
               </motion.div>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} md={4}>
+            <Box
+              sx={{
+                flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 12px)' },
+                minWidth: 0,
+              }}
+            >
               <motion.div variants={itemVariants}>
                 <Paper sx={{ p: 3, height: '100%' }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                    النشاطات الأخيرة
+                    {activities.length > 0 ? 'النشاطات الأخيرة' : 'البداية السريعة'}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <AnimatePresence>
@@ -530,8 +649,8 @@ const AnimatedDashboard: React.FC = () => {
                   </Box>
                 </Paper>
               </motion.div>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </motion.div>
       </Box>
 
