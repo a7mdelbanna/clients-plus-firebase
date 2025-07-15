@@ -88,6 +88,21 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
 - ✅ Fixed floating action button to use current theme colors
 - ✅ Added comprehensive error handling and logging
 
+### Recent Additions (2025-07-15)
+
+#### Firebase Storage Authentication Fix
+   - ✓ Created `signupWithCompany` Cloud Function for proper user creation with claims
+   - ✓ Updated signup flow to use Cloud Function ensuring all users get `companyId` claim
+   - ✓ Fixed storage rules to properly validate custom claims
+   - ✓ Added automatic claims migration for existing users
+   - ✓ Resolved 403 Forbidden errors for image uploads
+
+#### Service Image Upload serverTimestamp() Fix
+   - ✓ Fixed Firebase error when updating services with image arrays
+   - ✓ Changed `serverTimestamp()` to `Timestamp.now()` in image upload component
+   - ✓ Service editing now works without Firebase validation errors
+   - ✓ Updated documentation with serverTimestamp() array limitation
+
 ### Recent Additions (2025-01-15)
 1. **Real Company Data in Dashboard**
    - ✅ Created company.service.ts for fetching real statistics
@@ -115,7 +130,7 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Complete service management architecture for beauty/salon businesses
    - ✅ Service categories with CRUD operations
    - ✅ Services with pricing, duration, and online booking settings
-   - ✅ Multi-tab service creation/editing interface
+   - ✅ Multi-tab service creation/editing interface (6 tabs)
    - ✅ Real-time subscriptions for categories and services
    - ✅ Advanced service options (VAT, follow-up days, auto-deduction)
    - ✅ Resource management placeholders
@@ -125,6 +140,13 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
      - Dynamic translation fields based on selected languages
      - Flexible data structure supporting unlimited languages
      - Language selection with interactive chips UI
+   - ✅ Multiple image upload system for services:
+     - Upload up to 10 images per service
+     - Set default/primary image
+     - Image preview with delete functionality
+     - Firebase Storage integration
+     - Responsive image grid layout
+     - Service images displayed in category listing
    - ✅ Fixed Firestore permission errors for empty collections
    - ✅ Fixed Firebase addDoc() undefined field errors
    - ✅ Fixed TypeScript import errors (import type)
@@ -234,6 +256,45 @@ firebase deploy                          # Deploy everything
       // OR omit the field entirely when not needed
       ```
     - **Best Practice**: Use default values instead of undefined, or conditionally include fields
+
+11. **Firebase Storage CORS Errors**:
+    - **Error**: "Access to XMLHttpRequest... has been blocked by CORS policy"
+    - **Cause**: Firebase Storage needs CORS configuration for web uploads
+    - **Solution**: 
+      1. Run `./apply-cors.sh` to apply CORS configuration
+      2. Deploy storage rules: `firebase deploy --only storage`
+      3. Ensure storage bucket URL is correct: `clients-plus-egypt.firebasestorage.app`
+    - **See**: FIREBASE_STORAGE_SETUP.md for detailed instructions
+
+12. **Firebase Storage Permission Errors (storage/unauthorized)**:
+    - **Error**: "User does not have permission to access..."
+    - **Root Cause**: Users created via client-side `createUserWithEmailAndPassword` don't have custom claims
+    - **Solution Implemented**:
+      1. Created `signupWithCompany` Cloud Function that creates user with proper claims
+      2. Updated `Signup.tsx` to use the Cloud Function instead of direct Firebase Auth
+      3. Added automatic claims migration for existing users via `checkAndMigrateUserClaims`
+      4. Storage rules now properly check `request.auth.token.companyId`
+    - **For Existing Users**: The app automatically checks and migrates claims on login
+    - **Manual Migration**: Run `window.checkAndMigrateUserClaims()` in browser console
+
+13. **MUI Select Out-of-Range Value Warnings**:
+    - **Error**: "You have provided an out-of-range value..."
+    - **Cause**: Select component has a value that doesn't exist in available options (e.g., categories not loaded yet)
+    - **Solution**: Add `value={field.value || ''}` to Select components and handle empty states properly
+
+14. **Firebase serverTimestamp() in Arrays Error**:
+    - **Error**: "Function updateDoc() called with invalid data. serverTimestamp() is not currently supported inside arrays"
+    - **Cause**: Using `serverTimestamp()` inside array elements when updating Firestore documents
+    - **Solution**: Use `Timestamp.now()` instead of `serverTimestamp()` for timestamp fields inside arrays
+    - **Example Fix**:
+      ```typescript
+      // Before (causes error):
+      uploadedAt: serverTimestamp() as Timestamp,
+      
+      // After (works):
+      uploadedAt: Timestamp.now(),
+      ```
+    - **Note**: `serverTimestamp()` works fine for top-level fields, but not inside arrays or nested objects
 
 ## Next Major Features
 - Client management system
