@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasCompanyId() {
+      return isAuthenticated() && 
+        (request.auth.token.companyId != null || getUserData().companyId != null);
+    }
+    
+    function getUserCompanyId() {
+      return request.auth.token.get('companyId', getUserData().get('companyId', null));
+    }
+    
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && getUserCompanyId() == companyId;
+    }
+    
+    function isCompanyAdmin(companyId) {
+      return belongsToCompany(companyId) && 
+        request.auth.token.get('role', 'USER') == 'ADMIN';
+    }
+    
+    // Global users collection - for user lookup and company assignment
+    match /users/{userId} {
+      // Users can read their own document
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Users can create/update their own document (needed for signup)
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Don't allow deletion
+      allow delete: if false;
+    }
+    
+    // Companies collection
+    match /companies/{companyId} {
+      // Allow authenticated users to create companies if they are the owner
+      // This is specifically for the signup flow where users don't have companyId yet
+      allow create: if isAuthenticated() && 
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.active == true &&
+        request.resource.data.id == companyId;
+      
+      // Allow reading company if user belongs to it OR if they are the owner (for setup flow)
+      allow read: if belongsToCompany(companyId) || 
+        (isAuthenticated() && resource.data.ownerId == request.auth.uid);
+      
+      // Allow updating company if user is admin OR if they are the owner
+      // Note: During setup, the user might not have companyId in claims yet
+      allow update: if isCompanyAdmin(companyId) || 
+        (isAuthenticated() && resource.data.ownerId == request.auth.uid) ||
+        (belongsToCompany(companyId) && request.auth.token.get('role', 'USER') == 'ADMIN');
+      
+      // Don't allow deletion
+      allow delete: if false;
+      
+      // Company subcollections
+      match /users/{userId} {
+        // Allow creation during company setup (when user is the owner)
+        allow create: if isAuthenticated() && 
+          (request.auth.uid == get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId ||
+           request.auth.uid == userId);
+        
+        // Company admins can manage users
+        allow read, update, delete: if isCompanyAdmin(companyId);
+        
+        // Users can read their own profile in the company
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+      }
+      
+      match /branches/{branchId} {
+        // Users in company can read branches
+        allow read: if belongsToCompany(companyId) || 
+          (isAuthenticated() && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid);
+        
+        // Allow creation during setup by owner, or management by admins
+        allow create: if isAuthenticated() && 
+          get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid;
+        allow update, delete: if isCompanyAdmin(companyId);
+      }
+      
+      match /locations/{locationId} {
+        // Users in company can read locations
+        allow read: if belongsToCompany(companyId) || 
+          (isAuthenticated() && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid);
+        
+        // Allow creation during setup by owner, or management by admins
+        allow create: if isAuthenticated() && 
+          get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid;
+        allow update, delete: if isCompanyAdmin(companyId);
+      }
+      
+      match /setupProgress/{document} {
+        // Allow users to read/write their setup progress
+        allow read, write: if belongsToCompany(companyId);
+      }
+      
+      // Other company subcollections
+      match /{subcollection}/{document} {
+        // Default: users in company can read
+        allow read: if belongsToCompany(companyId);
+        
+        // Only admins can write
+        allow write: if isCompanyAdmin(companyId);
+      }
+    }
+    
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
