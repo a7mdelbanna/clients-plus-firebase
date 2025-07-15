@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Clients+ Functions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Test Clients+ Firebase Functions</h1>
+        
+        <div class="section">
+            <h2>1. Create Super Admin</h2>
+            <p>This should only be done once!</p>
+            <label>Email:</label>
+            <input type="email" id="superEmail" value="super@clientsplus.com">
+            <label>Password:</label>
+            <input type="password" id="superPassword" value="SuperAdmin123!">
+            <label>Name:</label>
+            <input type="text" id="superName" value="Super Admin">
+            <br><br>
+            <button onclick="createSuperAdmin()">Create Super Admin</button>
+            <div id="superAdminResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>2. Register Company</h2>
+            <label>Company Name:</label>
+            <input type="text" id="companyName" value="صالون الجمال">
+            <label>Admin Email:</label>
+            <input type="email" id="adminEmail" value="admin@salon.com">
+            <label>Admin Password:</label>
+            <input type="password" id="adminPassword" value="Admin123!">
+            <label>Admin Name:</label>
+            <input type="text" id="adminName" value="أحمد محمد">
+            <label>Phone:</label>
+            <input type="tel" id="phone" value="+201234567890">
+            <br><br>
+            <button onclick="registerCompany()">Register Company</button>
+            <div id="companyResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>3. Quick Links</h2>
+            <button onclick="window.open('https://console.firebase.google.com/project/clients-plus-egypt/firestore', '_blank')">
+                Open Firestore Console
+            </button>
+            <button onclick="window.open('https://console.firebase.google.com/project/clients-plus-egypt/authentication/users', '_blank')">
+                Open Auth Console
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const functionsUrl = 'https://us-central1-clients-plus-egypt.cloudfunctions.net';
+
+        async function createSuperAdmin() {
+            const email = document.getElementById('superEmail').value;
+            const password = document.getElementById('superPassword').value;
+            const name = document.getElementById('superName').value;
+            
+            const responseDiv = document.getElementById('superAdminResponse');
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Creating super admin...';
+            responseDiv.className = 'response';
+
+            try {
+                const response = await fetch(`${functionsUrl}/setupSuperAdmin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: { email, password, name }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.result) {
+                    responseDiv.textContent = JSON.stringify(data.result, null, 2);
+                    responseDiv.className = 'response success';
+                } else {
+                    responseDiv.textContent = JSON.stringify(data.error || data, null, 2);
+                    responseDiv.className = 'response error';
+                }
+            } catch (error) {
+                responseDiv.textContent = 'Error: ' + error.message;
+                responseDiv.className = 'response error';
+            }
+        }
+
+        async function registerCompany() {
+            const companyName = document.getElementById('companyName').value;
+            const adminEmail = document.getElementById('adminEmail').value;
+            const adminPassword = document.getElementById('adminPassword').value;
+            const adminName = document.getElementById('adminName').value;
+            const phone = document.getElementById('phone').value;
+            
+            const responseDiv = document.getElementById('companyResponse');
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Registering company...';
+            responseDiv.className = 'response';
+
+            try {
+                const response = await fetch(`${functionsUrl}/registerCompany`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: {
+                            companyName,
+                            adminEmail,
+                            adminPassword,
+                            adminName,
+                            country: 'EG',
+                            phone
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.result) {
+                    responseDiv.textContent = JSON.stringify(data.result, null, 2);
+                    responseDiv.className = 'response success';
+                } else {
+                    responseDiv.textContent = JSON.stringify(data.error || data, null, 2);
+                    responseDiv.className = 'response error';
+                }
+            } catch (error) {
+                responseDiv.textContent = 'Error: ' + error.message;
+                responseDiv.className = 'response error';
+            }
+        }
+    </script>
+</body>
+</html>
