@@ -1,0 +1,49 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+        request.auth.token.isSuperAdmin == true;
+    }
+    
+    function isCompanyUser(companyId) {
+      return isAuthenticated() && 
+        request.auth.token.companyId == companyId;
+    }
+    
+    function isCompanyAdmin(companyId) {
+      return isAuthenticated() && 
+        request.auth.token.companyId == companyId &&
+        request.auth.token.role == 'ADMIN';
+    }
+    
+    // Company logos and assets
+    match /companies/{companyId}/{allPaths=**} {
+      allow read: if true; // Public for display
+      allow write: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    // User profile pictures
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true; // Public for display
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Client photos (before/after)
+    match /clients/{companyId}/{clientId}/{allPaths=**} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow write: if isSuperAdmin() || isCompanyUser(companyId);
+    }
+    
+    // Service images
+    match /services/{companyId}/{allPaths=**} {
+      allow read: if true; // Public for booking
+      allow write: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+  }
+}
