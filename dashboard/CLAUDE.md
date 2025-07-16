@@ -112,6 +112,44 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✓ Fixed Firebase undefined field errors for optional fields
    - ✓ Added proper conditional field inclusion to avoid Firestore errors
 
+#### Enhanced Employee Management System (Altiego-based)
+   - ✓ Replaced basic employee system with comprehensive staff management
+   - ✓ Advanced filtering by position, status, access level, and search
+   - ✓ Role-based access control with 6 access levels (Employee, Administrator, etc.)
+   - ✓ Enhanced employee detail page with 6 tabs:
+     - Information: Profile management, avatar upload, access control
+     - Services: Service assignment with search, filter, and category grouping
+     - Online Booking: Booking configuration (placeholder)
+     - Additional Info: Personal details (placeholder)
+     - Settings: Employee settings (placeholder)
+     - Schedule: Full schedule management with templates, calendar view, and working hours
+   - ✓ Real-time online booking toggle from staff list
+   - ✓ Schedule status display with direct links
+   - ✓ Service count tracking
+   - ✓ Invitation system for granting access
+   - ✓ Enhanced data model with schedule, services, and booking fields
+   - ✓ Schedule Tab Implementation:
+     - Schedule templates (Full-time, Morning, Evening, Weekend, Custom)
+     - Date and time pickers for schedule setup
+     - Working days selection with interactive chips
+     - Calendar view with week/month toggle
+     - "Scheduled until" date tracking
+     - Auto-navigation from "Add to schedule" option
+     - Clear schedule functionality
+   - ✓ Enhanced Schedule Tab with Dot Grid System (2025-07-16):
+     - 7x24 interactive dot grid (7 days × 24 hours)
+     - Each dot represents one hour slot
+     - Manual mode: Click dots to toggle working/not working
+     - Template mode: Auto-fill based on selected template
+     - Compact responsive UI that fits all screens
+     - Template section moved above grid to save space
+     - All fields on single line with proper labels
+     - Time selection using dropdowns (hours 00-23, minutes in 15-min intervals)
+     - Week selection using dropdowns (common periods: 1-52 weeks)
+     - Copy schedule functionality with week dropdown
+     - Visual hour totals per day
+     - Legend for dot states (working/available)
+
 ### Recent Additions (2025-01-15)
 1. **Real Company Data in Dashboard**
    - ✅ Created company.service.ts for fetching real statistics
@@ -323,6 +361,30 @@ firebase deploy                          # Deploy everything
       uploadedAt: Timestamp.now(),
       ```
     - **Note**: `serverTimestamp()` works fine for top-level fields, but not inside arrays or nested objects
+
+15. **Material-UI Icon Import Errors**:
+    - **Error**: "The requested module does not provide an export named 'Services'"
+    - **Cause**: Using non-existent icon names from @mui/icons-material
+    - **Solution**: Use correct icon names (e.g., `MiscellaneousServices` instead of `Services`)
+    - **How to check**: Visit https://mui.com/material-ui/material-icons/ to search for valid icon names
+
+16. **Firestore Undefined Field Value Errors**:
+    - **Error**: "Function addDoc() called with invalid data. Unsupported field value: undefined"
+    - **Cause**: Trying to save `undefined` values to Firestore fields
+    - **Solution**: Build objects conditionally and only include fields with actual values
+    - **Example Fix**:
+      ```typescript
+      // Before (causes error):
+      const data = {
+        email: condition ? value : undefined,  // ❌ undefined not allowed
+      };
+      
+      // After (works):
+      const data: any = {};
+      if (condition && value) {
+        data.email = value;  // ✅ Only add field if it has a value
+      }
+      ```
 
 ## Next Major Features
 - Client management system
