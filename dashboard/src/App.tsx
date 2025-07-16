@@ -15,6 +15,11 @@ import ServiceCategoryPage from './pages/settings/services/ServiceCategoryPage';
 import ServiceEditPage from './pages/settings/services/ServiceEditPage';
 import PositionsPage from './pages/settings/positions/PositionsPage';
 import PositionFormPage from './pages/settings/positions/PositionFormPage';
+import StaffPage from './pages/settings/staff/StaffPage';
+import StaffFormPage from './pages/settings/staff/StaffFormPage';
+import EmployeeDetailPage from './pages/employee/EmployeeDetailPage';
+import ResourcesPage from './pages/settings/resources/ResourcesPage';
+import WorkSchedulePage from './pages/settings/work-schedule/WorkSchedulePage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
 import SetupWizard from './components/SetupWizard/SetupWizard';
@@ -146,6 +151,41 @@ function App() {
                 <Route path="/settings/positions/edit/:positionId" element={
                   <PageTransition>
                     <PositionFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/staff" element={
+                  <PageTransition>
+                    <StaffPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/staff/new" element={
+                  <PageTransition>
+                    <StaffFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/staff/edit/:staffId" element={
+                  <PageTransition>
+                    <StaffFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/employee/:employeeId" element={
+                  <PageTransition>
+                    <EmployeeDetailPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/resources" element={
+                  <PageTransition>
+                    <ResourcesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/work-schedule" element={
+                  <PageTransition>
+                    <WorkSchedulePage />
+                  </PageTransition>
+                } />
+                <Route path="/employee/:employeeId/schedule" element={
+                  <PageTransition>
+                    <EmployeeDetailPage />
                   </PageTransition>
                 } />
                 <Route path="/profile" element={

@@ -245,8 +245,9 @@ service cloud.firestore {
     
     // Staff collection
     match /staff/{staffId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
       allow read: if isAuthenticated() && 
-        belongsToCompany(resource.data.companyId);
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
       allow create: if isAuthenticated() && 
         belongsToCompany(request.resource.data.companyId) &&
         request.resource.data.companyId != null;
@@ -255,6 +256,21 @@ service cloud.firestore {
         request.resource.data.companyId == resource.data.companyId;
       allow delete: if isAuthenticated() && 
         isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Resources collection
+    match /resources/{resourceId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
     }
     
     // Work Schedule collection
