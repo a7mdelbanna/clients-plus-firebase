@@ -340,6 +340,29 @@ const ServiceCategoryPage: React.FC = () => {
                           gap: 2,
                         }}
                       >
+                        {/* Service Image */}
+                        {service.images && service.images.length > 0 && (
+                          <Box
+                            sx={{
+                              width: 80,
+                              height: 80,
+                              borderRadius: 2,
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <img
+                              src={service.images.find(img => img.isDefault)?.url || service.images[0].url}
+                              alt={service.name}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          </Box>
+                        )}
+                        
                         <Box sx={{ flex: 1 }}>
                           <Box
                             sx={{

@@ -21,8 +21,8 @@ import {
   Chip,
   CircularProgress,
   useMediaQuery,
-  alpha,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   ArrowBack,
   Settings,
@@ -33,6 +33,7 @@ import {
   AccessTime,
   Save,
   Delete,
+  PhotoLibrary,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useForm, Controller } from 'react-hook-form';
@@ -43,6 +44,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { serviceService } from '../../../services/service.service';
 import { setupService } from '../../../services/setup.service';
 import type { ServiceCategory as ServiceCategoryType, Service } from '../../../services/service.service';
+import ServiceImageUpload from '../../../components/services/ServiceImageUpload';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -127,6 +129,7 @@ const ServiceEditPage: React.FC = () => {
   const [showTranslation, setShowTranslation] = useState(false);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [translations, setTranslations] = useState<Record<string, { name: string; description?: string }>>({});
+  const [serviceImages, setServiceImages] = useState<Service['images']>([]);
 
   const {
     control,
@@ -207,10 +210,15 @@ const ServiceEditPage: React.FC = () => {
         setTranslations(trans);
       }
 
+      // Load existing images
+      if (fetchedService.images) {
+        setServiceImages(fetchedService.images);
+      }
+
       // Check if translation is needed
       if (!fetchedService.translations || Object.keys(fetchedService.translations).length === 0) {
         setShowTranslation(true);
-        setTabValue(4); // Switch to Languages tab
+        setTabValue(5); // Switch to Languages tab
       }
 
       setLoadingService(false);
@@ -268,6 +276,7 @@ const ServiceEditPage: React.FC = () => {
         vat: data.vat,
         followUpDays: data.followUpDays,
         autoDeduction: data.autoDeduction,
+        images: serviceImages,
       };
 
       await serviceService.updateService(serviceId, updatedService);
@@ -306,6 +315,7 @@ const ServiceEditPage: React.FC = () => {
     { label: 'الحجز الإلكتروني', icon: <ShoppingCart /> },
     { label: 'خيارات متقدمة', icon: <Build /> },
     { label: 'الموارد', icon: <Inventory /> },
+    { label: 'الصور', icon: <PhotoLibrary /> },
     { label: 'اللغات', icon: <Language /> },
   ];
 
@@ -399,7 +409,7 @@ const ServiceEditPage: React.FC = () => {
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {tab.label}
-                      {index === 4 && showTranslation && (
+                      {index === 5 && showTranslation && (
                         <Chip label="يحتاج ترجمة" size="small" color="warning" />
                       )}
                     </Box>
@@ -440,7 +450,13 @@ const ServiceEditPage: React.FC = () => {
                       {...field}
                       label="فئة الخدمة"
                       disabled={loadingCategories}
+                      value={field.value || ''}
                     >
+                      {!loadingCategories && categories.length === 0 && (
+                        <MenuItem value="" disabled>
+                          لا توجد فئات
+                        </MenuItem>
+                      )}
                       {categories.map((category) => (
                         <MenuItem key={category.id} value={category.id}>
                           {isRTL ? category.nameAr || category.name : category.name}
@@ -737,8 +753,27 @@ const ServiceEditPage: React.FC = () => {
             </Box>
           </TabPanel>
 
-          {/* Languages Tab */}
+          {/* Images Tab */}
           <TabPanel value={tabValue} index={4}>
+            <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                صور الخدمة
+              </Typography>
+              
+              {service && (
+                <ServiceImageUpload
+                  serviceId={serviceId!}
+                  companyId={service.companyId}
+                  images={serviceImages || []}
+                  onImagesChange={setServiceImages}
+                  disabled={loading}
+                />
+              )}
+            </Box>
+          </TabPanel>
+
+          {/* Languages Tab */}
+          <TabPanel value={tabValue} index={5}>
             <Box sx={{ maxWidth: 800, mx: 'auto' }}>
               <Typography variant="h6" sx={{ mb: 3 }}>
                 إدارة اللغات والترجمات

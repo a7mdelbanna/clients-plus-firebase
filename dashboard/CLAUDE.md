@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-01-15)
+## Current Status (Last Updated: 2025-07-16)
 
 ### Completed Features
 1. **Authentication System**
@@ -209,6 +209,76 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Firestore security rules for positions
    - ✅ Helper functions for getting translated position names/descriptions
 
+### Recent Additions (2025-07-16 continued)
+
+#### Work Schedule Management System
+   - ✓ Calendar grid view showing all employees' schedules
+   - ✓ Month and week view toggles
+   - ✓ Green blocks (#4CAF50) for working hours
+   - ✓ Employee sidebar with avatars and total hours
+   - ✓ Real-time schedule aggregation from staff working hours
+   - ✓ Daily, weekly, and monthly hour calculations
+   - ✓ Filter dropdown (position, status, date range)
+   - ✓ Today highlighting and weekend date coloring
+   - ✓ Navigation controls with previous/next and today button
+   - ✓ Export to PDF placeholder (implementation pending)
+   - ✓ Responsive Design Improvements (2025-07-16):
+     - Fixed calendar widget being cut off at screen edge
+     - Added horizontal scrolling with sticky employee column
+     - Enhanced scrollbar styling with primary theme color
+     - Mobile-optimized table with reduced cell sizes
+     - Responsive breakpoints for different screen sizes
+     - Animated scroll indicator for mobile devices
+     - Employee names with ellipsis for overflow
+     - Adjusted minimum widths for better mobile experience
+   - ✓ Enhanced 7-Day Calendar View (2025-07-16):
+     - Limited display to 7 days for improved readability
+     - Larger day numbers (1.75rem) and names (1rem)
+     - Better spacing with increased padding (p: 2)
+     - Visual separation with vertical borders between days
+     - Weekend days highlighted with grey background
+     - Today highlighted with warning color
+     - Bigger schedule blocks with enhanced hover effects
+     - Improved employee avatars and info display
+     - Clean, modern design with proper shadows
+   - ✓ Fixed Calendar Edge and Navigation Issues (2025-07-16):
+     - Added proper container padding to prevent calendar from touching screen edges
+     - Calendar wrapped in styled Box with padding and shadow
+     - Fixed navigation to always move by 7 days (weekly navigation)
+     - Updated date range display to show correct week range
+     - Removed unnecessary end cap columns
+     - Always loads week schedule (7 days) regardless of view mode
+     - Consistent weekly view with proper start/end dates
+   - ✓ Schedule Editing Functionality (2025-07-16):
+     - Created ScheduleEditDialog component for add/edit/delete operations
+     - Click empty cells to add new schedules (shows + icon on hover)
+     - Click existing schedule blocks to edit (shows pencil icon on hover)
+     - Time selection with hour and minute dropdowns (15-minute intervals)
+     - Real-time total hours calculation display
+     - Delete functionality for existing schedules
+     - Updates staff working hours in Firebase
+     - Automatic schedule reload after changes
+     - Visual feedback with hover effects and icons
+   - ✓ Schedule Date Range Validation (2025-07-16):
+     - Added scheduleStartDate field to staff schedule
+     - Work schedule only shows employees during their scheduled period
+     - Validates both start and end dates before displaying schedules
+     - Prevents schedules from appearing before start date
+     - Respects scheduledUntil date for schedule expiration
+     - Fixed ScheduleTab.tsx to save scheduleStartDate when creating/updating schedules
+     - Improved migration utility to use employee registration start date when available
+     - Added fixEmployeeScheduleStartDate utility for debugging specific employees
+
+#### Resources Management System
+   - ✓ Complete CRUD operations for resources (rooms, equipment)
+   - ✓ Resource-service linking with multi-select dropdown
+   - ✓ Capacity management (simultaneous usage)
+   - ✓ Empty state with helpful messaging
+   - ✓ Inline add resource form
+   - ✓ Real-time updates with Firestore subscriptions
+   - ✓ Soft delete with status management
+   - ✓ Integration points for future booking conflicts
+
 ### Remaining Tasks
 1. **Complete Page Implementations**
    - ClientDetail component (view individual client)
@@ -217,6 +287,7 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - Calendar integration
    - Reports and analytics
    - Inventory management
+   - PDF export implementation for work schedule
 
 3. **Additional Features**
    - Email notifications
@@ -385,6 +456,23 @@ firebase deploy                          # Deploy everything
         data.email = value;  // ✅ Only add field if it has a value
       }
       ```
+
+17. **Work Schedule Shows Employees Outside Their Scheduled Period**:
+    - **Error**: Employees appear in work schedule before their start date or after their end date
+    - **Cause**: Missing `scheduleStartDate` field when saving schedules in ScheduleTab
+    - **Solution**: 
+      1. Fixed ScheduleTab.tsx to save `scheduleStartDate` when creating/updating schedules
+      2. Run migration by clicking the sync button (⟳) in Work Schedule page
+      3. For specific fixes, use: `window.fixEmployeeScheduleStartDate('employeeId', new Date('2025-07-16'))`
+    - **Prevention**: Always save both `scheduleStartDate` and `scheduledUntil` together
+
+18. **Resources Not Appearing Immediately After Creation**:
+    - **Error**: New resources don't show up immediately after saving, require page refresh
+    - **Cause**: Improper cleanup of Firestore real-time subscription in useEffect
+    - **Solution**: 
+      1. Fixed subscription cleanup by properly handling the unsubscribe function in useEffect
+      2. Added small delay (100ms) before closing form to ensure real-time update is received
+    - **Prevention**: Always properly clean up Firestore subscriptions in useEffect cleanup function
 
 ## Next Major Features
 - Client management system

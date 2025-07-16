@@ -182,18 +182,41 @@ class WorkScheduleService {
 
     staff.forEach(employee => {
       if (employee.schedule.isScheduled && employee.schedule.workingHours) {
-        const dayHours = employee.schedule.workingHours[dayName];
-        if (dayHours && dayHours.isWorking && dayHours.start && dayHours.end) {
-          const totalHours = this.calculateHours(dayHours.start, dayHours.end);
-          daySchedule.employees.push({
-            employeeId: employee.id!,
-            employeeName: employee.name,
-            avatar: employee.avatar,
-            startTime: dayHours.start,
-            endTime: dayHours.end,
-            totalHours,
-            breaks: dayHours.breaks,
-          });
+        // Check if the date falls within the employee's scheduled period
+        let isWithinSchedulePeriod = true;
+        
+        // Check schedule start date
+        if (employee.schedule.scheduleStartDate) {
+          const scheduleStartDate = employee.schedule.scheduleStartDate.toDate();
+          scheduleStartDate.setHours(0, 0, 0, 0); // Start from beginning of day
+          if (date < scheduleStartDate) {
+            isWithinSchedulePeriod = false;
+          }
+        }
+        
+        // Check schedule end date
+        if (employee.schedule.scheduledUntil) {
+          const scheduledUntilDate = employee.schedule.scheduledUntil.toDate();
+          scheduledUntilDate.setHours(23, 59, 59, 999); // Include the entire end day
+          if (date > scheduledUntilDate) {
+            isWithinSchedulePeriod = false;
+          }
+        }
+        
+        if (isWithinSchedulePeriod) {
+          const dayHours = employee.schedule.workingHours[dayName];
+          if (dayHours && dayHours.isWorking && dayHours.start && dayHours.end) {
+            const totalHours = this.calculateHours(dayHours.start, dayHours.end);
+            daySchedule.employees.push({
+              employeeId: employee.id!,
+              employeeName: employee.name,
+              avatar: employee.avatar,
+              startTime: dayHours.start,
+              endTime: dayHours.end,
+              totalHours,
+              breaks: dayHours.breaks,
+            });
+          }
         }
       }
     });

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import AnimatedBackground from './AnimatedBackground';
 import { setupService } from '../services/setup.service';
-import { auth } from '../config/firebase';
+import { auth, functions } from '../config/firebase';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { httpsCallable } from 'firebase/functions';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import {
   Container,
   Box,
@@ -48,35 +50,26 @@ const Signup: React.FC = () => {
   const onSubmit = async (data: SignupFormData) => {
     try {
       setLoading(true);
-      await signup(data.email, data.password, data.name);
       
-      // Wait a moment for auth state to fully propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the Cloud Function to create user with company and claims
+      const signupWithCompany = httpsCallable(functions, 'signupWithCompany');
+      const result = await signupWithCompany({
+        email: data.email,
+        password: data.password,
+        displayName: data.name,
+      });
       
-      // Get fresh auth instance
-      const user = auth.currentUser;
-      if (user) {
-        try {
-          // Reload user to ensure we have the latest auth state
-          await user.reload();
-          
-          // Create company for the new user
-          const companyId = await setupService.createCompanyForUser(user.uid, data.email, data.name);
-          console.log('Company created with ID:', companyId);
-          
-          // Force token refresh to get new claims
-          await user.getIdToken(true);
-        } catch (companyError) {
-          console.error('Error during company creation:', companyError);
-          // If company creation fails, still show success for account creation
-          toast.warning('تم إنشاء الحساب ولكن حدث خطأ في إعداد الشركة. سيتم توجيهك لإعادة المحاولة.', {
-            position: 'top-center',
-            autoClose: 5000,
-          });
-          navigate('/setup');
-          return;
-        }
-      }
+      console.log('Signup result:', result.data);
+      
+      // Sign in the user after successful signup
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      
+      // Force token refresh to get the custom claims
+      await userCredential.user.getIdToken(true);
+      
+      // Verify claims are set
+      const idTokenResult = await userCredential.user.getIdTokenResult();
+      console.log('User claims after signup:', idTokenResult.claims);
       
       toast.success('تم إنشاء الحساب بنجاح!', {
         position: 'top-center',

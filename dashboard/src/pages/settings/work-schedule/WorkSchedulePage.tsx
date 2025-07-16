@@ -13,6 +13,7 @@ import {
   Menu,
   MenuItem,
   Stack,
+  Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -27,6 +28,7 @@ import {
   ViewWeek,
   Info,
   Star,
+  Sync,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -35,6 +37,7 @@ import { workScheduleService, type MonthSchedule, type WeekSchedule, type ViewMo
 import { setupService } from '../../../services/setup.service';
 import ScheduleCalendar from './components/ScheduleCalendar';
 import ScheduleFilters from './components/ScheduleFilters';
+import { migrateStaffSchedules } from '../../../utils/migrateSchedules';
 
 const WorkSchedulePage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,7 +45,7 @@ const WorkSchedulePage: React.FC = () => {
   const { currentUser } = useAuth();
   
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [schedule, setSchedule] = useState<MonthSchedule | WeekSchedule | null>(null);
   const [companyId, setCompanyId] = useState<string>('');
@@ -59,7 +62,7 @@ const WorkSchedulePage: React.FC = () => {
     if (companyId) {
       loadSchedule();
     }
-  }, [companyId, currentDate, viewMode]);
+  }, [companyId, currentDate]);
 
   const loadInitialData = async () => {
     try {
@@ -86,24 +89,16 @@ const WorkSchedulePage: React.FC = () => {
     try {
       setLoading(true);
       
-      if (viewMode === 'month') {
-        const monthSchedule = await workScheduleService.getMonthSchedule(
-          companyId,
-          currentDate.getFullYear(),
-          currentDate.getMonth()
-        );
-        setSchedule(monthSchedule);
-      } else {
-        // Get start of week (Sunday)
-        const startOfWeek = new Date(currentDate);
-        const day = startOfWeek.getDay();
-        const diff = startOfWeek.getDate() - day;
-        startOfWeek.setDate(diff);
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        const weekSchedule = await workScheduleService.getWeekSchedule(companyId, startOfWeek);
-        setSchedule(weekSchedule);
-      }
+      // Always load week schedule for 7-day view
+      // Get start of week (Sunday)
+      const startOfWeek = new Date(currentDate);
+      const day = startOfWeek.getDay();
+      const diff = startOfWeek.getDate() - day;
+      startOfWeek.setDate(diff);
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const weekSchedule = await workScheduleService.getWeekSchedule(companyId, startOfWeek);
+      setSchedule(weekSchedule);
     } catch (error) {
       console.error('Error loading schedule:', error);
       toast.error('حدث خطأ في تحميل الجدول');
@@ -121,18 +116,11 @@ const WorkSchedulePage: React.FC = () => {
   const handleNavigate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     
-    if (viewMode === 'month') {
-      if (direction === 'prev') {
-        newDate.setMonth(newDate.getMonth() - 1);
-      } else {
-        newDate.setMonth(newDate.getMonth() + 1);
-      }
+    // Always navigate by 7 days since we're showing 7-day view
+    if (direction === 'prev') {
+      newDate.setDate(newDate.getDate() - 7);
     } else {
-      if (direction === 'prev') {
-        newDate.setDate(newDate.getDate() - 7);
-      } else {
-        newDate.setDate(newDate.getDate() + 7);
-      }
+      newDate.setDate(newDate.getDate() + 7);
     }
     
     setCurrentDate(newDate);
@@ -161,17 +149,16 @@ const WorkSchedulePage: React.FC = () => {
   };
 
   const getDateRangeText = () => {
-    if (viewMode === 'month') {
-      return currentDate.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
-    } else {
-      if (schedule && 'startDate' in schedule && 'endDate' in schedule) {
-        const weekSchedule = schedule as WeekSchedule;
-        const start = new Date(weekSchedule.startDate);
-        const end = new Date(weekSchedule.endDate);
-        return `${start.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-      }
-      return '';
-    }
+    // Calculate the week range based on current date
+    const startOfWeek = new Date(currentDate);
+    const dayOfWeek = startOfWeek.getDay();
+    // Adjust to start from Sunday
+    startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    return `${startOfWeek.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   };
 
   return (
@@ -180,7 +167,14 @@ const WorkSchedulePage: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ 
+        height: '100vh', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        overflow: 'hidden',
+        position: 'relative',
+        width: '100%',
+      }}>
         {/* Top Navigation Bar */}
         <Paper 
           elevation={0} 
@@ -213,32 +207,53 @@ const WorkSchedulePage: React.FC = () => {
             </Box>
 
             {/* Right Side */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
               <Button
                 variant="outlined"
                 startIcon={<GetApp />}
                 onClick={handleExportPDF}
-                sx={{ borderRadius: 2 }}
+                sx={{ 
+                  borderRadius: 2,
+                  display: { xs: 'none', sm: 'flex' },
+                }}
               >
                 تصدير PDF
               </Button>
               
+              {/* Temporarily hide view toggle since we're always showing 7 days
               <ToggleButtonGroup
                 value={viewMode}
                 exclusive
                 onChange={handleViewModeChange}
                 size="small"
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
               >
-                <ToggleButton value="week" sx={{ px: 3 }}>
-                  <ViewWeek sx={{ mr: 1 }} />
-                  أسبوع
+                <ToggleButton value="week" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+                  <ViewWeek sx={{ mr: { xs: 0, sm: 1 } }} />
+                  <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>أسبوع</Box>
                 </ToggleButton>
-                <ToggleButton value="month" sx={{ px: 3 }}>
-                  <CalendarMonth sx={{ mr: 1 }} />
-                  شهر
+                <ToggleButton value="month" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+                  <CalendarMonth sx={{ mr: { xs: 0, sm: 1 } }} />
+                  <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>شهر</Box>
                 </ToggleButton>
-              </ToggleButtonGroup>
+              </ToggleButtonGroup> */}
 
+              <Tooltip title="تحديث الجداول القديمة">
+                <IconButton 
+                  onClick={async () => {
+                    try {
+                      const migrated = await migrateStaffSchedules(companyId);
+                      toast.success(`تم تحديث ${migrated} جدول`);
+                      loadSchedule();
+                    } catch (error) {
+                      toast.error('حدث خطأ في تحديث الجداول');
+                    }
+                  }}
+                  color="warning"
+                >
+                  <Sync />
+                </IconButton>
+              </Tooltip>
               <IconButton>
                 <Settings />
               </IconButton>
@@ -262,16 +277,27 @@ const WorkSchedulePage: React.FC = () => {
               startIcon={<FilterList />}
               endIcon={<KeyboardArrowDown />}
               onClick={(e) => setFilterAnchorEl(e.currentTarget)}
-              sx={{ borderRadius: 2 }}
+              sx={{ 
+                borderRadius: 2,
+                minWidth: { xs: 80, sm: 120 },
+              }}
+              size="small"
             >
-              عوامل التصفية
+              <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>عوامل التصفية</Box>
             </Button>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <IconButton onClick={() => handleNavigate('prev')}>
                 <ArrowForward />
               </IconButton>
-              <Typography variant="h6" sx={{ minWidth: 200, textAlign: 'center' }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  minWidth: { xs: 120, sm: 200 }, 
+                  textAlign: 'center',
+                  fontSize: { xs: '0.9rem', sm: '1.25rem' },
+                }}
+              >
                 {getDateRangeText()}
               </Typography>
               <IconButton onClick={() => handleNavigate('next')}>
@@ -291,7 +317,14 @@ const WorkSchedulePage: React.FC = () => {
         </Paper>
 
         {/* Schedule Grid */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+        <Box sx={{ 
+          flex: 1, 
+          overflow: 'hidden', 
+          p: { xs: 1, sm: 2, md: 3 },
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0, // Important for flex children
+        }}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
               <CircularProgress />
@@ -302,6 +335,7 @@ const WorkSchedulePage: React.FC = () => {
               viewMode={viewMode}
               currentDate={currentDate}
               onScheduleUpdate={loadSchedule}
+              companyId={companyId}
             />
           ) : (
             <Paper sx={{ p: 8, textAlign: 'center' }}>

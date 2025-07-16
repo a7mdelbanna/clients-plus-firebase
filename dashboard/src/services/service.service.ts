@@ -65,11 +65,18 @@ export interface Service {
       fr?: string;
       [key: string]: string | undefined;
     };
-    imageUrl?: string;
     prepaymentRequired?: boolean;
     membershipRequired?: boolean;
     availabilityPeriod?: number; // days
   };
+  
+  // Images
+  images?: {
+    url: string;
+    isDefault: boolean;
+    uploadedAt: Timestamp;
+    name?: string;
+  }[];
   
   // Advanced options
   invoiceName?: string;

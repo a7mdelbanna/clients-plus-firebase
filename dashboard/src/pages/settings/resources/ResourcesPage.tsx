@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import type { Unsubscribe } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { resourceService, type Resource } from '../../../services/resource.service';
 import { setupService } from '../../../services/setup.service';
@@ -49,48 +50,55 @@ const ResourcesPage: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     
-    loadData();
-  }, [currentUser]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const idTokenResult = await currentUser!.getIdTokenResult();
-      let cId = idTokenResult.claims.companyId as string;
-      
-      if (!cId) {
-        cId = await setupService.getUserCompanyId(currentUser!.uid);
-      }
-
-      if (!cId) {
-        toast.error('لم يتم العثور على معرف الشركة');
-        return;
-      }
-
-      setCompanyId(cId);
-
-      // Subscribe to real-time resource updates
-      const unsubscribe = resourceService.subscribeToResources(
-        cId,
-        (updatedResources) => {
-          setResources(updatedResources);
-          setLoading(false);
-        },
-        (error) => {
-          console.error('Error subscribing to resources:', error);
-          toast.error('حدث خطأ في تحميل الموارد');
-          setLoading(false);
+    let unsubscribe: Unsubscribe | null = null;
+    
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const idTokenResult = await currentUser.getIdTokenResult();
+        let cId = idTokenResult.claims.companyId as string;
+        
+        if (!cId) {
+          cId = await setupService.getUserCompanyId(currentUser.uid);
         }
-      );
 
-      // Cleanup subscription on unmount
-      return () => unsubscribe();
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast.error('حدث خطأ في تحميل البيانات');
-      setLoading(false);
-    }
-  };
+        if (!cId) {
+          toast.error('لم يتم العثور على معرف الشركة');
+          setLoading(false);
+          return;
+        }
+
+        setCompanyId(cId);
+
+        // Subscribe to real-time resource updates
+        unsubscribe = resourceService.subscribeToResources(
+          cId,
+          (updatedResources) => {
+            setResources(updatedResources);
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error subscribing to resources:', error);
+            toast.error('حدث خطأ في تحميل الموارد');
+            setLoading(false);
+          }
+        );
+      } catch (error) {
+        console.error('Error loading data:', error);
+        toast.error('حدث خطأ في تحميل البيانات');
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [currentUser]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, resource: Resource) => {
     setAnchorEl(event.currentTarget);
@@ -117,9 +125,12 @@ const ResourcesPage: React.FC = () => {
     handleMenuClose();
   };
 
-  const handleResourceAdded = () => {
-    setShowAddForm(false);
+  const handleResourceAdded = async () => {
     toast.success('تمت إضافة المورد بنجاح');
+    // Small delay to ensure real-time update is received
+    setTimeout(() => {
+      setShowAddForm(false);
+    }, 100);
   };
 
   return (

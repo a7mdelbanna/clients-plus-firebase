@@ -85,7 +85,12 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ employee, companyId, onUpdate
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [templateWeeks, setTemplateWeeks] = useState(2);
-  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs());
+  const [startDate, setStartDate] = useState<Dayjs | null>(() => {
+    if (employee.schedule.scheduleStartDate) {
+      return dayjs(employee.schedule.scheduleStartDate.toDate());
+    }
+    return dayjs();
+  });
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri by default
   const [startHour, setStartHour] = useState(9);
@@ -189,6 +194,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ employee, companyId, onUpdate
 
       const updatedSchedule = {
         'schedule.isScheduled': true,
+        'schedule.scheduleStartDate': Timestamp.fromDate(startDate.toDate()),
         'schedule.scheduledUntil': Timestamp.fromDate(scheduledUntil),
         'schedule.defaultTemplate': selectedTemplate,
         'schedule.workingHours': workingHours,
@@ -202,6 +208,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ employee, companyId, onUpdate
         schedule: {
           ...employee.schedule,
           isScheduled: true,
+          scheduleStartDate: Timestamp.fromDate(startDate.toDate()),
           scheduledUntil: Timestamp.fromDate(scheduledUntil),
           defaultTemplate: selectedTemplate,
           workingHours: workingHours,

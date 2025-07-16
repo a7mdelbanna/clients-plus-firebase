@@ -31,6 +31,7 @@ import {
   Language,
   AccessTime,
   Save,
+  PhotoLibrary,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useForm, Controller } from 'react-hook-form';
@@ -41,6 +42,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { serviceService } from '../../../services/service.service';
 import type { ServiceCategory as ServiceCategoryType, Service } from '../../../services/service.service';
 import { setupService } from '../../../services/setup.service';
+import ServiceImageUpload from '../../../components/services/ServiceImageUpload';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -101,6 +103,8 @@ const ServiceNewPage: React.FC = () => {
   const [categories, setCategories] = useState<ServiceCategoryType[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [serviceImages, setServiceImages] = useState<Service['images']>([]);
+  const [tempServiceId] = useState(`temp-${Date.now()}`); // Temporary ID for image uploads before service is created
 
   const {
     control,
@@ -207,6 +211,7 @@ const ServiceNewPage: React.FC = () => {
         vat: data.vat,
         followUpDays: data.followUpDays,
         autoDeduction: data.autoDeduction,
+        images: serviceImages,
         active: true,
       };
 
@@ -231,6 +236,7 @@ const ServiceNewPage: React.FC = () => {
     { label: 'الحجز الإلكتروني', icon: <ShoppingCart /> },
     { label: 'خيارات متقدمة', icon: <Build /> },
     { label: 'الموارد', icon: <Inventory /> },
+    { label: 'الصور', icon: <PhotoLibrary /> },
     { label: 'اللغات', icon: <Language /> },
   ];
 
@@ -639,8 +645,25 @@ const ServiceNewPage: React.FC = () => {
             </Box>
           </TabPanel>
 
-          {/* Languages Tab */}
+          {/* Images Tab */}
           <TabPanel value={tabValue} index={4}>
+            <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                صور الخدمة
+              </Typography>
+              
+              <ServiceImageUpload
+                serviceId={tempServiceId}
+                companyId={tempServiceId} // Use temp ID for now, images will be moved after service creation
+                images={serviceImages || []}
+                onImagesChange={setServiceImages}
+                disabled={loading}
+              />
+            </Box>
+          </TabPanel>
+
+          {/* Languages Tab */}
+          <TabPanel value={tabValue} index={5}>
             <Box sx={{ maxWidth: 600, mx: 'auto', textAlign: 'center', py: 4 }}>
               <Language sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
               <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
