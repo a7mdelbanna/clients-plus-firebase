@@ -230,8 +230,9 @@ service cloud.firestore {
     
     // Positions collection
     match /positions/{positionId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
       allow read: if isAuthenticated() && 
-        belongsToCompany(resource.data.companyId);
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
       allow create: if isAuthenticated() && 
         belongsToCompany(request.resource.data.companyId) &&
         request.resource.data.companyId != null;

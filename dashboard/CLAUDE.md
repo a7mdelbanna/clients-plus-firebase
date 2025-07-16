@@ -103,6 +103,15 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✓ Service editing now works without Firebase validation errors
    - ✓ Updated documentation with serverTimestamp() array limitation
 
+### Recent Additions (2025-07-16)
+
+#### Positions Management System
+   - ✓ Created simplified positions system with name and description only
+   - ✓ Implemented multi-language translation support (14 languages)
+   - ✓ Designed consistent UI pattern for name/description fields
+   - ✓ Fixed Firebase undefined field errors for optional fields
+   - ✓ Added proper conditional field inclusion to avoid Firestore errors
+
 ### Recent Additions (2025-01-15)
 1. **Real Company Data in Dashboard**
    - ✅ Created company.service.ts for fetching real statistics
@@ -150,6 +159,17 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Fixed Firestore permission errors for empty collections
    - ✅ Fixed Firebase addDoc() undefined field errors
    - ✅ Fixed TypeScript import errors (import type)
+
+4. **Positions Management System**
+   - ✅ Complete CRUD operations for positions
+   - ✅ Position service with real-time subscriptions
+   - ✅ Positions list page with search and filtering
+   - ✅ Create/Edit position form with two tabs (Basic Info, Translation)
+   - ✅ Multi-language translation support (14 languages)
+   - ✅ Position name and description fields
+   - ✅ Staff count tracking per position
+   - ✅ Firestore security rules for positions
+   - ✅ Helper functions for getting translated position names/descriptions
 
 ### Remaining Tasks
 1. **Complete Page Implementations**
@@ -256,6 +276,14 @@ firebase deploy                          # Deploy everything
       // OR omit the field entirely when not needed
       ```
     - **Best Practice**: Use default values instead of undefined, or conditionally include fields
+    - **Warning**: Be careful with `||` operator - `'' || undefined` evaluates to undefined, which will cause errors
+    - **Better approach**: Check for truthy values and only add fields when they have content:
+      ```typescript
+      const data: any = { requiredField: 'value' };
+      if (optionalField && optionalField.trim()) {
+        data.optionalField = optionalField;
+      }
+      ```
 
 11. **Firebase Storage CORS Errors**:
     - **Error**: "Access to XMLHttpRequest... has been blocked by CORS policy"

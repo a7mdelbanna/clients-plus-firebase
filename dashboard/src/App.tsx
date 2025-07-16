@@ -13,6 +13,8 @@ import ServicesPage from './pages/settings/services/ServicesPage';
 import ServiceNewPage from './pages/settings/services/ServiceNewPage';
 import ServiceCategoryPage from './pages/settings/services/ServiceCategoryPage';
 import ServiceEditPage from './pages/settings/services/ServiceEditPage';
+import PositionsPage from './pages/settings/positions/PositionsPage';
+import PositionFormPage from './pages/settings/positions/PositionFormPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
 import SetupWizard from './components/SetupWizard/SetupWizard';
@@ -23,9 +25,25 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
 import { initializeUserOnAuth } from './utils/initializeUser';
+import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './config/firebase';
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
+
+// Check and migrate claims for existing users
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    // Wait a moment for auth to stabilize
+    setTimeout(async () => {
+      const migrated = await checkAndMigrateUserClaims();
+      if (migrated) {
+        console.log('User claims migrated successfully');
+      }
+    }, 1000);
+  }
+});
 
 // RTL support
 import rtlPlugin from 'stylis-plugin-rtl';
@@ -113,6 +131,21 @@ function App() {
                 <Route path="/settings/services/edit/:serviceId" element={
                   <PageTransition>
                     <ServiceEditPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/positions" element={
+                  <PageTransition>
+                    <PositionsPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/positions/new" element={
+                  <PageTransition>
+                    <PositionFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/positions/edit/:positionId" element={
+                  <PageTransition>
+                    <PositionFormPage />
                   </PageTransition>
                 } />
                 <Route path="/profile" element={
