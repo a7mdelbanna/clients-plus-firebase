@@ -110,5 +110,73 @@ export const storageService = {
       console.error('Error uploading multiple service images:', error);
       throw error;
     }
+  },
+
+  async uploadBusinessPhoto(
+    file: File,
+    companyId: string
+  ): Promise<string> {
+    try {
+      // Create a unique filename
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop();
+      const filename = `business_${timestamp}.${extension}`;
+      const storageRef = ref(storage, `companies/${companyId}/business_photos/${filename}`);
+      
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      return downloadURL;
+    } catch (error: any) {
+      console.error('Error uploading business photo:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 'storage/unauthorized') {
+        throw new Error('غير مصرح لك برفع الصور. يرجى تسجيل الدخول مرة أخرى.');
+      } else if (error.code === 'storage/canceled') {
+        throw new Error('تم إلغاء رفع الصورة');
+      } else if (error.code === 'storage/unknown') {
+        throw new Error('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
+      } else {
+        throw new Error('حدث خطأ في رفع الصورة. يرجى المحاولة مرة أخرى.');
+      }
+    }
+  },
+
+  async uploadBusinessBanner(
+    file: File,
+    companyId: string
+  ): Promise<string> {
+    try {
+      // Create a unique filename
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop();
+      const filename = `banner_${timestamp}.${extension}`;
+      const storageRef = ref(storage, `companies/${companyId}/banner/${filename}`);
+      
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      return downloadURL;
+    } catch (error: any) {
+      console.error('Error uploading business banner:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 'storage/unauthorized') {
+        throw new Error('غير مصرح لك برفع صورة الغلاف. يرجى تسجيل الدخول مرة أخرى.');
+      } else if (error.code === 'storage/canceled') {
+        throw new Error('تم إلغاء رفع صورة الغلاف');
+      } else if (error.code === 'storage/unknown') {
+        throw new Error('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
+      } else {
+        throw new Error('حدث خطأ في رفع صورة الغلاف. يرجى المحاولة مرة أخرى.');
+      }
+    }
   }
 };

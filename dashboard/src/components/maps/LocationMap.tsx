@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   GoogleMap,
-  LoadScript,
+  useLoadScript,
   Marker,
   Autocomplete,
 } from '@react-google-maps/api';
@@ -57,8 +57,20 @@ const LocationMap: React.FC<LocationMapProps> = ({
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [autocomplete, setAutocomplete] = useState<any>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: apiKey || '',
+    libraries,
+  });
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (coordinates) {
@@ -88,6 +100,8 @@ const LocationMap: React.FC<LocationMapProps> = ({
       if (window.google && window.google.maps) {
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: newPosition }, (results: any, status: any) => {
+          if (!isMountedRef.current) return;
+          
           if (status === 'OK' && results?.[0]) {
             const formattedAddress = results[0].formatted_address;
             setSearchAddress(formattedAddress);
@@ -147,6 +161,8 @@ const LocationMap: React.FC<LocationMapProps> = ({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!isMountedRef.current) return;
+        
         const newPosition = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -163,6 +179,8 @@ const LocationMap: React.FC<LocationMapProps> = ({
         if (window.google && window.google.maps) {
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: newPosition }, (results: any, status: any) => {
+            if (!isMountedRef.current) return;
+            
             if (status === 'OK' && results?.[0]) {
               const formattedAddress = results[0].formatted_address;
               setSearchAddress(formattedAddress);
@@ -182,6 +200,8 @@ const LocationMap: React.FC<LocationMapProps> = ({
         toast.success('تم تحديد موقعك الحالي');
       },
       (error) => {
+        if (!isMountedRef.current) return;
+        
         setIsLoadingLocation(false);
         console.error('Error getting location:', error);
         
@@ -222,17 +242,24 @@ const LocationMap: React.FC<LocationMapProps> = ({
     );
   }
 
+  if (loadError) {
+    return (
+      <Alert severity="error">
+        Error loading Google Maps. Please check your API key and internet connection.
+      </Alert>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
-    <LoadScript 
-      googleMapsApiKey={apiKey} 
-      libraries={libraries}
-      loadingElement={
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height }}>
-          <CircularProgress />
-        </Box>
-      }
-    >
-      <Box sx={{ height }}>
+    <Box sx={{ height }}>
         <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
             <Autocomplete
@@ -319,7 +346,6 @@ const LocationMap: React.FC<LocationMapProps> = ({
           </GoogleMap>
         </Paper>
       </Box>
-    </LoadScript>
   );
 };
 

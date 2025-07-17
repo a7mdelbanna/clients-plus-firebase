@@ -44,6 +44,10 @@ export interface LocationDescription {
 }
 
 export interface LocationPhotos {
+  banner?: {
+    url: string;
+    caption?: string;
+  };
   photos: Array<{
     url: string;
     caption?: string;
@@ -518,6 +522,67 @@ class LocationService {
   // Get business categories as simple array (for backward compatibility)
   getBusinessCategoriesSimple(): string[] {
     return this.getBusinessCategories().map(cat => cat.labelAr);
+  }
+
+  // Map setup wizard business type to location category
+  mapBusinessTypeToCategory(businessType: string): string {
+    const mappings: Record<string, string> = {
+      'barbershop': 'صالون حلاقة',
+      'beauty-salon': 'صالون تجميل',
+      'beauty-center': 'سبا ومركز عافية',
+      'hair-salon': 'صالون تجميل',
+      'nail-salon': 'صالون تجميل',
+      'gym': 'مركز لياقة بدنية',
+      'spa': 'سبا ومركز عافية',
+      'wellness-center': 'سبا ومركز عافية',
+      'clinic': 'عيادة طبية',
+      'dental': 'عيادة أسنان',
+      'restaurant': 'مطعم',
+      'cafe': 'مطعم',
+      'retail': 'متجر بيع بالتجزئة',
+      'professional': 'خدمات مهنية',
+      'educational': 'مركز تعليمي',
+      'other': 'أخرى',
+    };
+    
+    // Get the Arabic label from the mapping
+    const arabicLabel = mappings[businessType];
+    if (!arabicLabel) {
+      return 'أخرى'; // Default to 'Other' if not found
+    }
+    
+    return arabicLabel;
+  }
+
+  // Update photos
+  async updatePhotos(companyId: string, photos: LocationPhotos, branchId?: string): Promise<void> {
+    try {
+      const docId = branchId ? `${companyId}_${branchId}` : `${companyId}_main`;
+      const docRef = doc(db, this.collectionName, docId);
+      
+      // Check if document exists
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        await updateDoc(docRef, {
+          photos,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Create new document with photos
+        const defaultSettings = this.getDefaultLocationSettings(companyId, branchId);
+        await setDoc(docRef, {
+          ...defaultSettings,
+          photos,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      
+      console.log('Photos updated successfully');
+    } catch (error) {
+      console.error('Error updating photos:', error);
+      throw error;
+    }
   }
 
   // Update branch name in the branches subcollection

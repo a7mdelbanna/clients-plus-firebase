@@ -297,17 +297,18 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
 
 #### Location Settings System (2025-07-17)
    - ✓ Comprehensive location management service (location.service.ts)
-   - ✓ Location Settings page with 4 tabs:
+   - ✓ Location Settings page with 5 tabs:
      - Basic Settings: Logo upload, business name, category, city, localization
      - Contact Details: Address, phone numbers, website, business hours
      - Business Hours: Weekly schedule with breaks, copy functionality
      - Map: Full Google Maps integration with search and markers
+     - Photos: Business banner and gallery with drag-and-drop upload
    - ✓ Multi-tenant location settings with branch support
    - ✓ Real-time subscriptions for location data
    - ✓ Logo upload to Firebase Storage
    - ✓ Phone number validation with country codes
    - ✓ Business hours with day/time selection and breaks
-   - ✓ Google Maps Integration (2025-07-17):
+   - ✓ Google Maps Integration Fixes (2025-07-17):
      - Interactive map with click-to-set location
      - Address search with autocomplete (restricted to Egypt)
      - Get current location button with geolocation API
@@ -317,9 +318,23 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
      - Address syncs with map location automatically
      - Fixed undefined coordinates error with proper validation
      - Added null checks for lat/lng values before saving
-     - Fixed map not displaying due to invalid coordinates from Firestore
-     - Properly handle undefined/null coordinates with Cairo fallback
-     - Coordinates and address both save to Firestore correctly
+     - Fixed Google Maps multiple loading error when switching tabs
+     - Replaced LoadScript component with useLoadScript hook for proper lifecycle
+     - Fixed constant loading spinner issue
+   - ✓ Business Name and Category Synchronization:
+     - Fixed business name always reverting to setup wizard value
+     - Prioritized saved location settings over company data
+     - Added category mapping from setup wizard business types
+     - Proper business name and category persistence after save
+   - ✓ Photos Tab Implementation:
+     - Banner section for hero image (used in online booking)
+     - Gallery section for multiple business photos
+     - Drag-and-drop upload support with react-dropzone
+     - Dark theme compatibility with theme-aware colors
+     - Firebase Storage integration for banner and business photos
+     - Image validation and size limits (10MB banner, 5MB photos)
+     - Caption editing for both banner and gallery photos
+     - Upload progress indicators and error handling
    - ✓ Integration with existing settings menu
    - ✓ Route configuration in App.tsx
    - Note: Google Maps Autocomplete shows deprecation warning (works but should migrate to PlaceAutocompleteElement in future)
@@ -333,6 +348,8 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - Reports and analytics
    - Inventory management
    - PDF export implementation for work schedule
+   - DescriptionTab with rich text editor for location settings
+   - Business Information page
 
 2. **Additional Features**
    - Email notifications

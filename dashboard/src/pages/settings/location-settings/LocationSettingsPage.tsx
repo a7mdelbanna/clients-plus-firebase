@@ -18,6 +18,7 @@ import {
   ContactPhone,
   Schedule,
   Map,
+  PhotoLibrary,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -31,6 +32,7 @@ import BasicSettingsTab from './tabs/BasicSettingsTab';
 import ContactDetailsTab from './tabs/ContactDetailsTab';
 import BusinessHoursTab from './tabs/BusinessHoursTab';
 import MapTab from './tabs/MapTab';
+import PhotosTab from './tabs/PhotosTab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -99,24 +101,28 @@ const LocationSettingsPage: React.FC = () => {
         unsubscribe = locationService.subscribeToLocationSettings(
           cId,
           (settings) => {
-            // If no settings exist yet and we have company info, pre-populate business name
-            if (!settings?.basic?.businessName && companyInfo?.name) {
-              const updatedSettings: LocationSettings = {
-                ...settings!,
-                basic: {
-                  ...settings?.basic!,
-                  businessName: companyInfo.name,
-                  locationName: settings?.basic?.locationName || currentBranch?.name || 'الفرع الرئيسي',
-                  category: settings?.basic?.category || '',
-                  city: settings?.basic?.city || '',
-                  notificationLanguage: settings?.basic?.notificationLanguage || 'ar',
-                  dateFormat: settings?.basic?.dateFormat || 'DD.MM.YYYY, HH:mm',
-                }
-              };
-              setLocationSettings(updatedSettings);
-            } else {
-              setLocationSettings(settings);
-            }
+            // Use saved business name if exists, otherwise use company name as default
+            const businessName = settings?.basic?.businessName || companyInfo?.name || '';
+            
+            // Map category from company info only if no category is saved
+            const mappedCategory = settings?.basic?.category || 
+              (companyInfo?.businessType 
+                ? locationService.mapBusinessTypeToCategory(companyInfo.businessType)
+                : '');
+            
+            const updatedSettings: LocationSettings = {
+              ...settings!,
+              basic: {
+                ...settings?.basic!,
+                businessName: businessName,
+                locationName: settings?.basic?.locationName || currentBranch?.name || 'الفرع الرئيسي',
+                category: mappedCategory,
+                city: settings?.basic?.city || '',
+                notificationLanguage: settings?.basic?.notificationLanguage || 'ar',
+                dateFormat: settings?.basic?.dateFormat || 'DD.MM.YYYY, HH:mm',
+              }
+            };
+            setLocationSettings(updatedSettings);
             setLoading(false);
           },
           (error) => {
@@ -171,6 +177,9 @@ const LocationSettingsPage: React.FC = () => {
             address: data.address 
           }, branchId);
           break;
+        case 'photos':
+          await locationService.updatePhotos(companyId, data, branchId);
+          break;
         default:
           break;
       }
@@ -189,6 +198,7 @@ const LocationSettingsPage: React.FC = () => {
     { label: 'تفاصيل الاتصال', icon: <ContactPhone />, index: 1 },
     { label: 'ساعات العمل', icon: <Schedule />, index: 2 },
     { label: 'الخريطة', icon: <Map />, index: 3 },
+    { label: 'الصور والمعرض', icon: <PhotoLibrary />, index: 4 },
   ];
 
   if (loading) {
@@ -302,6 +312,15 @@ const LocationSettingsPage: React.FC = () => {
             address={locationSettings?.contact?.address || ''}
             coordinates={locationSettings?.contact?.coordinates}
             onSave={(data) => handleSave(data, 'coordinates')}
+            saving={saving}
+          />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={4}>
+          <PhotosTab
+            photos={locationSettings?.photos}
+            companyId={companyId}
+            onSave={(data) => handleSave(data, 'photos')}
             saving={saving}
           />
         </TabPanel>
