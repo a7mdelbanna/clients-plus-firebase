@@ -19,8 +19,6 @@ import {
   Category,
   CalendarToday,
   CategoryOutlined,
-  EventNote,
-  GroupOutlined,
   Payment,
   PointOfSale,
   Receipt,
@@ -95,27 +93,11 @@ const settingsSections: SettingSection[] = [
   },
   // الفئات
   {
-    id: 'appointment-categories',
-    title: 'فئات المواعيد',
+    id: 'categories',
+    title: 'قوائم الفئات',
     icon: <CategoryOutlined sx={{ fontSize: 32 }} />,
-    path: '/settings/appointment-categories',
+    path: '/settings/categories',
     color: '#F97316',
-    category: 'categories',
-  },
-  {
-    id: 'event-categories',
-    title: 'فئات الفعاليات',
-    icon: <EventNote sx={{ fontSize: 32 }} />,
-    path: '/settings/event-categories',
-    color: '#84CC16',
-    category: 'categories',
-  },
-  {
-    id: 'client-categories',
-    title: 'فئات العملاء',
-    icon: <GroupOutlined sx={{ fontSize: 32 }} />,
-    path: '/settings/client-categories',
-    color: '#06B6D4',
     category: 'categories',
   },
   // المالية
@@ -218,7 +200,6 @@ const categories = [
 const SettingsMain: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const isRTL = theme.direction === 'rtl';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const containerVariants = {

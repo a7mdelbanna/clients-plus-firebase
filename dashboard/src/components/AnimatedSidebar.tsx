@@ -51,6 +51,7 @@ import {
   Work,
   Schedule,
   Category,
+  CategoryOutlined,
   CalendarToday,
   LocationOn,
   NotificationImportant,
@@ -172,6 +173,13 @@ const bottomMenuItems: MenuItem[] = [
         titleAr: 'الموارد',
         icon: <Category />,
         path: '/settings/resources',
+      },
+      {
+        id: 'categories',
+        title: 'Categories',
+        titleAr: 'قوائم الفئات',
+        icon: <CategoryOutlined />,
+        path: '/settings/categories',
       },
       {
         id: 'appointment-calendar',

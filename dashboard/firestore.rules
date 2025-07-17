@@ -287,10 +287,11 @@ service cloud.firestore {
         isCompanyAdmin(resource.data.companyId);
     }
     
-    // Resources collection
-    match /resources/{resourceId} {
+    // Client Categories collection
+    match /clientCategories/{categoryId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
       allow read: if isAuthenticated() && 
-        belongsToCompany(resource.data.companyId);
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
       allow create: if isAuthenticated() && 
         belongsToCompany(request.resource.data.companyId) &&
         request.resource.data.companyId != null;
@@ -298,7 +299,37 @@ service cloud.firestore {
         belongsToCompany(resource.data.companyId) &&
         request.resource.data.companyId == resource.data.companyId;
       allow delete: if isAuthenticated() && 
-        isCompanyAdmin(resource.data.companyId);
+        belongsToCompany(resource.data.companyId);
+    }
+    
+    // Appointment Categories collection
+    match /appointmentCategories/{categoryId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+    }
+    
+    // Event Categories collection
+    match /eventCategories/{categoryId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
     }
     
     // Deny all other access by default

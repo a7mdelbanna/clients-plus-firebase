@@ -20,6 +20,10 @@ import StaffFormPage from './pages/settings/staff/StaffFormPage';
 import EmployeeDetailPage from './pages/employee/EmployeeDetailPage';
 import ResourcesPage from './pages/settings/resources/ResourcesPage';
 import WorkSchedulePage from './pages/settings/work-schedule/WorkSchedulePage';
+import CategoriesPage from './pages/settings/categories/CategoriesPage';
+import ClientCategoriesPage from './pages/settings/categories/ClientCategoriesPage';
+import AppointmentCategoriesPage from './pages/settings/categories/AppointmentCategoriesPage';
+import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
 import SetupWizard from './components/SetupWizard/SetupWizard';
@@ -181,6 +185,26 @@ function App() {
                 <Route path="/settings/work-schedule" element={
                   <PageTransition>
                     <WorkSchedulePage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories" element={
+                  <PageTransition>
+                    <CategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories/clients" element={
+                  <PageTransition>
+                    <ClientCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories/appointments" element={
+                  <PageTransition>
+                    <AppointmentCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories/events" element={
+                  <PageTransition>
+                    <EventCategoriesPage />
                   </PageTransition>
                 } />
                 <Route path="/employee/:employeeId/schedule" element={
