@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { collection, query, where, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, type Unsubscribe } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import { setupService } from '../services/setup.service';
@@ -12,6 +12,7 @@ export interface Branch {
   isMain: boolean;
   active?: boolean;
   createdAt?: any;
+  businessName?: string; // Business name from company document
 }
 
 interface BranchContextType {
@@ -80,12 +81,25 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
         
         unsubscribe = onSnapshot(
           q,
-          (snapshot) => {
+          async (snapshot) => {
             const branchList: Branch[] = [];
+            
+            // Get business name from company document
+            let businessName = '';
+            try {
+              const companyDoc = await getDoc(doc(db, 'companies', cId));
+              if (companyDoc.exists()) {
+                businessName = companyDoc.data().businessName || '';
+              }
+            } catch (error) {
+              console.warn('Could not fetch business name:', error);
+            }
+            
             snapshot.forEach((doc) => {
               branchList.push({
                 id: doc.id,
-                ...doc.data()
+                ...doc.data(),
+                businessName
               } as Branch);
             });
 

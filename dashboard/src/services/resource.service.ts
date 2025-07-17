@@ -20,6 +20,7 @@ import { db } from '../config/firebase';
 export interface Resource {
   id?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   name: string;
   description?: string;
   services: string[]; // Service IDs that can use this resource

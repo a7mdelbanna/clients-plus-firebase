@@ -30,6 +30,7 @@ import { toast } from 'react-toastify';
 import { staffService, type AccessLevel, AccessLevelDescriptions } from '../../../services/staff.service';
 import type { Position } from '../../../services/position.service';
 import { Timestamp } from 'firebase/firestore';
+import { useBranch } from '../../../contexts/BranchContext';
 
 interface AddEmployeeModalProps {
   open: boolean;
@@ -57,6 +58,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [showNewPosition, setShowNewPosition] = useState(false);
+  const { currentBranch } = useBranch();
 
   const {
     control,
@@ -127,7 +129,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
         newStaff.access.inviteSentAt = Timestamp.now();
       }
 
-      const staffId = await staffService.createStaff(newStaff, companyId);
+      const staffId = await staffService.createStaff(newStaff, companyId, currentBranch?.id);
 
       // Send invitation if requested
       if (data.grantServiceAccess && data.contactInfo) {

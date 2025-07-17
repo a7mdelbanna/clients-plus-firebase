@@ -115,7 +115,7 @@ class LocationService {
       }
       
       // Return default settings if none exist
-      return this.getDefaultLocationSettings(companyId, branchId);
+      return this.getDefaultLocationSettings(companyId, branchId, undefined);
     } catch (error) {
       console.error('Error getting location settings:', error);
       throw error;
@@ -123,21 +123,38 @@ class LocationService {
   }
 
   // Get default location settings
-  private getDefaultLocationSettings(companyId: string, branchId?: string): LocationSettings {
+  private getDefaultLocationSettings(
+    companyId: string, 
+    branchId?: string,
+    branchData?: { name?: string; address?: string; phone?: string; businessName?: string }
+  ): LocationSettings {
+    // Parse phone number if provided
+    let phones = [{ countryCode: '+20', number: '' }];
+    if (branchData?.phone) {
+      // Extract country code and number from phone string
+      const phoneMatch = branchData.phone.match(/^(\+\d+)(.*)$/);
+      if (phoneMatch) {
+        phones = [{
+          countryCode: phoneMatch[1],
+          number: phoneMatch[2].trim()
+        }];
+      }
+    }
+
     return {
       companyId,
       branchId,
       basic: {
-        locationName: 'الفرع الرئيسي',
-        businessName: '',
+        locationName: branchData?.name || 'الفرع الرئيسي',
+        businessName: branchData?.businessName || '',
         category: '',
         city: '',
         notificationLanguage: 'ar',
         dateFormat: 'DD.MM.YYYY, HH:mm',
       },
       contact: {
-        address: '',
-        phones: [{ countryCode: '+20', number: '' }], // Egypt default
+        address: branchData?.address || '',
+        phones: phones,
       },
       active: true,
       isMain: !branchId,
@@ -269,6 +286,12 @@ class LocationService {
           updatedAt: serverTimestamp(),
         });
       }
+      
+      // Also update branch address and phone in the branches subcollection
+      if (contactDetails.address || contactDetails.phones?.length) {
+        console.log('Updating branch contact details');
+        await this.updateBranchContactDetails(companyId, branchId || 'main', contactDetails);
+      }
     } catch (error) {
       console.error('Error updating contact details:', error);
       throw error;
@@ -299,8 +322,8 @@ class LocationService {
         await setDoc(docRef, {
           companyId,
           branchId,
-          basic: this.getDefaultLocationSettings(companyId, branchId).basic,
-          contact: this.getDefaultLocationSettings(companyId, branchId).contact,
+          basic: this.getDefaultLocationSettings(companyId, branchId, undefined).basic,
+          contact: this.getDefaultLocationSettings(companyId, branchId, undefined).contact,
           description,
           isMain: !branchId,
           active: true,
@@ -338,8 +361,8 @@ class LocationService {
         await setDoc(docRef, {
           companyId,
           branchId,
-          basic: this.getDefaultLocationSettings(companyId, branchId).basic,
-          contact: this.getDefaultLocationSettings(companyId, branchId).contact,
+          basic: this.getDefaultLocationSettings(companyId, branchId, undefined).basic,
+          contact: this.getDefaultLocationSettings(companyId, branchId, undefined).contact,
           photos,
           isMain: !branchId,
           active: true,
@@ -377,8 +400,8 @@ class LocationService {
         await setDoc(docRef, {
           companyId,
           branchId,
-          basic: this.getDefaultLocationSettings(companyId, branchId).basic,
-          contact: this.getDefaultLocationSettings(companyId, branchId).contact,
+          basic: this.getDefaultLocationSettings(companyId, branchId, undefined).basic,
+          contact: this.getDefaultLocationSettings(companyId, branchId, undefined).contact,
           legal: legalDetails,
           isMain: !branchId,
           active: true,
@@ -405,14 +428,61 @@ class LocationService {
 
     return onSnapshot(
       docRef,
-      (docSnap) => {
+      async (docSnap) => {
         if (docSnap.exists()) {
           onUpdate({
             id: docSnap.id,
             ...docSnap.data()
           } as LocationSettings);
         } else {
-          onUpdate(this.getDefaultLocationSettings(companyId, branchId));
+          // If location settings don't exist, try to get branch data
+          let branchData = undefined;
+          try {
+            // Try to get branch data to use as initial values
+            let actualBranchId = branchId || 'main';
+            let branchRef = doc(db, 'companies', companyId, 'branches', actualBranchId);
+            let branchDoc = await getDoc(branchRef);
+            
+            // If not found and branchId is '1', try 'main' (for backward compatibility)
+            if (!branchDoc.exists() && branchId === '1') {
+              console.log('Branch with ID "1" not found, trying "main"...');
+              branchRef = doc(db, 'companies', companyId, 'branches', 'main');
+              branchDoc = await getDoc(branchRef);
+            }
+            
+            // If still not found, try to get the first branch
+            if (!branchDoc.exists()) {
+              const branchesRef = collection(db, 'companies', companyId, 'branches');
+              const branchesSnapshot = await getDocs(branchesRef);
+              if (branchesSnapshot.size > 0) {
+                branchDoc = branchesSnapshot.docs[0];
+              }
+            }
+            
+            if (branchDoc.exists()) {
+              const branch = branchDoc.data();
+              branchData = {
+                name: branch.name,
+                address: branch.address,
+                phone: branch.phone,
+              };
+              console.log('Using branch data for defaults:', branchData);
+            }
+            
+            // Also get business name from company document
+            const companyRef = doc(db, 'companies', companyId);
+            const companyDoc = await getDoc(companyRef);
+            if (companyDoc.exists()) {
+              branchData = {
+                ...branchData,
+                businessName: companyDoc.data().name || ''
+              };
+            }
+          } catch (error) {
+            console.warn('Could not fetch branch data for defaults:', error);
+          }
+          
+          onUpdate(this.getDefaultLocationSettings(companyId, branchId, branchData));
         }
       },
       (error) => {
@@ -570,7 +640,7 @@ class LocationService {
         });
       } else {
         // Create new document with photos
-        const defaultSettings = this.getDefaultLocationSettings(companyId, branchId);
+        const defaultSettings = this.getDefaultLocationSettings(companyId, branchId, undefined);
         await setDoc(docRef, {
           ...defaultSettings,
           photos,
@@ -635,6 +705,74 @@ class LocationService {
       }
     } catch (error) {
       console.error('Error updating branch name:', error);
+      // Don't throw here to avoid breaking the main save operation
+    }
+  }
+
+  // Update branch contact details in the branches subcollection
+  async updateBranchContactDetails(
+    companyId: string, 
+    branchId: string, 
+    contactDetails: Partial<LocationContactDetails>
+  ): Promise<void> {
+    try {
+      console.log(`Attempting to update branch contact details. CompanyId: ${companyId}, BranchId: ${branchId}`);
+      
+      // Extract the primary phone number
+      const primaryPhone = contactDetails.phones?.length ? contactDetails.phones[0] : null;
+      const phoneNumber = primaryPhone ? `${primaryPhone.countryCode}${primaryPhone.number}` : '';
+      
+      // First, try with the provided branchId
+      const branchRef = doc(db, 'companies', companyId, 'branches', branchId);
+      const branchDoc = await getDoc(branchRef);
+      
+      if (branchDoc.exists()) {
+        const updateData: any = {};
+        if (contactDetails.address) updateData.address = contactDetails.address;
+        if (phoneNumber) updateData.phone = phoneNumber;
+        updateData.updatedAt = serverTimestamp();
+        
+        await updateDoc(branchRef, updateData);
+        console.log('Branch contact details updated successfully');
+        return;
+      }
+      
+      // If not found and branchId is '1', try 'main' (for backward compatibility)
+      if (branchId === '1') {
+        console.log('Branch with ID "1" not found, trying "main"...');
+        const mainBranchRef = doc(db, 'companies', companyId, 'branches', 'main');
+        const mainBranchDoc = await getDoc(mainBranchRef);
+        
+        if (mainBranchDoc.exists()) {
+          const updateData: any = {};
+          if (contactDetails.address) updateData.address = contactDetails.address;
+          if (phoneNumber) updateData.phone = phoneNumber;
+          updateData.updatedAt = serverTimestamp();
+          
+          await updateDoc(mainBranchRef, updateData);
+          console.log('Branch contact details updated for main branch');
+          return;
+        }
+      }
+      
+      // If still not found, check if there's only one branch and update it
+      const branchesRef = collection(db, 'companies', companyId, 'branches');
+      const branchesSnapshot = await getDocs(branchesRef);
+      
+      if (branchesSnapshot.size === 1) {
+        const singleBranchDoc = branchesSnapshot.docs[0];
+        const updateData: any = {};
+        if (contactDetails.address) updateData.address = contactDetails.address;
+        if (phoneNumber) updateData.phone = phoneNumber;
+        updateData.updatedAt = serverTimestamp();
+        
+        await updateDoc(singleBranchDoc.ref, updateData);
+        console.log(`Branch contact details updated for single branch (ID: ${singleBranchDoc.id})`);
+      } else {
+        console.warn(`Branch ${branchId} not found and multiple branches exist`);
+      }
+    } catch (error) {
+      console.error('Error updating branch contact details:', error);
       // Don't throw here to avoid breaking the main save operation
     }
   }

@@ -261,20 +261,6 @@ export const setupService = {
         });
       }
 
-      // If there's only one branch, update it as the main location
-      if (setupData.branches.length === 1) {
-        const locationsRef = collection(db, 'companies', companyId, 'locations');
-        const locationDoc = doc(locationsRef);
-        batch.set(locationDoc, {
-          name: setupData.branches[0].name,
-          address: setupData.branches[0].address,
-          phone: setupData.branches[0].phone,
-          isMain: true,
-          active: true,
-          createdAt: serverTimestamp()
-        });
-      }
-
       await batch.commit();
       console.log('[setupService] Batch commit successful');
       

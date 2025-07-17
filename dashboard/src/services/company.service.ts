@@ -29,7 +29,7 @@ export interface RecentActivity {
 }
 
 class CompanyService {
-  async getCompanyStats(companyId: string): Promise<CompanyStats> {
+  async getCompanyStats(companyId: string, branchId?: string): Promise<CompanyStats> {
     try {
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -40,11 +40,17 @@ class CompanyService {
       // Get clients count
       let totalClients = 0;
       try {
-        const clientsQuery = query(
-          collection(db, 'clients'),
+        const conditions = [
           where('companyId', '==', companyId),
           where('status', '==', 'active')
-        );
+        ];
+        
+        // Add branch filtering if branchId is provided
+        if (branchId) {
+          conditions.push(where('branchId', '==', branchId));
+        }
+        
+        const clientsQuery = query(collection(db, 'clients'), ...conditions);
         const clientsSnapshot = await getDocs(clientsQuery);
         totalClients = clientsSnapshot.size;
       } catch (error) {
@@ -54,12 +60,18 @@ class CompanyService {
       // Get clients from last month for growth calculation
       let clientsGrowth = '+0%';
       try {
-        const lastMonthClientsQuery = query(
-          collection(db, 'clients'),
+        const lastMonthConditions = [
           where('companyId', '==', companyId),
           where('createdAt', '>=', Timestamp.fromDate(lastMonthStart)),
           where('createdAt', '<=', Timestamp.fromDate(lastMonthEnd))
-        );
+        ];
+        
+        // Add branch filtering if branchId is provided
+        if (branchId) {
+          lastMonthConditions.push(where('branchId', '==', branchId));
+        }
+        
+        const lastMonthClientsQuery = query(collection(db, 'clients'), ...lastMonthConditions);
         const lastMonthClientsSnapshot = await getDocs(lastMonthClientsQuery);
         const lastMonthClients = lastMonthClientsSnapshot.size;
         

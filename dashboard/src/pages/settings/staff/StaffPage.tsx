@@ -45,6 +45,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { staffService, type Staff, type AccessLevel, AccessLevelDescriptions } from '../../../services/staff.service';
 import { positionService, type Position } from '../../../services/position.service';
 import { setupService } from '../../../services/setup.service';
@@ -55,6 +56,7 @@ const StaffPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   
   const [staff, setStaff] = useState<Staff[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -74,7 +76,7 @@ const StaffPage: React.FC = () => {
     if (!currentUser) return;
     
     loadData();
-  }, [currentUser]);
+  }, [currentUser, currentBranch]);
 
   const loadData = async () => {
     try {
@@ -108,7 +110,8 @@ const StaffPage: React.FC = () => {
           console.error('Error subscribing to staff:', error);
           toast.error('حدث خطأ في تحميل الموظفين');
           setLoading(false);
-        }
+        },
+        currentBranch?.id // Add branch filtering
       );
 
       // Cleanup subscription on unmount

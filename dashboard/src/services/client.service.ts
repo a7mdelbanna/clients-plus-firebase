@@ -39,6 +39,7 @@ export interface Client {
   tags?: string[];
   notes?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   createdBy?: string;
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
@@ -77,10 +78,11 @@ class ClientService {
   private clientsCollection = 'clients';
 
   // Create a new client
-  async createClient(clientData: Omit<Client, 'id'>, userId: string): Promise<string> {
+  async createClient(clientData: Omit<Client, 'id'>, userId: string, branchId?: string): Promise<string> {
     try {
       const newClient = {
         ...clientData,
+        branchId: branchId || clientData.branchId, // Use provided branchId or fallback to clientData.branchId
         createdBy: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -149,12 +151,18 @@ class ClientService {
   async getClients(
     companyId: string,
     filter?: ClientsFilter,
-    pagination?: PaginationOptions
+    pagination?: PaginationOptions,
+    branchId?: string
   ): Promise<{ clients: Client[]; lastDoc: DocumentSnapshot | null }> {
     try {
       const constraints: QueryConstraint[] = [
         where('companyId', '==', companyId)
       ];
+
+      // Add branch filtering if branchId is provided
+      if (branchId) {
+        constraints.push(where('branchId', '==', branchId));
+      }
 
       // Apply status filter
       if (filter?.status && filter.status !== 'all') {
@@ -248,11 +256,17 @@ class ClientService {
   subscribeToClients(
     companyId: string,
     callback: (clients: Client[]) => void,
-    filter?: ClientsFilter
+    filter?: ClientsFilter,
+    branchId?: string
   ): Unsubscribe {
     const constraints: QueryConstraint[] = [
       where('companyId', '==', companyId)
     ];
+
+    // Add branch filtering if branchId is provided
+    if (branchId) {
+      constraints.push(where('branchId', '==', branchId));
+    }
 
     if (filter?.status && filter.status !== 'all') {
       constraints.push(where('status', '==', filter.status));

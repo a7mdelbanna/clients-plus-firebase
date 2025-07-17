@@ -19,6 +19,7 @@ import {
   LocationOn,
   Phone,
   CheckCircle,
+  Add,
 } from '@mui/icons-material';
 import { useBranch } from '../contexts/BranchContext';
 
@@ -50,7 +51,9 @@ const BranchSelector: React.FC = () => {
     );
   }
 
-  if (!currentBranch || branches.length <= 1) {
+  // Always show the branch selector if we have at least one branch
+  // This helps users understand which branch they're viewing
+  if (!currentBranch || branches.length === 0) {
     return null;
   }
 
@@ -74,8 +77,8 @@ const BranchSelector: React.FC = () => {
         }}
       >
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {currentBranch.name}
+          <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
+            {currentBranch.businessName ? `${currentBranch.businessName} - ${currentBranch.name}` : currentBranch.name}
           </Typography>
           {currentBranch.isMain && (
             <Chip
@@ -143,7 +146,7 @@ const BranchSelector: React.FC = () => {
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {branch.name}
+                    {branch.businessName ? `${branch.businessName} - ${branch.name}` : branch.name}
                   </Typography>
                   {branch.isMain && (
                     <Chip
@@ -171,10 +174,43 @@ const BranchSelector: React.FC = () => {
                   </Box>
                 </Box>
               }
+              secondaryTypographyProps={{ component: 'div' }}
               sx={{ my: 0 }}
             />
           </MenuItem>
         ))}
+        
+        <Divider />
+        
+        <MenuItem
+          onClick={handleClose}
+          disabled={branches.length >= 2} // Trial limitation: max 2 branches
+          sx={{
+            py: 1.5,
+            color: branches.length >= 2 ? 'text.disabled' : 'primary.main',
+            '&:hover': {
+              backgroundColor: branches.length >= 2 ? 'transparent' : alpha(theme.palette.primary.main, 0.08),
+            },
+          }}
+        >
+          <ListItemIcon>
+            <Add sx={{ color: branches.length >= 2 ? 'text.disabled' : 'primary.main' }} />
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {isRTL ? 'إضافة فرع جديد' : 'Add New Branch'}
+              </Typography>
+            }
+            secondary={
+              branches.length >= 2 ? (
+                <Typography variant="caption" color="text.secondary">
+                  {isRTL ? 'الحد الأقصى للفترة التجريبية: 2 فروع' : 'Trial limit: 2 branches'}
+                </Typography>
+              ) : null
+            }
+          />
+        </MenuItem>
       </Menu>
     </>
   );

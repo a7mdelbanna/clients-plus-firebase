@@ -19,6 +19,7 @@ import { db } from '../config/firebase';
 export interface BaseCategory {
   id?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   name: string;
   nameAr?: string;
   color: string;

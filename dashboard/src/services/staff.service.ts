@@ -23,6 +23,7 @@ export type AccessLevel = 'Employee' | 'Administrator' | 'CallCenter' | 'Account
 export interface Staff {
   id?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   
   // Basic Info
   name: string; // Primary name in Arabic
@@ -128,10 +129,12 @@ export const staffService = {
   // Create a new staff member
   async createStaff(
     staff: Omit<Staff, 'id' | 'createdAt' | 'updatedAt'>,
-    userId: string
+    userId: string,
+    branchId?: string
   ): Promise<string> {
     const staffData = {
       ...staff,
+      branchId: branchId || staff.branchId, // Use provided branchId or fallback to staff.branchId
       services: staff.services || [],
       servicesCount: staff.services?.length || 0,
       createdAt: serverTimestamp(),
@@ -150,7 +153,7 @@ export const staffService = {
   },
 
   // Get all staff for a company
-  async getStaff(companyId: string): Promise<Staff[]> {
+  async getStaff(companyId: string, branchId?: string): Promise<Staff[]> {
     const q = query(
       collection(db, 'staff'),
       where('companyId', '==', companyId),
@@ -158,7 +161,7 @@ export const staffService = {
     );
 
     const snapshot = await getDocs(q);
-    const staff = snapshot.docs.map(doc => {
+    let staff = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -169,6 +172,14 @@ export const staffService = {
         onlineBooking: data.onlineBooking || { enabled: false },
       } as Staff;
     });
+    
+    // Filter by branch on client side to handle legacy data
+    if (branchId) {
+      staff = staff.filter(s => {
+        // Include staff that belong to this branch OR staff with no branchId (legacy data)
+        return s.branchId === branchId || !s.branchId;
+      });
+    }
     
     // Sort by name
     return staff.sort((a, b) => a.name.localeCompare(b.name));
@@ -267,7 +278,8 @@ export const staffService = {
   subscribeToStaff(
     companyId: string,
     callback: (staff: Staff[]) => void,
-    errorCallback?: (error: Error) => void
+    errorCallback?: (error: Error) => void,
+    branchId?: string
   ): Unsubscribe {
     const q = query(
       collection(db, 'staff'),
@@ -278,7 +290,7 @@ export const staffService = {
     return onSnapshot(
       q, 
       (snapshot) => {
-        const staff = snapshot.docs.map(doc => {
+        let staff = snapshot.docs.map(doc => {
           const data = doc.data();
           // Ensure proper data structure for new schema
           return {
@@ -290,6 +302,15 @@ export const staffService = {
             onlineBooking: data.onlineBooking || { enabled: false },
           } as Staff;
         });
+        
+        // Filter by branch on client side to handle legacy data
+        if (branchId) {
+          staff = staff.filter(s => {
+            // Include staff that belong to this branch OR staff with no branchId (legacy data)
+            return s.branchId === branchId || !s.branchId;
+          });
+        }
+        
         // Sort by name
         const sortedStaff = staff.sort((a, b) => a.name.localeCompare(b.name));
         callback(sortedStaff);

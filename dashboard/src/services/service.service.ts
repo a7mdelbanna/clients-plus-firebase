@@ -20,6 +20,7 @@ import { db } from '../config/firebase';
 export interface ServiceCategory {
   id?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   name: string;
   nameAr?: string;
   useOnlineBookingName?: boolean;
@@ -35,6 +36,7 @@ export interface ServiceCategory {
 export interface Service {
   id?: string;
   companyId: string;
+  branchId?: string; // Branch assignment for multi-branch support
   categoryId: string;
   name: string; // Primary name in Arabic
   nameAr?: string; // Deprecated - kept for backward compatibility
@@ -200,10 +202,12 @@ export const serviceService = {
   // Service CRUD
   async createService(
     service: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>,
-    userId: string
+    userId: string,
+    branchId?: string
   ): Promise<string> {
     const serviceData = {
       ...service,
+      branchId: branchId || service.branchId, // Use provided branchId or fallback to service.branchId
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: userId,
@@ -227,23 +231,23 @@ export const serviceService = {
     return docRef.id;
   },
 
-  async getServices(companyId: string, categoryId?: string): Promise<Service[]> {
-    let q;
+  async getServices(companyId: string, categoryId?: string, branchId?: string): Promise<Service[]> {
+    const conditions = [
+      where('companyId', '==', companyId),
+      where('active', '==', true)
+    ];
     
-    if (categoryId) {
-      q = query(
-        collection(db, 'services'),
-        where('companyId', '==', companyId),
-        where('categoryId', '==', categoryId),
-        where('active', '==', true)
-      );
-    } else {
-      q = query(
-        collection(db, 'services'),
-        where('companyId', '==', companyId),
-        where('active', '==', true)
-      );
+    // Add branch filtering if branchId is provided
+    if (branchId) {
+      conditions.push(where('branchId', '==', branchId));
     }
+    
+    // Add category filtering if categoryId is provided
+    if (categoryId) {
+      conditions.push(where('categoryId', '==', categoryId));
+    }
+    
+    const q = query(collection(db, 'services'), ...conditions);
 
     const snapshot = await getDocs(q);
     const services = snapshot.docs.map(doc => ({
@@ -364,24 +368,25 @@ export const serviceService = {
     companyId: string,
     callback: (services: Service[]) => void,
     categoryId?: string,
-    errorCallback?: (error: Error) => void
+    errorCallback?: (error: Error) => void,
+    branchId?: string
   ): Unsubscribe {
-    let q;
+    const conditions = [
+      where('companyId', '==', companyId),
+      where('active', '==', true)
+    ];
     
-    if (categoryId) {
-      q = query(
-        collection(db, 'services'),
-        where('companyId', '==', companyId),
-        where('categoryId', '==', categoryId),
-        where('active', '==', true)
-      );
-    } else {
-      q = query(
-        collection(db, 'services'),
-        where('companyId', '==', companyId),
-        where('active', '==', true)
-      );
+    // Add branch filtering if branchId is provided
+    if (branchId) {
+      conditions.push(where('branchId', '==', branchId));
     }
+    
+    // Add category filtering if categoryId is provided
+    if (categoryId) {
+      conditions.push(where('categoryId', '==', categoryId));
+    }
+    
+    const q = query(collection(db, 'services'), ...conditions);
 
     return onSnapshot(
       q, 
