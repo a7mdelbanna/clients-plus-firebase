@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { BranchProvider } from './contexts/BranchContext';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import ForgotPassword from './components/ForgotPassword';
@@ -24,6 +25,7 @@ import CategoriesPage from './pages/settings/categories/CategoriesPage';
 import ClientCategoriesPage from './pages/settings/categories/ClientCategoriesPage';
 import AppointmentCategoriesPage from './pages/settings/categories/AppointmentCategoriesPage';
 import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage';
+import LocationSettingsPage from './pages/settings/location-settings/LocationSettingsPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
 import SetupWizard from './components/SetupWizard/SetupWizard';
@@ -72,8 +74,9 @@ function App() {
       <Router>
         <AuthProvider>
           <ThemeProvider>
-            <CssBaseline />
-            <Routes>
+            <BranchProvider>
+              <CssBaseline />
+              <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/login" element={
                 <PageTransition>
@@ -207,6 +210,11 @@ function App() {
                     <EventCategoriesPage />
                   </PageTransition>
                 } />
+                <Route path="/settings/location-settings" element={
+                  <PageTransition>
+                    <LocationSettingsPage />
+                  </PageTransition>
+                } />
                 <Route path="/employee/:employeeId/schedule" element={
                   <PageTransition>
                     <EmployeeDetailPage />
@@ -246,6 +254,7 @@ function App() {
                 fontFamily: 'Tajawal, sans-serif',
               }}
             />
+            </BranchProvider>
           </ThemeProvider>
         </AuthProvider>
       </Router>

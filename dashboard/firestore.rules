@@ -332,6 +332,21 @@ service cloud.firestore {
         belongsToCompany(resource.data.companyId);
     }
     
+    // Location Settings collection
+    match /locationSettings/{settingId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null;
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+    }
+    
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

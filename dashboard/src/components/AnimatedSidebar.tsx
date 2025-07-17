@@ -182,6 +182,13 @@ const bottomMenuItems: MenuItem[] = [
         path: '/settings/categories',
       },
       {
+        id: 'location-settings',
+        title: 'Location Settings',
+        titleAr: 'إعدادات الموقع',
+        icon: <LocationOn />,
+        path: '/settings/location-settings',
+      },
+      {
         id: 'appointment-calendar',
         title: 'Appointment Calendar',
         titleAr: 'تقويم المواعيد',

@@ -56,7 +56,7 @@ const SetupWizard: React.FC = () => {
       ownerPosition: '',
       branches: [
         {
-          id: '1',
+          id: 'main',
           name: '',
           address: '',
           phone: '',

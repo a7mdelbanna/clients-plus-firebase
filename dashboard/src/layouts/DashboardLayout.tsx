@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box, useTheme, useMediaQuery } from '@mui/material';
 import AnimatedSidebar from '../components/AnimatedSidebar';
+import DashboardHeader from '../components/DashboardHeader';
 
 const DashboardLayout: React.FC = () => {
   const theme = useTheme();
@@ -14,6 +15,10 @@ const DashboardLayout: React.FC = () => {
 
   const handleSidebarOpen = () => {
     setSidebarOpen(true);
+  };
+
+  const handleMenuClick = () => {
+    setSidebarOpen(!sidebarOpen);
   };
 
   return (
@@ -30,9 +35,14 @@ const DashboardLayout: React.FC = () => {
           flexGrow: 1,
           backgroundColor: theme.palette.background.default,
           minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Outlet />
+        <DashboardHeader onMenuClick={handleMenuClick} />
+        <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+          <Outlet />
+        </Box>
       </Box>
     </Box>
   );

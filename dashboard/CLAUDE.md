@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-07-17)
+## Current Status (Last Updated: 2025-07-17 - Evening)
 
 ### Completed Features
 1. **Authentication System**
@@ -295,6 +295,35 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✓ Empty states with CTAs
    - ✓ Responsive design with animations
 
+#### Location Settings System (2025-07-17)
+   - ✓ Comprehensive location management service (location.service.ts)
+   - ✓ Location Settings page with 4 tabs:
+     - Basic Settings: Logo upload, business name, category, city, localization
+     - Contact Details: Address, phone numbers, website, business hours
+     - Business Hours: Weekly schedule with breaks, copy functionality
+     - Map: Full Google Maps integration with search and markers
+   - ✓ Multi-tenant location settings with branch support
+   - ✓ Real-time subscriptions for location data
+   - ✓ Logo upload to Firebase Storage
+   - ✓ Phone number validation with country codes
+   - ✓ Business hours with day/time selection and breaks
+   - ✓ Google Maps Integration (2025-07-17):
+     - Interactive map with click-to-set location
+     - Address search with autocomplete (restricted to Egypt)
+     - Get current location button with geolocation API
+     - Reverse geocoding for address lookup
+     - Marker animation and map controls
+     - Coordinates display with lat/lng values
+     - Address syncs with map location automatically
+     - Fixed undefined coordinates error with proper validation
+     - Added null checks for lat/lng values before saving
+     - Fixed map not displaying due to invalid coordinates from Firestore
+     - Properly handle undefined/null coordinates with Cairo fallback
+     - Coordinates and address both save to Firestore correctly
+   - ✓ Integration with existing settings menu
+   - ✓ Route configuration in App.tsx
+   - Note: Google Maps Autocomplete shows deprecation warning (works but should migrate to PlaceAutocompleteElement in future)
+
 ### Remaining Tasks
 1. **Complete Page Implementations**
    - ClientDetail component (view individual client)
@@ -305,13 +334,24 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - Inventory management
    - PDF export implementation for work schedule
 
-3. **Additional Features**
+2. **Additional Features**
    - Email notifications
    - Real-time updates
    - Export functionality
    - Advanced search
    - Bulk operations
    - API integration
+
+3. **Production Deployment Tasks**
+   - **IMPORTANT: Secure Google Maps API Key**
+     - Add domain restrictions in Google Cloud Console
+     - Allowed referrers should include:
+       ```
+       https://your-domain.com/*
+       https://www.your-domain.com/*
+       ```
+     - Remove localhost and unrestricted access
+     - Enable only required APIs (Maps JavaScript, Places, Geocoding)
 
 ## Tech Stack
 - **Frontend**: React 18 with TypeScript
@@ -344,6 +384,24 @@ firebase deploy --only firestore:rules    # Deploy security rules
 firebase deploy --only functions          # Deploy cloud functions
 firebase deploy                          # Deploy everything
 ```
+
+## Next Steps for Testing
+1. **Test Location Settings Features**:
+   - ✅ Google Maps integration working
+   - Test logo upload functionality
+   - Test business hours configuration
+   - Test contact details (phone numbers, website)
+   - Test all data persistence after page refresh
+
+2. **Implement Branch Switcher in Sidebar**:
+   - Allow users to switch between branches
+   - Update all pages to be branch-aware
+   - Test multi-branch functionality
+
+3. **Complete Remaining Settings Pages**:
+   - Business Information page
+   - Rich text editor for descriptions
+   - Photo gallery for business photos
 
 ## Common Issues and Solutions
 1. **Permission Errors**: 
@@ -489,6 +547,87 @@ firebase deploy                          # Deploy everything
       1. Fixed subscription cleanup by properly handling the unsubscribe function in useEffect
       2. Added small delay (100ms) before closing form to ensure real-time update is received
     - **Prevention**: Always properly clean up Firestore subscriptions in useEffect cleanup function
+
+19. **Location Settings Update Permission Error**:
+    - **Error**: "Missing or insufficient permissions" when saving location settings
+    - **Cause**: Using `updateDoc` on a document that doesn't exist yet
+    - **Solution**: 
+      1. Modified all update methods in location.service.ts to check if document exists first
+      2. Use `setDoc` to create document if it doesn't exist, `updateDoc` if it does
+      3. Apply same pattern to updateBasicSettings, updateContactDetails, etc.
+    - **Example Fix**:
+      ```typescript
+      // Check if document exists
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        await updateDoc(docRef, data);
+      } else {
+        await setDoc(docRef, fullData);
+      }
+      ```
+    - **Prevention**: Always check document existence before using updateDoc
+
+20. **Location Settings Data Persistence Issue**:
+    - **Error**: Saved data shows success but doesn't persist after page refresh
+    - **Cause**: Inconsistent document ID construction between read and write operations
+    - **Solution**: 
+      1. Fixed document ID format to be consistent across all methods
+      2. Changed from `docId = branchId || ${companyId}_main` to `docId = branchId ? ${companyId}_${branchId} : ${companyId}_main`
+      3. Ensures data is saved to and loaded from the same document
+    - **Example Fix**:
+      ```typescript
+      // Consistent format for both read and write
+      const docId = branchId ? `${companyId}_${branchId}` : `${companyId}_main`;
+      ```
+    - **Prevention**: Always use consistent document ID format across service methods
+
+21. **Branch Name Synchronization Issue**:
+    - **Error**: Branch name in header doesn't update when changed in location settings
+    - **Cause**: Branch names stored in two different places without synchronization
+    - **Solution**: 
+      1. Added `updateBranchName` method to sync branch name to branches subcollection
+      2. When updating location settings, also update the branch document
+      3. Branch selector in header shows the synced name
+    - **Implementation**:
+      ```typescript
+      // In updateBasicSettings
+      if (basicSettings.locationName) {
+        await this.updateBranchName(companyId, branchId || 'main', basicSettings.locationName);
+      }
+      ```
+    - **Data Flow**: 
+      - Location Settings → updates both `locationSettings` and `branches` collections
+      - Header BranchSelector → reads from `branches` collection
+    - **Prevention**: Keep single source of truth for shared data
+
+22. **Branch ID Mismatch Between Setup and Firestore**:
+    - **Error**: "Branch 1 not found in branches subcollection" when updating branch name
+    - **Root Cause**: 
+      1. Setup wizard creates branches with hardcoded ID (e.g., `id: '1'`)
+      2. When saved to Firestore, branches got auto-generated document IDs
+      3. The branch object has `id: '1'` but Firestore document ID is different
+    - **Solutions Implemented**:
+      1. Changed setup to use branch.id as document ID if provided
+      2. Changed default branch ID from '1' to 'main' for clarity
+      3. Added robust fallback in `updateBranchName`:
+         - Try provided branchId first
+         - If branchId is '1', also try 'main' (backward compatibility)
+         - If single branch exists, update it regardless of ID
+    - **Code Changes**:
+      ```typescript
+      // Setup service now uses branch.id as document ID
+      const branchRef = branch.id 
+        ? doc(db, 'companies', companyId, 'branches', branch.id)
+        : doc(collection(db, 'companies', companyId, 'branches'));
+      ```
+    - **Prevention**: Always use consistent ID strategies between data model and storage
+    - **Migration**: For existing users with mismatched branch IDs, run in browser console:
+      ```javascript
+      // Get company ID from auth context or user claims
+      const companyId = 'your-company-id';
+      window.migrateBranchIds(companyId);
+      ```
 
 ## Next Major Features
 - Client management system

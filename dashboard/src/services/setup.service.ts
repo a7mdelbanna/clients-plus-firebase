@@ -246,9 +246,16 @@ export const setupService = {
 
       // Add branches as subcollection
       for (const branch of setupData.branches) {
-        const branchRef = doc(collection(db, 'companies', companyId, 'branches'));
+        // Use the branch id from the data if it exists, otherwise generate new one
+        const branchRef = branch.id 
+          ? doc(db, 'companies', companyId, 'branches', branch.id)
+          : doc(collection(db, 'companies', companyId, 'branches'));
+        
+        // Remove the id from branch data as it's stored as document ID
+        const { id, ...branchData } = branch;
+        
         batch.set(branchRef, {
-          ...branch,
+          ...branchData,
           createdAt: serverTimestamp(),
           active: true
         });
