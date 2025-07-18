@@ -128,6 +128,20 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✓ Service count tracking
    - ✓ Invitation system for granting access
    - ✓ Enhanced data model with schedule, services, and booking fields
+   - ✓ Duplicate Detection System (2025-07-18):
+     - Smart client duplicate detection using phone, email, name, and DOB matching
+     - Levenshtein distance algorithm for fuzzy name matching
+     - Score-based duplicate detection with configurable thresholds
+     - Warning dialog showing potential duplicates with match details
+     - Block/warn/allow actions based on match confidence
+     - Visual duplicate match cards with avatars and match scores
+     - Integrated seamlessly into client form submission workflow
+   - ✓ Client Form Fixes (2025-07-18):
+     - Fixed email field focus loss with memoized EmailField component
+     - Fixed FieldRow scope error in EmailField component
+     - Fixed interactive sliders in Preferences tab (volume and temperature)
+     - Removed conflicting {...field} spread in slider components
+     - All form fields now working correctly without UI glitches
    - ✓ Schedule Tab Implementation:
      - Schedule templates (Full-time, Morning, Evening, Weekend, Custom)
      - Date and time pickers for schedule setup
@@ -713,6 +727,29 @@ firebase deploy                          # Deploy everything
       const companyId = 'your-company-id';
       window.migrateBranchIds(companyId);
       ```
+
+25. **MUI Slider Not Interactive with React Hook Form**:
+    - **Error**: Sliders appear non-interactive and don't respond to user input
+    - **Root Cause**: Using `{...field}` spread operator with custom `value` and `onChange` properties
+    - **Problem**: The spread operator includes field's original `value` and `onChange` which conflict with custom ones
+    - **Solution**: Remove `{...field}` and only use custom `value` and `onChange` properties
+    - **Example Fix**:
+      ```typescript
+      // Before (non-interactive):
+      <Slider
+        {...field}
+        value={field.value === 'quiet' ? 1 : 2}
+        onChange={(_, value) => field.onChange(value === 1 ? 'quiet' : 'loud')}
+      />
+      
+      // After (interactive):
+      <Slider
+        value={field.value === 'quiet' ? 1 : 2}
+        onChange={(_, value) => field.onChange(value === 1 ? 'quiet' : 'loud')}
+      />
+      ```
+    - **Prevention**: When using custom value transformations, don't spread the field object
+    - **Common Pattern**: This affects any controlled component that needs value transformation
 
 ## Next Major Features
 - Client management system

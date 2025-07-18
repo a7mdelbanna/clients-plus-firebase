@@ -35,7 +35,6 @@ import {
   Add,
   Email,
   Phone,
-  Visibility,
   Business,
   Download,
   Upload,
@@ -56,10 +55,9 @@ import { ar, enUS } from 'date-fns/locale';
 interface ClientsListProps {
   onAddClick?: () => void;
   onEditClick?: (client: Client) => void;
-  onViewClick?: (client: Client) => void;
 }
 
-const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onViewClick }) => {
+const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -446,7 +444,6 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                           borderBottom: `1px solid ${theme.palette.divider}`,
                         },
                       }}
-                      onClick={() => onViewClick?.(client)}
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -547,21 +544,6 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                           : '-'}
                       </TableCell>
                       <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewClick?.(client);
-                          }}
-                          sx={{
-                            color: theme.palette.primary.main,
-                            '&:hover': {
-                              backgroundColor: theme.palette.primary.main + '20',
-                            },
-                          }}
-                        >
-                          <Visibility />
-                        </IconButton>
                         <IconButton
                           size="small"
                           onClick={(e) => {

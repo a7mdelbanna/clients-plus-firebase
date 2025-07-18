@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -53,14 +53,9 @@ import {
   Delete as DeleteIcon,
   Coffee,
   MusicNote,
-  Thermostat,
-  LocalFlorist,
   Schedule,
-  Group,
   ChatBubble,
   VolumeOff,
-  VolumeMute,
-  VolumeDown,
   VolumeUp,
   Instagram,
   Facebook,
@@ -75,7 +70,7 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { clientService } from '../../services/client.service';
-import type { Client, ClientPhone, ClientEmail } from '../../services/client.service';
+import type { Client, DuplicateCheckResult } from '../../services/client.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { toast } from 'react-toastify';
@@ -91,7 +86,7 @@ interface ClientFormProps {
   onClose: () => void;
   onSuccess?: () => void;
   client?: Client | null;
-  mode: 'add' | 'edit';
+  mode: 'add' | 'edit' | 'view';
 }
 
 interface TabPanelProps {
@@ -419,6 +414,98 @@ const DAYS_OF_WEEK = [
   { label: 'السبت', labelEn: 'Saturday', value: 'saturday' },
 ];
 
+// Memoized Email Field Component to prevent re-renders
+const EmailField = memo(({ 
+  control, 
+  index, 
+  errors, 
+  isRTL, 
+  theme, 
+  onRemove 
+}: {
+  control: any;
+  index: number;
+  errors: any;
+  isRTL: boolean;
+  theme: any;
+  onRemove: () => void;
+}) => {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 3,
+          flexWrap: { xs: 'wrap', md: 'nowrap' },
+          '& > *': {
+            flex: '1 1 300px',
+            minWidth: 0,
+          },
+        }}
+      >
+        <Controller
+          name={`emails.${index}.address`}
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              fullWidth
+              required
+              type="email"
+              label={isRTL ? 'البريد الإلكتروني' : 'Email Address'}
+              error={!!errors.emails?.[index]?.address}
+              helperText={errors.emails?.[index]?.address?.message}
+              InputProps={{
+                startAdornment: <Email sx={{ mr: 1, color: 'text.secondary' }} />,
+              }}
+            />
+          )}
+        />
+        <Controller
+          name={`emails.${index}.type`}
+          control={control}
+          render={({ field }) => (
+            <FormControl fullWidth>
+              <InputLabel>{isRTL ? 'النوع' : 'Type'}</InputLabel>
+              <Select {...field} label={isRTL ? 'النوع' : 'Type'}>
+                <MenuItem value="personal">{isRTL ? 'شخصي' : 'Personal'}</MenuItem>
+                <MenuItem value="work">{isRTL ? 'عمل' : 'Work'}</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Controller
+            name={`emails.${index}.isPrimary`}
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Switch {...field} checked={field.value} />}
+                label={isRTL ? 'أساسي' : 'Primary'}
+              />
+            )}
+          />
+          <Controller
+            name={`emails.${index}.canReceiveEmails`}
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={<Switch {...field} checked={field.value} />}
+                label={isRTL ? 'رسائل' : 'Emails'}
+              />
+            )}
+          />
+          <IconButton onClick={onRemove} color="error">
+            <RemoveCircleOutline />
+          </IconButton>
+        </Box>
+      </Box>
+    </Box>
+  );
+});
+
+EmailField.displayName = 'EmailField';
+
 const ClientForm: React.FC<ClientFormProps> = ({
   open,
   onClose,
@@ -431,6 +518,7 @@ const ClientForm: React.FC<ClientFormProps> = ({
   const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const [loading, setLoading] = useState(false);
+  const isViewMode = mode === 'view';
   const [tabValue, setTabValue] = useState(0);
   const [tagInput, setTagInput] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -444,6 +532,11 @@ const ClientForm: React.FC<ClientFormProps> = ({
   const [genreInput, setGenreInput] = useState('');
   const [artistInput, setArtistInput] = useState('');
   const [aromatherapyInput, setAromatherapyInput] = useState('');
+  
+  // Duplicate detection state
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateCheckResult | null>(null);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [snackInput, setSnackInput] = useState('');
 
   const {
@@ -546,7 +639,6 @@ const ClientForm: React.FC<ClientFormProps> = ({
   });
 
   const watchedTags = watch('tags') || [];
-  const watchedPhones = watch('phones');
 
   // Load client categories
   useEffect(() => {
@@ -826,6 +918,46 @@ const ClientForm: React.FC<ClientFormProps> = ({
         toast.error(isRTL ? 'خطأ: لم يتم العثور على معرف الشركة' : 'Error: Company ID not found');
         return;
       }
+
+      // Check for duplicates only when adding new clients
+      if (mode === 'add') {
+        const clientDataForCheck = {
+          companyId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phones?.find(p => p.isPrimary)?.number || data.phones?.[0]?.number || '',
+          email: data.emails?.find(e => e.isPrimary)?.address || data.emails?.[0]?.address || '',
+          dateOfBirth: data.dateOfBirth,
+          id: client?.id, // For edit mode
+        };
+        
+        const duplicateResult = await clientService.checkForDuplicates(clientDataForCheck);
+        
+        if (duplicateResult.hasDuplicates) {
+          if (duplicateResult.suggestedAction === 'block') {
+            toast.error(isRTL ? 'يوجد عميل مطابق بالفعل' : 'An identical client already exists');
+            setLoading(false);
+            return;
+          } else if (duplicateResult.suggestedAction === 'warn') {
+            setDuplicateCheckResult(duplicateResult);
+            setPendingFormData(data);
+            setShowDuplicateDialog(true);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      await submitClientData(data, companyId);
+    } catch (error) {
+      console.error('Error saving client:', error);
+      toast.error(isRTL ? 'حدث خطأ في حفظ العميل' : 'Error saving client');
+      setLoading(false);
+    }
+  };
+
+  const submitClientData = async (data: FormData, companyId: string) => {
+    try {
       // Prepare client data with new structure
       const clientData: any = {
         // Basic Information
@@ -954,6 +1086,32 @@ const ClientForm: React.FC<ClientFormProps> = ({
     }
   };
 
+  const handleDuplicateDialogClose = () => {
+    setShowDuplicateDialog(false);
+    setDuplicateCheckResult(null);
+    setPendingFormData(null);
+  };
+
+  const handleProceedWithDuplicate = async () => {
+    if (!pendingFormData) return;
+    
+    setShowDuplicateDialog(false);
+    setLoading(true);
+    
+    try {
+      const idTokenResult = await currentUser!.getIdTokenResult();
+      const companyId = idTokenResult.claims.companyId as string;
+      await submitClientData(pendingFormData, companyId);
+    } catch (error) {
+      console.error('Error saving client after duplicate warning:', error);
+      toast.error(isRTL ? 'حدث خطأ في حفظ العميل' : 'Error saving client');
+      setLoading(false);
+    }
+    
+    setPendingFormData(null);
+    setDuplicateCheckResult(null);
+  };
+
   const handleClose = () => {
     reset();
     setTabValue(0);
@@ -988,17 +1146,119 @@ const ClientForm: React.FC<ClientFormProps> = ({
   );
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        component: motion.div,
-        initial: { opacity: 0, scale: 0.9 },
-        animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 0.9 },
-        sx: {
+    <>
+      {/* Duplicate Warning Dialog */}
+      <Dialog
+        open={showDuplicateDialog}
+        onClose={handleDuplicateDialogClose}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          backgroundColor: theme.palette.warning.main,
+          color: '#fff',
+        }}>
+          <Person />
+          {isRTL ? 'تحذير: عملاء متشابهون' : 'Warning: Similar Clients Found'}
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            {isRTL 
+              ? 'وجدنا عملاء متشابهين في قاعدة البيانات. هل تريد المتابعة؟'
+              : 'We found similar clients in the database. Do you want to proceed?'
+            }
+          </Typography>
+          
+          {duplicateCheckResult?.matches.map((match, index) => (
+            <Card key={index} sx={{ mb: 2, border: `1px solid ${theme.palette.warning.main}` }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Avatar
+                    src={match.client.photo}
+                    sx={{ 
+                      width: 48, 
+                      height: 48,
+                      bgcolor: theme.palette.warning.main + '20',
+                      color: theme.palette.warning.main,
+                    }}
+                  >
+                    {match.client.photo ? null : (
+                      match.client.firstName?.charAt(0)?.toUpperCase() || 
+                      match.client.name?.charAt(0)?.toUpperCase() || 
+                      <Person />
+                    )}
+                  </Avatar>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6">
+                      {match.client.firstName && match.client.lastName
+                        ? `${match.client.firstName} ${match.client.lastName}`
+                        : match.client.name || 'اسم غير محدد'
+                      }
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {match.client.phone || match.client.email || 'لا توجد معلومات اتصال'}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={`${match.matchScore}% ${isRTL ? 'مطابقة' : 'match'}`}
+                    color={match.matchType === 'exact' ? 'error' : 'warning'}
+                    size="small"
+                  />
+                </Box>
+                
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {match.matchedFields.map((field) => (
+                    <Chip
+                      key={field}
+                      label={field === 'phone' ? (isRTL ? 'الهاتف' : 'Phone') :
+                             field === 'email' ? (isRTL ? 'الإيميل' : 'Email') :
+                             field === 'name' ? (isRTL ? 'الاسم' : 'Name') :
+                             field === 'dateOfBirth' ? (isRTL ? 'تاريخ الميلاد' : 'DOB') :
+                             field}
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                    />
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleDuplicateDialogClose}
+            variant="outlined"
+            color="primary"
+          >
+            {isRTL ? 'إلغاء' : 'Cancel'}
+          </Button>
+          <Button
+            onClick={handleProceedWithDuplicate}
+            variant="contained"
+            color="warning"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={20} /> : (isRTL ? 'متابعة على أي حال' : 'Proceed Anyway')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Main Client Form Dialog */}
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          component: motion.div,
+          initial: { opacity: 0, scale: 0.9 },
+          animate: { opacity: 1, scale: 1 },
+          exit: { opacity: 0, scale: 0.9 },
+          sx: {
           backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#ffffff',
           backgroundImage: 'none',
           '& .MuiTextField-root': {
@@ -1048,6 +1308,8 @@ const ClientForm: React.FC<ClientFormProps> = ({
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             {mode === 'add'
               ? (isRTL ? 'إضافة عميل جديد' : 'Add New Client')
+              : mode === 'view'
+              ? (isRTL ? 'عرض بيانات العميل' : 'View Client Details')
               : (isRTL ? 'تعديل بيانات العميل' : 'Edit Client')}
           </Typography>
           <IconButton 
@@ -1237,6 +1499,7 @@ const ClientForm: React.FC<ClientFormProps> = ({
                       {...field}
                       fullWidth
                       required
+                      disabled={isViewMode}
                       label={isRTL ? 'الاسم الأول' : 'First Name'}
                       error={!!errors.firstName}
                       helperText={errors.firstName?.message}
@@ -1251,6 +1514,7 @@ const ClientForm: React.FC<ClientFormProps> = ({
                       {...field}
                       fullWidth
                       required
+                      disabled={isViewMode}
                       label={isRTL ? 'اسم العائلة' : 'Last Name'}
                       error={!!errors.lastName}
                       helperText={errors.lastName?.message}
@@ -1539,66 +1803,15 @@ const ClientForm: React.FC<ClientFormProps> = ({
                   {isRTL ? 'البريد الإلكتروني' : 'Email Addresses'}
                 </Typography>
                 {emailFields.map((field, index) => (
-                  <Box key={field.id} sx={{ mb: 2 }}>
-                    <FieldRow>
-                      <Controller
-                        name={`emails.${index}.address`}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            fullWidth
-                            required
-                            type="email"
-                            label={isRTL ? 'البريد الإلكتروني' : 'Email Address'}
-                            error={!!errors.emails?.[index]?.address}
-                            helperText={errors.emails?.[index]?.address?.message}
-                            InputProps={{
-                              startAdornment: <Email sx={{ mr: 1, color: 'text.secondary' }} />,
-                            }}
-                          />
-                        )}
-                      />
-                      <Controller
-                        name={`emails.${index}.type`}
-                        control={control}
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>{isRTL ? 'النوع' : 'Type'}</InputLabel>
-                            <Select {...field} label={isRTL ? 'النوع' : 'Type'}>
-                              <MenuItem value="personal">{isRTL ? 'شخصي' : 'Personal'}</MenuItem>
-                              <MenuItem value="work">{isRTL ? 'عمل' : 'Work'}</MenuItem>
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Controller
-                          name={`emails.${index}.isPrimary`}
-                          control={control}
-                          render={({ field }) => (
-                            <FormControlLabel
-                              control={<Switch {...field} checked={field.value} />}
-                              label={isRTL ? 'رئيسي' : 'Primary'}
-                            />
-                          )}
-                        />
-                        <Controller
-                          name={`emails.${index}.canReceiveEmails`}
-                          control={control}
-                          render={({ field }) => (
-                            <FormControlLabel
-                              control={<Switch {...field} checked={field.value} />}
-                              label={isRTL ? 'رسائل' : 'Emails'}
-                            />
-                          )}
-                        />
-                        <IconButton onClick={() => removeEmail(index)} color="error">
-                          <RemoveCircleOutline />
-                        </IconButton>
-                      </Box>
-                    </FieldRow>
-                  </Box>
+                  <EmailField
+                    key={field.id}
+                    control={control}
+                    index={index}
+                    errors={errors}
+                    isRTL={isRTL}
+                    theme={theme}
+                    onRemove={() => removeEmail(index)}
+                  />
                 ))}
                 {emailFields.length === 0 && (
                   <Button
@@ -2722,7 +2935,6 @@ const ClientForm: React.FC<ClientFormProps> = ({
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                           <VolumeOff />
                           <Slider
-                            {...field}
                             value={field.value === 'quiet' ? 1 : field.value === 'moderate' ? 2 : 3}
                             onChange={(_, value) => {
                               field.onChange(value === 1 ? 'quiet' : value === 2 ? 'moderate' : 'loud');
@@ -2754,7 +2966,6 @@ const ClientForm: React.FC<ClientFormProps> = ({
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                           <span>❄️</span>
                           <Slider
-                            {...field}
                             value={
                               field.value === 'cold' ? 1 : 
                               field.value === 'cool' ? 2 : 
@@ -2874,29 +3085,32 @@ const ClientForm: React.FC<ClientFormProps> = ({
           >
             {isRTL ? 'إلغاء' : 'Cancel'}
           </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : <Save />}
-            sx={{
-              backgroundColor: theme.palette.primary.main,
-              color: '#fff',
-              '&:hover': {
-                backgroundColor: theme.palette.primary.dark,
-              },
-              '&.Mui-disabled': {
-                backgroundColor: theme.palette.action.disabledBackground,
-              },
-            }}
-          >
-            {mode === 'add'
-              ? (isRTL ? 'إضافة' : 'Add')
-              : (isRTL ? 'حفظ' : 'Save')}
-          </Button>
+          {!isViewMode && (
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+              sx={{
+                backgroundColor: theme.palette.primary.main,
+                color: '#fff',
+                '&:hover': {
+                  backgroundColor: theme.palette.primary.dark,
+                },
+                '&.Mui-disabled': {
+                  backgroundColor: theme.palette.action.disabledBackground,
+                },
+              }}
+            >
+              {mode === 'add'
+                ? (isRTL ? 'إضافة' : 'Add')
+                : (isRTL ? 'حفظ' : 'Save')}
+            </Button>
+          )}
         </DialogActions>
       </form>
     </Dialog>
+    </>
   );
 };
 

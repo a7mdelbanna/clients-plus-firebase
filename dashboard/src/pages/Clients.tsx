@@ -66,10 +66,6 @@ const Clients: React.FC = () => {
     setFormOpen(true);
   };
 
-  const handleViewClick = (client: Client) => {
-    // TODO: Navigate to client detail page
-    console.log('View client:', client);
-  };
 
   const handleFormClose = () => {
     setFormOpen(false);
@@ -145,7 +141,6 @@ const Clients: React.FC = () => {
               key={refreshList}
               onAddClick={handleAddClick}
               onEditClick={handleEditClick}
-              onViewClick={handleViewClick}
             />
           </motion.div>
         </motion.div>
