@@ -624,37 +624,6 @@ class LocationService {
     return arabicLabel;
   }
 
-  // Update photos
-  async updatePhotos(companyId: string, photos: LocationPhotos, branchId?: string): Promise<void> {
-    try {
-      const docId = branchId ? `${companyId}_${branchId}` : `${companyId}_main`;
-      const docRef = doc(db, this.collectionName, docId);
-      
-      // Check if document exists
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        await updateDoc(docRef, {
-          photos,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        // Create new document with photos
-        const defaultSettings = this.getDefaultLocationSettings(companyId, branchId, undefined);
-        await setDoc(docRef, {
-          ...defaultSettings,
-          photos,
-          updatedAt: serverTimestamp(),
-        });
-      }
-      
-      console.log('Photos updated successfully');
-    } catch (error) {
-      console.error('Error updating photos:', error);
-      throw error;
-    }
-  }
-
   // Update branch name in the branches subcollection
   async updateBranchName(companyId: string, branchId: string, name: string): Promise<void> {
     try {

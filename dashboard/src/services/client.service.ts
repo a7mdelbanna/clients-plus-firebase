@@ -68,12 +68,35 @@ export interface EmergencyContact {
 
 // Client preferences interface
 export interface ClientPreferences {
+  // Service preferences
   preferredStaff?: string[]; // Staff IDs
   preferredDays?: string[]; // Day names
   preferredTimes?: string[]; // Time ranges
   roomPreferences?: string;
-  specialRequests?: string;
+  
+  // Communication preferences
   communicationLanguage?: string;
+  communicationStyle?: 'silent' | 'minimal' | 'chatty' | 'very_social';
+  
+  // Lifestyle preferences
+  favoriteDrinks?: string[]; // Coffee, Tea, Juice, etc.
+  musicPreferences?: {
+    genres?: string[]; // Pop, Classical, Jazz, etc.
+    artists?: string[]; // Favorite artists
+    volume?: 'quiet' | 'moderate' | 'loud';
+    preference?: 'no_music' | 'background' | 'engaged';
+  };
+  
+  // Comfort preferences
+  temperaturePreference?: 'cold' | 'cool' | 'moderate' | 'warm' | 'hot';
+  aromatherapy?: string[]; // Preferred scents
+  refreshments?: {
+    beverageTemperature?: 'ice_cold' | 'cold' | 'room_temp' | 'warm' | 'hot';
+    snackPreferences?: string[];
+  };
+  
+  // Special requests
+  specialRequests?: string;
 }
 
 // Medical information interface
@@ -123,6 +146,8 @@ export interface Client {
   mobile?: string;
   
   // Additional Information
+  nationality?: string;
+  idNumber?: string; // National ID or Iqama number
   occupation?: string;
   employer?: string;
   referralSource?: string;

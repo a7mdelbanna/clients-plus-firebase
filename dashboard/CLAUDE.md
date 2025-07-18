@@ -427,6 +427,15 @@ firebase deploy                          # Deploy everything
    - A "Fix Permissions" button appears on Clients page if permissions are missing
    - Run `window.fixUserDocument()` in browser console as a manual fix
 
+2. **Firestore Index Errors**:
+   - **Error**: "The query requires an index" when filtering/ordering data
+   - **Cause**: Missing composite index for multi-field queries
+   - **Solution**: 
+     1. Add the required index to `firestore.indexes.json`
+     2. Deploy with `firebase deploy --only firestore:indexes`
+   - **Example**: Multi-branch client queries need index on branchId + companyId + createdAt
+   - **Prevention**: Add indexes proactively for all new query patterns
+
 2. **Firestore Query Permission Errors on Empty Collections**:
    - **Error**: "Missing or insufficient permissions" when querying empty collections
    - **Cause**: Security rules checking `resource.data.companyId` fail when no documents exist
@@ -618,7 +627,66 @@ firebase deploy                          # Deploy everything
       - Header BranchSelector → reads from `branches` collection
     - **Prevention**: Keep single source of truth for shared data
 
-22. **Branch ID Mismatch Between Setup and Firestore**:
+22. **useFieldArray Phone/Dynamic Input Loses Focus on Every Keystroke**:
+    - **Error**: When typing in dynamic form fields (like phone numbers), the input loses focus after each character
+    - **Root Cause**: 
+      1. Form validation mode set to `onChange` causes re-renders on every keystroke
+      2. useFieldArray fields get re-mounted when the form re-renders
+      3. React loses track of which input element had focus
+    - **Solution**: 
+      1. Change form mode from `onChange` to `onSubmit`:
+      ```typescript
+      const { control, handleSubmit } = useForm({
+        mode: 'onSubmit', // Instead of 'onChange'
+      });
+      ```
+      2. This prevents validation from running on every keystroke
+      3. Form only validates when submitted, eliminating constant re-renders
+    - **Alternative Solutions Tried (Less Effective)**:
+      - Using `keyName` in useFieldArray
+      - Creating memoized components
+      - Using stable keys for array items
+      - Using uncontrolled inputs
+    - **When This Happens**: Common with react-hook-form's useFieldArray for dynamic lists (phones, emails, addresses)
+    - **Prevention**: Always use `mode: 'onSubmit'` or `mode: 'onBlur'` for forms with dynamic field arrays
+
+23. **Client Form Submit Button Not Working**:
+    - **Error**: Form submit button appears to work but nothing happens, no form submission
+    - **Root Causes & Solutions**:
+      1. **CompanyId Access Issue**: 
+         - Error: `currentUser.companyId` is undefined
+         - Solution: Get companyId from token claims:
+         ```typescript
+         const idTokenResult = await currentUser.getIdTokenResult();
+         const companyId = idTokenResult.claims.companyId as string;
+         ```
+      2. **Firestore Undefined Field Values**:
+         - Error: "Function addDoc() called with invalid data. Unsupported field value: undefined"
+         - Solution: Only include fields with actual values:
+         ```typescript
+         const clientData: any = { /* required fields */ };
+         
+         // Add optional fields conditionally
+         if (data.dateOfBirth) {
+           clientData.dateOfBirth = Timestamp.fromDate(data.dateOfBirth);
+         }
+         
+         if (data.medicalInfo?.allergies?.length || data.medicalInfo?.conditions?.length) {
+           clientData.medicalInfo = { ...data.medicalInfo, lastUpdated: Timestamp.now() };
+         }
+         ```
+      3. **Missing Service Parameters**:
+         - Error: createClient function requires userId parameter
+         - Solution: Pass all required parameters:
+         ```typescript
+         await clientService.createClient(clientData, currentUser.uid, currentBranch?.id);
+         ```
+    - **Prevention**: 
+      - Always check service function signatures for required parameters
+      - Use conditional field inclusion for optional Firestore fields
+      - Get companyId from token claims, not user object directly
+
+24. **Branch ID Mismatch Between Setup and Firestore**:
     - **Error**: "Branch 1 not found in branches subcollection" when updating branch name
     - **Root Cause**: 
       1. Setup wizard creates branches with hardcoded ID (e.g., `id: '1'`)

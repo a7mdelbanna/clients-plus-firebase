@@ -23,6 +23,7 @@ import {
   Select,
   useTheme,
   alpha,
+  Avatar,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
@@ -38,12 +39,15 @@ import {
   Business,
   Download,
   Upload,
+  Person,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { clientService } from '../../services/client.service';
 import type { Client, ClientsFilter } from '../../services/client.service';
+import { categoryService } from '../../services/category.service';
+import type { ClientCategory } from '../../services/category.service';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -75,6 +79,7 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [clientCategories, setClientCategories] = useState<ClientCategory[]>([]);
 
   // Get company ID from user
   const getCompanyId = useCallback(async () => {
@@ -121,6 +126,27 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
       setLoading(false);
     }
   }, [getCompanyId, filter, searchTerm, rowsPerPage, isRTL, currentBranch]);
+
+  // Load client categories
+  useEffect(() => {
+    const loadCategories = async () => {
+      const companyId = await getCompanyId();
+      if (!companyId) return;
+      
+      try {
+        const categories = await categoryService.getCategories(
+          companyId,
+          'client',
+          currentBranch?.id
+        );
+        setClientCategories(categories as ClientCategory[]);
+      } catch (error) {
+        console.error('Error loading client categories:', error);
+      }
+    };
+    
+    loadCategories();
+  }, [getCompanyId, currentBranch]);
 
   useEffect(() => {
     loadClients();
@@ -280,12 +306,26 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Tooltip title={isRTL ? 'استيراد' : 'Import'}>
-              <IconButton>
+              <IconButton
+                sx={{
+                  color: theme.palette.primary.main,
+                  '&:hover': {
+                    backgroundColor: theme.palette.primary.main + '20',
+                  },
+                }}
+              >
                 <Upload />
               </IconButton>
             </Tooltip>
             <Tooltip title={isRTL ? 'تصدير' : 'Export'}>
-              <IconButton>
+              <IconButton
+                sx={{
+                  color: theme.palette.primary.main,
+                  '&:hover': {
+                    backgroundColor: theme.palette.primary.main + '20',
+                  },
+                }}
+              >
                 <Download />
               </IconButton>
             </Tooltip>
@@ -293,6 +333,13 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
               variant="contained"
               startIcon={<Add />}
               onClick={onAddClick}
+              sx={{
+                backgroundColor: theme.palette.primary.main,
+                color: '#fff',
+                '&:hover': {
+                  backgroundColor: theme.palette.primary.dark,
+                },
+              }}
             >
               {isRTL ? 'إضافة عميل' : 'Add Client'}
             </Button>
@@ -301,15 +348,34 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
 
         {/* Table */}
         <motion.div variants={itemVariants}>
-          <TableContainer component={Paper}>
+          <TableContainer 
+            component={Paper}
+            sx={{
+              backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#fff',
+              boxShadow: theme.palette.mode === 'dark' 
+                ? '0 4px 6px rgba(0,0,0,0.3)' 
+                : '0 1px 3px rgba(0,0,0,0.12)',
+            }}
+          >
             <Table>
               <TableHead>
-                <TableRow>
+                <TableRow
+                  sx={{
+                    backgroundColor: theme.palette.mode === 'dark' 
+                      ? '#252525' 
+                      : '#f5f5f5',
+                    '& .MuiTableCell-head': {
+                      color: theme.palette.primary.main,
+                      fontWeight: 600,
+                      borderBottom: `2px solid ${theme.palette.primary.main}`,
+                    },
+                  }}
+                >
                   <TableCell>{isRTL ? 'اسم العميل' : 'Client Name'}</TableCell>
                   <TableCell>{isRTL ? 'البريد الإلكتروني' : 'Email'}</TableCell>
                   <TableCell>{isRTL ? 'الهاتف' : 'Phone'}</TableCell>
+                  <TableCell>{isRTL ? 'الفئة' : 'Category'}</TableCell>
                   <TableCell>{isRTL ? 'الحالة' : 'Status'}</TableCell>
-                  <TableCell>{isRTL ? 'المشاريع' : 'Projects'}</TableCell>
                   <TableCell>{isRTL ? 'الإيرادات' : 'Revenue'}</TableCell>
                   <TableCell>{isRTL ? 'تاريخ الإضافة' : 'Date Added'}</TableCell>
                   <TableCell align="center">{isRTL ? 'الإجراءات' : 'Actions'}</TableCell>
@@ -327,13 +393,12 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                       <TableCell><Skeleton /></TableCell>
                       <TableCell><Skeleton /></TableCell>
                       <TableCell><Skeleton /></TableCell>
-                      <TableCell><Skeleton /></TableCell>
                     </TableRow>
                   ))
                 ) : displayedClients.length === 0 ? (
                   // Empty state
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                       <Box>
                         <Business sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                         <Typography variant="h6" color="text.secondary">
@@ -346,7 +411,14 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                             variant="contained"
                             startIcon={<Add />}
                             onClick={onAddClick}
-                            sx={{ mt: 2 }}
+                            sx={{ 
+                              mt: 2,
+                              backgroundColor: theme.palette.primary.main,
+                              color: '#fff',
+                              '&:hover': {
+                                backgroundColor: theme.palette.primary.dark,
+                              },
+                            }}
                           >
                             {isRTL ? 'إضافة أول عميل' : 'Add First Client'}
                           </Button>
@@ -365,18 +437,40 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                       component={TableRow}
                       sx={{
                         '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                          backgroundColor: theme.palette.mode === 'dark'
+                            ? alpha(theme.palette.primary.main, 0.15)
+                            : alpha(theme.palette.primary.main, 0.05),
                           cursor: 'pointer',
+                        },
+                        '& .MuiTableCell-root': {
+                          borderBottom: `1px solid ${theme.palette.divider}`,
                         },
                       }}
                       onClick={() => onViewClick?.(client)}
                     >
                       <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Business sx={{ color: 'text.secondary' }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Avatar
+                            src={client.photo}
+                            sx={{ 
+                              width: 40, 
+                              height: 40,
+                              bgcolor: theme.palette.primary.main + '20',
+                              color: theme.palette.primary.main,
+                            }}
+                          >
+                            {client.photo ? null : (
+                              client.firstName?.charAt(0)?.toUpperCase() || 
+                              client.lastName?.charAt(0)?.toUpperCase() || 
+                              client.name?.charAt(0)?.toUpperCase() || 
+                              <Person />
+                            )}
+                          </Avatar>
                           <Box>
                             <Typography variant="body2" fontWeight={500}>
-                              {client.name}
+                              {client.firstName || client.lastName 
+                                ? `${client.firstName || ''} ${client.lastName || ''}`.trim()
+                                : client.name || 'No Name'}
                             </Typography>
                             {client.nameAr && (
                               <Typography variant="caption" color="text.secondary">
@@ -389,23 +483,57 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           <Email sx={{ fontSize: 16, color: 'text.secondary' }} />
-                          {client.email}
+                          {client.emails?.find(e => e.isPrimary)?.address || client.email || '-'}
                         </Box>
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                           <Phone sx={{ fontSize: 16, color: 'text.secondary' }} />
-                          {client.phone}
+                          {client.phones?.find(p => p.isPrimary)?.number || client.phone || '-'}
                         </Box>
+                      </TableCell>
+                      <TableCell>
+                        {client.categoryId ? (
+                          (() => {
+                            const category = clientCategories.find(c => c.id === client.categoryId);
+                            return category ? (
+                              <Chip
+                                label={isRTL ? category.nameAr || category.name : category.name}
+                                size="small"
+                                sx={{
+                                  backgroundColor: category.color + '20',
+                                  color: category.color,
+                                  borderColor: category.color,
+                                  border: '1px solid',
+                                  fontWeight: 500,
+                                }}
+                              />
+                            ) : '-';
+                          })()
+                        ) : '-'}
                       </TableCell>
                       <TableCell>
                         <Chip
                           label={getStatusLabel(client.status)}
                           color={getStatusColor(client.status)}
                           size="small"
+                          sx={{
+                            fontWeight: 500,
+                            '&.MuiChip-colorSuccess': {
+                              backgroundColor: '#4caf50',
+                              color: '#fff',
+                            },
+                            '&.MuiChip-colorError': {
+                              backgroundColor: '#f44336',
+                              color: '#fff',
+                            },
+                            '&.MuiChip-colorWarning': {
+                              backgroundColor: theme.palette.primary.main,
+                              color: '#fff',
+                            },
+                          }}
                         />
                       </TableCell>
-                      <TableCell>{client.projectsCount || 0}</TableCell>
                       <TableCell>
                         {client.totalRevenue
                           ? `${client.totalRevenue.toLocaleString()} ${isRTL ? 'ر.س' : 'SAR'}`
@@ -425,6 +553,12 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                             e.stopPropagation();
                             onViewClick?.(client);
                           }}
+                          sx={{
+                            color: theme.palette.primary.main,
+                            '&:hover': {
+                              backgroundColor: theme.palette.primary.main + '20',
+                            },
+                          }}
                         >
                           <Visibility />
                         </IconButton>
@@ -434,12 +568,24 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
                             e.stopPropagation();
                             onEditClick?.(client);
                           }}
+                          sx={{
+                            color: theme.palette.primary.main,
+                            '&:hover': {
+                              backgroundColor: theme.palette.primary.main + '20',
+                            },
+                          }}
                         >
                           <Edit />
                         </IconButton>
                         <IconButton
                           size="small"
                           onClick={(e) => handleMenuClick(e, client)}
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                            },
+                          }}
                         >
                           <MoreVert />
                         </IconButton>

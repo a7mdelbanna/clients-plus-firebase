@@ -16,9 +16,11 @@ import {
   InputAdornment,
   CircularProgress,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Alert,
+  Collapse
 } from '@mui/material';
-import { Visibility, VisibilityOff, Email, Lock } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Email, Lock, Error as ErrorIcon } from '@mui/icons-material';
 
 interface LoginFormData {
   email: string;
@@ -30,8 +32,9 @@ const Login: React.FC = () => {
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [showError, setShowError] = useState(false);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const {
     register,
@@ -42,24 +45,52 @@ const Login: React.FC = () => {
   const onSubmit = async (data: LoginFormData) => {
     try {
       setLoading(true);
+      setShowError(false);
+      setErrorMessage('');
       await login(data.email, data.password);
       toast.success('تم تسجيل الدخول بنجاح!', {
         position: 'top-center',
       });
       navigate('/dashboard');
     } catch (error: any) {
-      const errorMessage = error.code === 'auth/user-not-found' 
-        ? 'البريد الإلكتروني غير مسجل'
-        : error.code === 'auth/wrong-password'
-        ? 'كلمة المرور غير صحيحة'
-        : error.code === 'auth/invalid-email'
-        ? 'البريد الإلكتروني غير صالح'
-        : error.code === 'auth/too-many-requests'
-        ? 'تم تجاوز عدد المحاولات المسموح بها. حاول لاحقاً'
-        : 'حدث خطأ في تسجيل الدخول';
+      console.error('Login error:', error);
       
-      toast.error(errorMessage, {
+      let message = '';
+      
+      // Firebase Auth Error Codes
+      switch (error.code) {
+        case 'auth/user-not-found':
+          message = 'البريد الإلكتروني غير مسجل. تحقق من البريد الإلكتروني أو قم بإنشاء حساب جديد.';
+          break;
+        case 'auth/wrong-password':
+          message = 'كلمة المرور غير صحيحة. تحقق من كلمة المرور وحاول مرة أخرى.';
+          break;
+        case 'auth/invalid-email':
+          message = 'البريد الإلكتروني غير صالح. تحقق من صيغة البريد الإلكتروني.';
+          break;
+        case 'auth/user-disabled':
+          message = 'هذا الحساب معطل. اتصل بالدعم الفني للمساعدة.';
+          break;
+        case 'auth/too-many-requests':
+          message = 'تم تجاوز عدد المحاولات المسموح بها. الرجاء المحاولة بعد بضع دقائق.';
+          break;
+        case 'auth/network-request-failed':
+          message = 'خطأ في الاتصال بالشبكة. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.';
+          break;
+        case 'auth/invalid-credential':
+          message = 'بيانات الدخول غير صحيحة. تحقق من البريد الإلكتروني وكلمة المرور.';
+          break;
+        default:
+          message = error.message || 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
+      }
+      
+      setErrorMessage(message);
+      setShowError(true);
+      
+      // Also show toast for immediate feedback
+      toast.error(message, {
         position: 'top-center',
+        autoClose: 5000,
       });
     } finally {
       setLoading(false);
@@ -133,7 +164,7 @@ const Login: React.FC = () => {
                 component="h1" 
                 variant="h4" 
                 sx={{ 
-                  mb: 3,
+                  mb: 1,
                   background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
@@ -143,9 +174,31 @@ const Login: React.FC = () => {
               >
                 تسجيل الدخول
               </Typography>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                sx={{ mb: 3 }}
+              >
+                مرحباً بعودتك إلى Clients+
+              </Typography>
             </motion.div>
 
             <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1, width: '100%' }}>
+              <Collapse in={showError}>
+                <motion.div variants={itemVariants}>
+                  <Alert 
+                    severity="error" 
+                    sx={{ mb: 2 }}
+                    icon={<ErrorIcon />}
+                    onClose={() => setShowError(false)}
+                  >
+                    <Typography variant="body2">
+                      {errorMessage}
+                    </Typography>
+                  </Alert>
+                </motion.div>
+              </Collapse>
+              
               <motion.div variants={itemVariants}>
                 <TextField
               margin="normal"
@@ -162,9 +215,10 @@ const Login: React.FC = () => {
                   message: 'البريد الإلكتروني غير صحيح'
                 }
               })}
-              error={!!errors.email}
+              error={!!errors.email || (showError && errorMessage.includes('البريد'))}
               helperText={errors.email?.message}
               disabled={loading}
+              onFocus={() => setShowError(false)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -191,9 +245,10 @@ const Login: React.FC = () => {
                       message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'
                     }
                   })}
-                  error={!!errors.password}
+                  error={!!errors.password || (showError && errorMessage.includes('كلمة المرور'))}
                   helperText={errors.password?.message}
                   disabled={loading}
+                  onFocus={() => setShowError(false)}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -226,6 +281,11 @@ const Login: React.FC = () => {
                     py: 1.5,
                     fontSize: '1.1rem',
                     fontWeight: 600,
+                    position: 'relative',
+                    transition: 'all 0.3s ease',
+                    '&:disabled': {
+                      backgroundColor: theme.palette.action.disabledBackground,
+                    },
                   }}
                   disabled={loading}
                 >
@@ -238,7 +298,13 @@ const Login: React.FC = () => {
               </motion.div>
 
               <motion.div variants={itemVariants}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  flexWrap: 'wrap',
+                  gap: 1,
+                  mt: 2,
+                }}>
                   <Link to="/forgot-password" style={{ textDecoration: 'none' }}>
                     <Typography 
                       variant="body2" 
