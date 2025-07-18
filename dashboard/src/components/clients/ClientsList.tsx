@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { clientService } from '../../services/client.service';
 import type { Client, ClientsFilter } from '../../services/client.service';
 import { toast } from 'react-toastify';
@@ -58,6 +59,7 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -106,7 +108,8 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
       const { clients: fetchedClients } = await clientService.getClients(
         companyId,
         { ...filter, searchTerm },
-        { pageSize: rowsPerPage }
+        { pageSize: rowsPerPage },
+        currentBranch?.id
       );
 
       setClients(fetchedClients);
@@ -117,7 +120,7 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick, onVi
     } finally {
       setLoading(false);
     }
-  }, [getCompanyId, filter, searchTerm, rowsPerPage, isRTL]);
+  }, [getCompanyId, filter, searchTerm, rowsPerPage, isRTL, currentBranch]);
 
   useEffect(() => {
     loadClients();

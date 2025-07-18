@@ -47,11 +47,12 @@ class ResourceService {
   private collectionName = 'resources';
 
   // Create a new resource
-  async createResource(resource: Omit<Resource, 'id'>, companyId: string): Promise<string> {
+  async createResource(resource: Omit<Resource, 'id'>, companyId: string, branchId?: string): Promise<string> {
     try {
       const docRef = await addDoc(collection(db, this.collectionName), {
         ...resource,
         companyId,
+        branchId: branchId || resource.branchId, // Use provided branchId or fallback to resource.branchId
         capacity: resource.capacity || 1,
         status: resource.status || 'active',
         active: true,
@@ -67,7 +68,7 @@ class ResourceService {
   }
 
   // Get all resources for a company
-  async getResources(companyId: string): Promise<Resource[]> {
+  async getResources(companyId: string, branchId?: string): Promise<Resource[]> {
     try {
       const q = query(
         collection(db, this.collectionName),
@@ -76,10 +77,17 @@ class ResourceService {
         orderBy('name')
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      let resources = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Resource));
+      
+      // Filter by branch on client side to handle resources without branchId (legacy data)
+      if (branchId) {
+        resources = resources.filter(r => r.branchId === branchId || !r.branchId);
+      }
+      
+      return resources;
     } catch (error) {
       console.error('Error getting resources:', error);
       throw error;
@@ -87,7 +95,7 @@ class ResourceService {
   }
 
   // Get resources by service ID
-  async getResourcesByService(companyId: string, serviceId: string): Promise<Resource[]> {
+  async getResourcesByService(companyId: string, serviceId: string, branchId?: string): Promise<Resource[]> {
     try {
       const q = query(
         collection(db, this.collectionName),
@@ -97,10 +105,17 @@ class ResourceService {
         where('active', '==', true)
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      let resources = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Resource));
+      
+      // Filter by branch on client side
+      if (branchId) {
+        resources = resources.filter(r => r.branchId === branchId || !r.branchId);
+      }
+      
+      return resources;
     } catch (error) {
       console.error('Error getting resources by service:', error);
       throw error;
@@ -160,7 +175,8 @@ class ResourceService {
   subscribeToResources(
     companyId: string,
     onUpdate: (resources: Resource[]) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    branchId?: string
   ): Unsubscribe {
     const q = query(
       collection(db, this.collectionName),
@@ -172,10 +188,16 @@ class ResourceService {
     return onSnapshot(
       q,
       (querySnapshot) => {
-        const resources = querySnapshot.docs.map(doc => ({
+        let resources = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         } as Resource));
+        
+        // Filter by branch on client side
+        if (branchId) {
+          resources = resources.filter(r => r.branchId === branchId || !r.branchId);
+        }
+        
         onUpdate(resources);
       },
       (error) => {

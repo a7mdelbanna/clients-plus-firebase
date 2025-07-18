@@ -31,6 +31,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { serviceService } from '../../services/service.service';
 import { setupService } from '../../services/setup.service';
 
@@ -61,6 +62,7 @@ const CreateServiceModal: React.FC<CreateServiceModalProps> = ({
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const [step, setStep] = useState<'select' | 'form'>('select');
   const [selectedType, setSelectedType] = useState<CreateType | null>(null);
@@ -130,13 +132,15 @@ const CreateServiceModal: React.FC<CreateServiceModalProps> = ({
       await serviceService.createCategory(
         {
           companyId,
+          branchId: currentBranch?.id,
           name: data.name,
           nameAr: data.name, // Use the same name for Arabic
           useOnlineBookingName: data.useOnlineBookingName || false,
           onlineBookingName: data.useOnlineBookingName ? data.onlineBookingName : data.name, // Default to name if not specified
           active: true,
         },
-        currentUser.uid
+        currentUser.uid,
+        currentBranch?.id
       );
       
       toast.success('تم إنشاء الفئة بنجاح');

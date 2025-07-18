@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useThemeMode } from '../contexts/ThemeContext';
+import { useBranch } from '../contexts/BranchContext';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,6 +47,7 @@ import {
 const AnimatedDashboard: React.FC = () => {
   const { currentUser, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useThemeMode();
+  const { currentBranch } = useBranch();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const theme = useTheme();
@@ -152,7 +154,7 @@ const AnimatedDashboard: React.FC = () => {
           }
           
           // Fetch company stats
-          const stats = await companyService.getCompanyStats(companyId);
+          const stats = await companyService.getCompanyStats(companyId, currentBranch?.id);
           setCompanyStats(stats);
         }
       } catch (error) {
@@ -165,7 +167,7 @@ const AnimatedDashboard: React.FC = () => {
     if (!loading) {
       fetchCompanyData();
     }
-  }, [currentUser, loading]);
+  }, [currentUser, loading, currentBranch]);
 
   if (loading) {
     return (

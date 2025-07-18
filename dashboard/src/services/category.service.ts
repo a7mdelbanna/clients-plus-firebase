@@ -134,7 +134,8 @@ class CategoryService {
   // Get all categories of a specific type for a company
   async getCategories<T extends Category>(
     companyId: string,
-    type: 'client' | 'appointment' | 'event'
+    type: 'client' | 'appointment' | 'event',
+    branchId?: string
   ): Promise<T[]> {
     try {
       const collectionName = this.collections[type];
@@ -145,11 +146,19 @@ class CategoryService {
         orderBy('name')
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      
+      let categories = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         type,
       } as T));
+      
+      // Filter by branch on client side to handle categories without branchId (shared across branches)
+      if (branchId) {
+        categories = categories.filter(c => !c.branchId || c.branchId === branchId);
+      }
+      
+      return categories;
     } catch (error) {
       console.error(`Error getting ${type} categories:`, error);
       throw error;
@@ -232,7 +241,8 @@ class CategoryService {
     companyId: string,
     type: 'client' | 'appointment' | 'event',
     onUpdate: (categories: T[]) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    branchId?: string
   ): Unsubscribe {
     const collectionName = this.collections[type];
     const q = query(
@@ -245,11 +255,17 @@ class CategoryService {
     return onSnapshot(
       q,
       (querySnapshot) => {
-        const categories = querySnapshot.docs.map(doc => ({
+        let categories = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           type,
         } as T));
+        
+        // Filter by branch on client side to handle categories without branchId (shared across branches)
+        if (branchId) {
+          categories = categories.filter(c => !c.branchId || c.branchId === branchId);
+        }
+        
         onUpdate(categories);
       },
       (error) => {
@@ -260,16 +276,16 @@ class CategoryService {
   }
 
   // Get category counts for dashboard
-  async getCategoryCounts(companyId: string): Promise<{
+  async getCategoryCounts(companyId: string, branchId?: string): Promise<{
     client: number;
     appointment: number;
     event: number;
   }> {
     try {
       const counts = await Promise.all([
-        this.getCategories(companyId, 'client'),
-        this.getCategories(companyId, 'appointment'),
-        this.getCategories(companyId, 'event'),
+        this.getCategories(companyId, 'client', branchId),
+        this.getCategories(companyId, 'appointment', branchId),
+        this.getCategories(companyId, 'event', branchId),
       ]);
 
       return {

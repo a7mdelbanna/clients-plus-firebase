@@ -36,6 +36,7 @@ import * as yup from 'yup';
 import { clientService } from '../../services/client.service';
 import type { Client } from '../../services/client.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { toast } from 'react-toastify';
 
 interface ClientFormProps {
@@ -119,6 +120,7 @@ const ClientForm: React.FC<ClientFormProps> = ({
 }) => {
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const [loading, setLoading] = useState(false);
   const [tabValue, setTabValue] = useState(0);
@@ -228,8 +230,10 @@ const ClientForm: React.FC<ClientFormProps> = ({
           {
             ...data,
             companyId,
+            branchId: currentBranch?.id,
           },
-          currentUser.uid
+          currentUser.uid,
+          currentBranch?.id
         );
         toast.success(isRTL ? 'تم إضافة العميل بنجاح' : 'Client added successfully');
       } else if (mode === 'edit' && client?.id) {

@@ -26,6 +26,7 @@ import { serviceService, type Service } from '../../../../services/service.servi
 
 interface AddResourceFormProps {
   companyId: string;
+  branchId?: string;
   onCancel: () => void;
   onSuccess: () => void;
 }
@@ -39,6 +40,7 @@ interface FormData {
 
 const AddResourceForm: React.FC<AddResourceFormProps> = ({
   companyId,
+  branchId,
   onCancel,
   onSuccess,
 }) => {
@@ -61,12 +63,12 @@ const AddResourceForm: React.FC<AddResourceFormProps> = ({
 
   useEffect(() => {
     loadServices();
-  }, [companyId]);
+  }, [companyId, branchId]);
 
   const loadServices = async () => {
     try {
       setLoadingServices(true);
-      const fetchedServices = await serviceService.getServices(companyId);
+      const fetchedServices = await serviceService.getServices(companyId, branchId);
       setServices(fetchedServices);
     } catch (error) {
       console.error('Error loading services:', error);
@@ -86,9 +88,10 @@ const AddResourceForm: React.FC<AddResourceFormProps> = ({
         services: data.services,
         capacity: data.capacity || 1,
         status: 'active' as const,
+        branchId,
       };
 
-      await resourceService.createResource(newResource, companyId);
+      await resourceService.createResource(newResource, companyId, branchId);
       onSuccess();
     } catch (error) {
       console.error('Error adding resource:', error);

@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import CreateServiceModal from '../../../components/services/CreateServiceModal';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { toast } from 'react-toastify';
 import { serviceService } from '../../../services/service.service';
 import type { ServiceCategory as ServiceCategoryType } from '../../../services/service.service';
@@ -38,6 +39,7 @@ const ServicesPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -92,7 +94,8 @@ const ServicesPage: React.FC = () => {
               toast.error('فشل تحميل الفئات');
             }
             setLoading(false);
-          }
+          },
+          currentBranch?.id
         );
         
         // Set loading to false after subscription is set up
@@ -113,7 +116,7 @@ const ServicesPage: React.FC = () => {
         unsubscribe();
       }
     };
-  }, [currentUser]);
+  }, [currentUser, currentBranch]);
 
   const handleExcelMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setExcelMenuAnchor(event.currentTarget);

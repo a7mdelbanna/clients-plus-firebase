@@ -31,6 +31,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import type { Unsubscribe } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { resourceService, type Resource } from '../../../services/resource.service';
 import { setupService } from '../../../services/setup.service';
 import AddResourceForm from './components/AddResourceForm';
@@ -39,6 +40,7 @@ const ResourcesPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,8 @@ const ResourcesPage: React.FC = () => {
             console.error('Error subscribing to resources:', error);
             toast.error('حدث خطأ في تحميل الموارد');
             setLoading(false);
-          }
+          },
+          currentBranch?.id
         );
       } catch (error) {
         console.error('Error loading data:', error);
@@ -98,7 +101,7 @@ const ResourcesPage: React.FC = () => {
         unsubscribe();
       }
     };
-  }, [currentUser]);
+  }, [currentUser, currentBranch]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, resource: Resource) => {
     setAnchorEl(event.currentTarget);
@@ -115,7 +118,7 @@ const ResourcesPage: React.FC = () => {
 
     if (window.confirm(`هل أنت متأكد من حذف المورد "${selectedResource.name}"؟`)) {
       try {
-        await resourceService.deleteResource(selectedResource.id!);
+        await resourceService.deleteResource(selectedResource.id!, currentBranch?.id);
         toast.success('تم حذف المورد بنجاح');
       } catch (error) {
         console.error('Error deleting resource:', error);
@@ -188,6 +191,7 @@ const ResourcesPage: React.FC = () => {
         {showAddForm && (
           <AddResourceForm
             companyId={companyId}
+            branchId={currentBranch?.id}
             onCancel={() => setShowAddForm(false)}
             onSuccess={handleResourceAdded}
           />
