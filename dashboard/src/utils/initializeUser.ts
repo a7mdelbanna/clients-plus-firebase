@@ -11,6 +11,9 @@ export function initializeUserOnAuth() {
   onAuthStateChanged(auth, async (user) => {
     if (!user) return;
     
+    // Add a small delay to ensure auth state is fully initialized
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     // Create a minimal user document if it doesn't exist
     const userRef = doc(db, 'users', user.uid);
     
@@ -19,31 +22,34 @@ export function initializeUserOnAuth() {
       if (!userDoc.exists()) {
         console.log('Creating initial user document for:', user.uid);
         
-        // Create minimal document just to satisfy security rules
-        await setDoc(userRef, {
+        // Get user claims to include companyId if available
+        const idTokenResult = await user.getIdTokenResult();
+        const companyId = idTokenResult.claims.companyId as string | undefined;
+        
+        // Create minimal document with companyId if available
+        const userData: any = {
           id: user.uid,
           email: user.email,
           name: user.displayName || user.email?.split('@')[0] || 'User',
           createdAt: serverTimestamp(),
           active: true,
-        });
+        };
         
+        // Only add companyId if it exists in claims
+        if (companyId) {
+          userData.companyId = companyId;
+          userData.role = idTokenResult.claims.role || 'USER';
+        }
+        
+        await setDoc(userRef, userData);
         console.log('Initial user document created');
       }
-    } catch (error) {
-      // If we can't read, try to create anyway
-      console.log('Attempting to create user document...');
-      try {
-        await setDoc(userRef, {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName || user.email?.split('@')[0] || 'User',
-          createdAt: serverTimestamp(),
-          active: true,
-        }, { merge: true });
-        console.log('User document created/updated');
-      } catch (createError) {
-        console.error('Failed to create user document:', createError);
+    } catch (error: any) {
+      // If permission denied, it might be because the document already exists
+      if (error.code === 'permission-denied') {
+        console.log('User document might already exist or permission issue');
+      } else {
+        console.error('Failed to create user document:', error);
       }
     }
   });

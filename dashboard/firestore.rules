@@ -38,13 +38,23 @@ service cloud.firestore {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       
       // Users can create their own document with minimal required fields
+      // Allow creation even if user already has companyId in claims
       allow create: if isAuthenticated() && 
         request.auth.uid == userId &&
         request.resource.data.id == userId &&
-        request.resource.data.email != null;
+        request.resource.data.email != null &&
+        // Allow companyId if it matches user's claims
+        (request.resource.data.companyId == null || 
+         request.resource.data.companyId == request.auth.token.get('companyId', null));
       
       // Users can update their own document
-      allow update: if isAuthenticated() && request.auth.uid == userId;
+      // Prevent changing companyId unless it matches claims
+      allow update: if isAuthenticated() && 
+        request.auth.uid == userId &&
+        // If companyId is being changed, it must match claims
+        (!request.resource.data.keys().hasAll(['companyId']) ||
+         request.resource.data.companyId == request.auth.token.get('companyId', null) ||
+         request.resource.data.companyId == resource.data.companyId);
       
       // Don't allow deletion
       allow delete: if false;
@@ -345,6 +355,53 @@ service cloud.firestore {
         request.resource.data.companyId == resource.data.companyId;
       allow delete: if isAuthenticated() && 
         belongsToCompany(resource.data.companyId);
+    }
+    
+    // Booking Links collection
+    match /bookingLinks/{linkId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      
+      // Only authenticated users in the company can create booking links
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null &&
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Users in the company can update their booking links
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId;
+      
+      // Only admins can delete booking links
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
+    }
+    
+    // Appointments collection
+    match /appointments/{appointmentId} {
+      // Allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if isAuthenticated() && 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      
+      // Only authenticated users in the company can create appointments
+      allow create: if isAuthenticated() && 
+        belongsToCompany(request.resource.data.companyId) &&
+        request.resource.data.companyId != null &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      
+      // Users in the company can update appointments
+      allow update: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId) &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.updatedAt == request.time;
+      
+      // Only admins can delete appointments
+      allow delete: if isAuthenticated() && 
+        isCompanyAdmin(resource.data.companyId);
     }
     
     // Deny all other access by default

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box, useTheme, useMediaQuery } from '@mui/material';
-import AnimatedSidebar from '../components/AnimatedSidebar';
+import Sidebar from '../components/Sidebar';
 import DashboardHeader from '../components/DashboardHeader';
 
 const DashboardLayout: React.FC = () => {
@@ -23,7 +23,7 @@ const DashboardLayout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AnimatedSidebar
+      <Sidebar
         open={sidebarOpen}
         onClose={handleSidebarClose}
         onOpen={handleSidebarOpen}

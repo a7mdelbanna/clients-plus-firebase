@@ -28,6 +28,9 @@ import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage
 import LocationSettingsPage from './pages/settings/location-settings/LocationSettingsPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
+import BookingLinks from './pages/BookingLinks';
+import OnlineBooking from './pages/OnlineBooking';
+import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -108,6 +111,21 @@ function App() {
                 <Route path="/clients" element={
                   <PageTransition>
                     <Clients />
+                  </PageTransition>
+                } />
+                <Route path="/booking-links" element={
+                  <PageTransition>
+                    <BookingLinks />
+                  </PageTransition>
+                } />
+                <Route path="/online-booking" element={
+                  <PageTransition>
+                    <OnlineBooking />
+                  </PageTransition>
+                } />
+                <Route path="/appointments" element={
+                  <PageTransition>
+                    <AppointmentsPage />
                   </PageTransition>
                 } />
                 <Route path="/projects" element={

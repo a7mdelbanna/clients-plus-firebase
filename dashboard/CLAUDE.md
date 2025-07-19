@@ -223,6 +223,35 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Firestore security rules for positions
    - ✅ Helper functions for getting translated position names/descriptions
 
+### Recent Additions (2025-07-19)
+
+#### Appointment Management System (Complete Core Implementation)
+   - ✓ **Complete appointment booking workflow** from staff selection to time slot booking
+   - ✓ **Service Management Integration**: 
+     - Fixed service duration structure (hours/minutes object → total minutes)
+     - Fixed service pricing (startingPrice vs undefined price)
+     - Service chips display correct duration and price in EGP
+     - Total duration and price calculations working properly
+   - ✓ **Client Management Integration**:
+     - Fixed client autocomplete search functionality  
+     - Auto-loads all clients when dropdown opens
+     - Search works with real-time filtering
+     - Handles client selection with phone/email auto-fill
+     - Fixed data structure mismatch (service returns object, not array)
+   - ✓ **Time Slot Management**:
+     - Visual time slot picker with morning/afternoon/evening sections
+     - Real-time availability checking for selected staff and date
+     - Proper time validation and error handling
+     - Duration-based slot calculations
+   - ✓ **Form Validation & Error Handling**:
+     - Fixed React JSX key prop errors in service chips
+     - Fixed invalid time value errors in date/time calculations
+     - Added comprehensive validation for all required fields
+     - Proper error messages in Arabic and English
+   - ✓ **Multi-language Support**: Full Arabic/English support with RTL layout
+   - ✓ **Staff Assignment**: Working staff selection with availability integration
+   - ✓ **Appointment Status Management**: Complete status workflow (pending → confirmed → completed)
+
 ### Recent Additions (2025-07-16 continued)
 
 #### Work Schedule Management System
@@ -354,18 +383,27 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - Note: Google Maps Autocomplete shows deprecation warning (works but should migrate to PlaceAutocompleteElement in future)
 
 ### Remaining Tasks
-1. **Complete Page Implementations**
+1. **Appointment System Enhancements**
+   - Drag-and-drop appointment rescheduling in calendar view
+   - Email/SMS appointment notifications and reminders
+   - Recurring appointments support
+   - Appointment conflict resolution
+   - Staff availability calendar integration
+   - Resource booking (rooms, equipment)
+   - Payment integration for appointments
+
+2. **Complete Page Implementations**
    - ClientDetail component (view individual client)
    - Projects tracking page
    - Invoices and billing page
-   - Calendar integration
+   - Calendar integration with appointments
    - Reports and analytics
    - Inventory management
    - PDF export implementation for work schedule
    - DescriptionTab with rich text editor for location settings
    - Business Information page
 
-2. **Additional Features**
+3. **Additional Features**
    - Email notifications
    - Real-time updates
    - Export functionality
@@ -434,7 +472,7 @@ firebase deploy                          # Deploy everything
    - Rich text editor for descriptions
    - Photo gallery for business photos
 
-## Common Issues and Solutions
+## Common Issues and Solutions (Updated 2025-07-19)
 1. **Permission Errors**: 
    - Ensure Firestore security rules are deployed with `firebase deploy --only firestore:rules`
    - If user sees "Missing or insufficient permissions", they should logout and login again
@@ -750,6 +788,32 @@ firebase deploy                          # Deploy everything
       ```
     - **Prevention**: When using custom value transformations, don't spread the field object
     - **Common Pattern**: This affects any controlled component that needs value transformation
+
+26. **Appointment Form Service Duration and Price Display Errors**:
+    - **Error**: "[object Object]" displayed instead of duration and price values
+    - **Root Cause**: Service duration stored as `{hours: number, minutes: number}` object, not simple number
+    - **Solution**: Updated all duration calculations to convert hours+minutes to total minutes:
+      ```typescript
+      const durationInMinutes = service.duration 
+        ? (service.duration.hours || 0) * 60 + (service.duration.minutes || 0)
+        : 0;
+      ```
+    - **Additional Fix**: Changed from non-existent `price` to `startingPrice` property
+    - **Currency Fix**: Updated currency display from "$" to "EGP"
+    - **Impact**: Fixed service chip labels, total calculations, and appointment data preparation
+
+27. **Client Autocomplete Search Not Working**:
+    - **Error**: Client search shows "No options" and constant loading, then white screen crash
+    - **Root Cause**: `clientService.getClients()` returns `{clients: Client[], lastDoc}` object, not array
+    - **Solution**: Extract clients array from service result:
+      ```typescript
+      const result = await clientService.getClients(companyId);
+      const clientsArray = result?.clients || [];
+      setClients(clientsArray);
+      ```
+    - **MUI Error Fix**: Added array safety checks to prevent `options.filter is not a function`
+    - **UX Enhancement**: Added auto-load on dropdown open for better user experience
+    - **Prevention**: Always ensure state arrays are properly initialized to prevent filter errors
 
 ## Next Major Features
 - Client management system

@@ -24,30 +24,45 @@ export async function ensureUserDocument() {
       
       // Get token to check for existing companyId
       const idTokenResult = await currentUser.getIdTokenResult();
-      const companyId = idTokenResult.claims.companyId as string;
+      const companyId = idTokenResult.claims.companyId as string | undefined;
       
-      // Create the user document
-      await setDoc(userRef, {
+      // Build user data object
+      const userData: any = {
         id: currentUser.uid,
         email: currentUser.email,
         name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-        companyId: companyId || null,
-        role: idTokenResult.claims.role || 'USER',
         active: true,
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
-      });
+      };
+      
+      // Only add companyId and role if companyId exists
+      if (companyId) {
+        userData.companyId = companyId;
+        userData.role = idTokenResult.claims.role || 'USER';
+      }
+      
+      // Create the user document
+      await setDoc(userRef, userData);
       
       console.log('User document created successfully');
     } else {
       console.log('User document already exists');
       
-      // Update last login
-      await setDoc(userRef, {
-        lastLoginAt: serverTimestamp(),
-      }, { merge: true });
+      // Update last login - use merge to avoid overwriting existing data
+      try {
+        await setDoc(userRef, {
+          lastLoginAt: serverTimestamp(),
+        }, { merge: true });
+      } catch (updateError) {
+        console.log('Could not update last login:', updateError);
+      }
     }
-  } catch (error) {
-    console.error('Error ensuring user document:', error);
+  } catch (error: any) {
+    if (error.code === 'permission-denied') {
+      console.log('Permission denied - user document might already exist');
+    } else {
+      console.error('Error ensuring user document:', error);
+    }
   }
 }
