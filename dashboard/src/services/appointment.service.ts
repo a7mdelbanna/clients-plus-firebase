@@ -20,6 +20,7 @@ import {
   endAt,
 } from 'firebase/firestore';
 import { format, parse, addMinutes, isBefore, isAfter, areIntervalsOverlapping, startOfDay, endOfDay } from 'date-fns';
+import { staffService } from './staff.service';
 
 // Appointment Types
 export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
@@ -147,12 +148,24 @@ class AppointmentService {
   ): Promise<string> {
     try {
       // Check availability first
+      let dateToCheck: Date;
+      if (appointment.date instanceof Timestamp) {
+        dateToCheck = appointment.date.toDate();
+      } else if (appointment.date.toDate && typeof appointment.date.toDate === 'function') {
+        dateToCheck = appointment.date.toDate();
+      } else if (appointment.date instanceof Date) {
+        dateToCheck = appointment.date;
+      } else {
+        dateToCheck = new Date(appointment.date);
+      }
+      
+      
       const isAvailable = await this.checkAvailability({
         companyId: appointment.companyId,
         staffId: appointment.staffId,
-        date: appointment.date.toDate(),
+        date: dateToCheck,
         duration: appointment.totalDuration,
-        serviceIds: appointment.services.map(s => s.serviceId),
+        serviceIds: appointment.services?.map(s => s.serviceId) || [],
       });
 
       if (!isAvailable) {
@@ -165,7 +178,7 @@ class AppointmentService {
         updatedAt: serverTimestamp() as Timestamp,
         createdBy: userId,
         changeHistory: [{
-          changedAt: serverTimestamp() as Timestamp,
+          changedAt: Timestamp.now(),
           changedBy: userId,
           changes: ['Appointment created']
         }]
@@ -373,7 +386,7 @@ class AppointmentService {
       if (updates.services) changes.push('Services modified');
 
       const changeEntry = {
-        changedAt: serverTimestamp() as Timestamp,
+        changedAt: Timestamp.now(),
         changedBy: userId,
         changes
       };
@@ -569,24 +582,168 @@ class AppointmentService {
     date: Date,
     duration: number
   ): Promise<boolean> {
-    // TODO: Integrate with staff schedule service
-    // For now, assume 9 AM to 6 PM
-    const hour = date.getHours();
-    const endHour = addMinutes(date, duration).getHours();
-    
-    return hour >= 9 && endHour <= 18;
+    try {
+      // Validate date
+      if (!date || isNaN(date.getTime())) {
+        console.error('Invalid date provided to checkStaffWorkingHours:', date);
+        return false;
+      }
+
+      // Get staff member details
+      const staffMember = await staffService.getStaffMember(staffId);
+      if (!staffMember || !staffMember.schedule?.workingHours) {
+        // If no schedule, assume standard working hours
+        const hour = date.getHours();
+        const endHour = addMinutes(date, duration).getHours();
+        return hour >= 9 && endHour <= 18;
+      }
+
+      // Check if staff is scheduled
+      if (!staffMember.schedule.isScheduled) {
+        // If staff is not scheduled, allow standard working hours
+        const hour = date.getHours();
+        const endHour = addMinutes(date, duration).getHours();
+        return hour >= 9 && endHour <= 18;
+      }
+
+      // Check if within schedule date range
+      if (staffMember.schedule.scheduleStartDate) {
+        const startDate = staffMember.schedule.scheduleStartDate.toDate 
+          ? staffMember.schedule.scheduleStartDate.toDate()
+          : staffMember.schedule.scheduleStartDate;
+        if (isBefore(date, startDate)) {
+          return false;
+        }
+      }
+
+      if (staffMember.schedule.scheduledUntil) {
+        const endDate = staffMember.schedule.scheduledUntil.toDate
+          ? staffMember.schedule.scheduledUntil.toDate()
+          : staffMember.schedule.scheduledUntil;
+        if (isAfter(date, endDate)) {
+          return false;
+        }
+      }
+
+      // Get day of week
+      const dayName = format(date, 'EEEE').toLowerCase();
+      const daySchedule = staffMember.schedule.workingHours[dayName];
+
+
+      if (!daySchedule || !daySchedule.isWorking) {
+        return false;
+      }
+
+      // Check working hours
+      const appointmentStart = format(date, 'HH:mm');
+      const appointmentEnd = format(addMinutes(date, duration), 'HH:mm');
+
+      const workStart = daySchedule.start || '09:00';
+      const workEnd = daySchedule.end || '18:00';
+
+      // Check if appointment is within working hours
+      if (appointmentStart < workStart || appointmentEnd > workEnd) {
+        return false;
+      }
+
+      // Check for breaks
+      if (daySchedule.breaks && daySchedule.breaks.length > 0) {
+        for (const breakTime of daySchedule.breaks) {
+          // Check if appointment overlaps with break
+          if (
+            (appointmentStart >= breakTime.start && appointmentStart < breakTime.end) ||
+            (appointmentEnd > breakTime.start && appointmentEnd <= breakTime.end) ||
+            (appointmentStart <= breakTime.start && appointmentEnd >= breakTime.end)
+          ) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error checking staff working hours:', error);
+      // Fallback to default hours
+      const hour = date.getHours();
+      const endHour = addMinutes(date, duration).getHours();
+      return hour >= 9 && endHour <= 18;
+    }
   }
 
   private async getStaffWorkingHours(
     staffId: string,
     date: Date
   ): Promise<{ start: Date; end: Date }[] | null> {
-    // TODO: Integrate with staff schedule service
-    // For now, return default working hours
-    return [{
-      start: new Date(date.setHours(9, 0, 0, 0)),
-      end: new Date(date.setHours(18, 0, 0, 0))
-    }];
+    try {
+      const staffMember = await staffService.getStaffMember(staffId);
+      if (!staffMember?.schedule?.workingHours) {
+        // Return default hours if no schedule
+        const defaultDate = new Date(date);
+        return [{
+          start: new Date(defaultDate.setHours(9, 0, 0, 0)),
+          end: new Date(defaultDate.setHours(18, 0, 0, 0))
+        }];
+      }
+
+      const dayName = format(date, 'EEEE').toLowerCase();
+      const daySchedule = staffMember.schedule.workingHours[dayName];
+
+      if (!daySchedule || !daySchedule.isWorking) {
+        return null;
+      }
+
+      const [startHour, startMin] = (daySchedule.start || '09:00').split(':').map(Number);
+      const [endHour, endMin] = (daySchedule.end || '18:00').split(':').map(Number);
+
+      const workingHours = [{
+        start: new Date(date.getFullYear(), date.getMonth(), date.getDate(), startHour, startMin, 0, 0),
+        end: new Date(date.getFullYear(), date.getMonth(), date.getDate(), endHour, endMin, 0, 0)
+      }];
+
+      // If there are breaks, split the working hours
+      if (daySchedule.breaks && daySchedule.breaks.length > 0) {
+        const allHours: { start: Date; end: Date }[] = [];
+        let currentStart = workingHours[0].start;
+
+        for (const breakTime of daySchedule.breaks.sort((a, b) => a.start.localeCompare(b.start))) {
+          const [breakStartHour, breakStartMin] = breakTime.start.split(':').map(Number);
+          const [breakEndHour, breakEndMin] = breakTime.end.split(':').map(Number);
+
+          const breakStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), breakStartHour, breakStartMin, 0, 0);
+          const breakEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), breakEndHour, breakEndMin, 0, 0);
+
+          // Add working hours before break
+          if (currentStart < breakStart) {
+            allHours.push({
+              start: currentStart,
+              end: breakStart
+            });
+          }
+
+          currentStart = breakEnd;
+        }
+
+        // Add remaining hours after last break
+        if (currentStart < workingHours[0].end) {
+          allHours.push({
+            start: currentStart,
+            end: workingHours[0].end
+          });
+        }
+
+        return allHours;
+      }
+
+      return workingHours;
+    } catch (error) {
+      console.error('Error getting staff working hours:', error);
+      // Return default hours as fallback
+      const defaultDate = new Date(date);
+      return [{
+        start: new Date(defaultDate.setHours(9, 0, 0, 0)),
+        end: new Date(defaultDate.setHours(18, 0, 0, 0))
+      }];
+    }
   }
 
   private async checkAppointmentConflicts(
@@ -673,7 +830,7 @@ class AppointmentService {
   async getClientAppointments(
     companyId: string,
     clientId: string,
-    limit?: number
+    maxResults?: number
   ): Promise<Appointment[]> {
     try {
       const constraints: QueryConstraint[] = [
@@ -682,8 +839,8 @@ class AppointmentService {
         orderBy('date', 'desc')
       ];
 
-      if (limit) {
-        constraints.push(limit(limit));
+      if (maxResults) {
+        constraints.push(limit(maxResults));
       }
 
       const q = query(collection(db, this.appointmentsCollection), ...constraints);
@@ -695,6 +852,32 @@ class AppointmentService {
       } as Appointment));
     } catch (error) {
       console.error('Error getting client appointments:', error);
+      // If orderBy fails due to missing index, try without ordering
+      if (error instanceof Error && error.message.includes('index')) {
+        try {
+          const simpleQuery = query(
+            collection(db, this.appointmentsCollection),
+            where('companyId', '==', companyId),
+            where('clientId', '==', clientId)
+          );
+          const snapshot = await getDocs(simpleQuery);
+          
+          // Sort on client side
+          const appointments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Appointment));
+          
+          return appointments.sort((a, b) => {
+            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date as any);
+            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date as any);
+            return dateB.getTime() - dateA.getTime();
+          });
+        } catch (fallbackError) {
+          console.error('Error in fallback query:', fallbackError);
+          throw fallbackError;
+        }
+      }
       throw error;
     }
   }

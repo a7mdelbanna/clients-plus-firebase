@@ -29,10 +29,12 @@ import { ar, enUS } from 'date-fns/locale';
 import { useAuth } from '../../contexts/AuthContext';
 import { appointmentService } from '../../services/appointment.service';
 import { staffService } from '../../services/staff.service';
-import AppointmentCalendar from '../../components/appointments/AppointmentCalendar';
-import AppointmentForm from '../../components/appointments/AppointmentForm';
+import CalendarWeekView from '../../components/appointments/CalendarWeekView';
+import AppointmentPanel from '../../components/appointments/AppointmentPanel';
+import AppointmentPanelForm from '../../components/appointments/AppointmentPanelForm';
 import type { Appointment } from '../../services/appointment.service';
 import type { Staff } from '../../services/staff.service';
+import { Timestamp } from 'firebase/firestore';
 
 type ViewType = 'day' | 'week' | 'month';
 
@@ -49,7 +51,7 @@ const AppointmentsPage: React.FC = () => {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openAppointmentForm, setOpenAppointmentForm] = useState(false);
+  const [openAppointmentPanel, setOpenAppointmentPanel] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: Date; time: string } | null>(null);
   const [companyId, setCompanyId] = useState<string>('');
@@ -165,24 +167,83 @@ const AppointmentsPage: React.FC = () => {
   const handleTimeSlotClick = (date: Date, time: string) => {
     setSelectedTimeSlot({ date, time });
     setSelectedAppointment(null);
-    setOpenAppointmentForm(true);
+    setOpenAppointmentPanel(true);
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setSelectedTimeSlot(null);
-    setOpenAppointmentForm(true);
+    setOpenAppointmentPanel(true);
   };
 
-  const handleAppointmentFormClose = () => {
-    setOpenAppointmentForm(false);
+  const handleAppointmentPanelClose = () => {
+    setOpenAppointmentPanel(false);
     setSelectedAppointment(null);
     setSelectedTimeSlot(null);
   };
 
-  const handleAppointmentFormSuccess = async () => {
-    await loadAppointments();
-    handleAppointmentFormClose();
+  const handleAppointmentSave = async (appointmentData: Partial<Appointment>) => {
+    try {
+      if (selectedAppointment?.id) {
+        await appointmentService.updateAppointment(
+          selectedAppointment.id, 
+          appointmentData,
+          currentUser?.uid || ''
+        );
+      } else {
+        // Create new appointment
+        // Don't override the date from appointmentData - it already has the correct date
+        const newAppointment: Partial<Appointment> = {
+          ...appointmentData,
+          companyId,
+        };
+        await appointmentService.createAppointment(
+          newAppointment as Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>,
+          currentUser?.uid || ''
+        );
+      }
+      
+      // Navigate to the appointment date if it's different from current view
+      if (appointmentData.date) {
+        const appointmentDate = appointmentData.date instanceof Timestamp ? 
+          appointmentData.date.toDate() : 
+          appointmentData.date;
+        
+        // Check if appointment date is in current view
+        let startDate: Date;
+        let endDate: Date;
+        
+        if (viewType === 'week') {
+          startDate = startOfWeek(currentDate, { locale });
+          endDate = endOfWeek(currentDate, { locale });
+        } else {
+          startDate = startOfDay(currentDate);
+          endDate = endOfDay(currentDate);
+        }
+        
+        // If appointment is outside current view, navigate to it
+        if (appointmentDate < startDate || appointmentDate > endDate) {
+          setCurrentDate(appointmentDate);
+        }
+      }
+      
+      await loadAppointments();
+      handleAppointmentPanelClose();
+    } catch (error) {
+      console.error('Error saving appointment:', error);
+      throw error;
+    }
+  };
+
+  const handleAppointmentDelete = async (appointmentId: string) => {
+    try {
+      await appointmentService.deleteAppointment(appointmentId);
+      await loadAppointments();
+      handleAppointmentPanelClose();
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      throw error;
+    }
   };
 
   // Get current view date range text
@@ -220,7 +281,7 @@ const AppointmentsPage: React.FC = () => {
             onClick={() => {
               setSelectedAppointment(null);
               setSelectedTimeSlot(null);
-              setOpenAppointmentForm(true);
+              setOpenAppointmentPanel(true);
             }}
             sx={{ 
               backgroundColor: theme.palette.primary.main,
@@ -311,30 +372,45 @@ const AppointmentsPage: React.FC = () => {
       </Paper>
 
       {/* Calendar */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-        <AppointmentCalendar
-          appointments={appointments}
-          currentDate={currentDate}
-          viewType={viewType}
-          selectedStaff={selectedStaff}
-          staff={staff}
-          loading={loading}
-          onTimeSlotClick={handleTimeSlotClick}
-          onAppointmentClick={handleAppointmentClick}
-        />
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', p: 2 }}>
+        {viewType === 'week' ? (
+          <CalendarWeekView
+            currentDate={currentDate}
+            appointments={appointments}
+            onAppointmentClick={handleAppointmentClick}
+            onTimeSlotClick={handleTimeSlotClick}
+            selectedStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
+          />
+        ) : (
+          // Keep the existing calendar for day/month views for now
+          <Paper sx={{ p: 2, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="text.secondary">
+              {isRTL ? 'عرض اليوم والشهر قيد التطوير' : 'Day and Month views coming soon'}
+            </Typography>
+          </Paper>
+        )}
       </Box>
 
-      {/* Appointment Form Dialog */}
-      <AppointmentForm
-        open={openAppointmentForm}
-        appointment={selectedAppointment}
-        defaultDate={selectedTimeSlot?.date}
-        defaultTime={selectedTimeSlot?.time}
-        defaultStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
-        companyId={companyId}
-        onClose={handleAppointmentFormClose}
-        onSuccess={handleAppointmentFormSuccess}
-      />
+      {/* Appointment Panel */}
+      <AppointmentPanel
+        open={openAppointmentPanel}
+        onClose={handleAppointmentPanelClose}
+        title={selectedAppointment ? 
+          (isRTL ? 'تعديل الموعد' : 'Edit Appointment') : 
+          (isRTL ? 'موعد جديد' : 'New Appointment')
+        }
+      >
+        <AppointmentPanelForm
+          appointment={selectedAppointment}
+          defaultDate={selectedTimeSlot?.date}
+          defaultTime={selectedTimeSlot?.time}
+          defaultStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
+          companyId={companyId}
+          onSave={handleAppointmentSave}
+          onDelete={selectedAppointment ? handleAppointmentDelete : undefined}
+          onClose={handleAppointmentPanelClose}
+        />
+      </AppointmentPanel>
     </Box>
   );
 };

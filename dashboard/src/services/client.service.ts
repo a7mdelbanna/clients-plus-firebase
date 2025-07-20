@@ -616,9 +616,8 @@ class ClientService {
       // Ensure backward compatibility
       const compatibleData = this.ensureBackwardCompatibility(clientData);
       
-      const newClient = {
+      const newClient: any = {
         ...compatibleData,
-        branchId: branchId || clientData.branchId,
         createdBy: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -642,7 +641,21 @@ class ClientService {
         memberSince: serverTimestamp(),
       };
 
-      const docRef = await addDoc(collection(db, this.clientsCollection), newClient);
+      // Only add branchId if it has a value
+      const finalBranchId = branchId || clientData.branchId;
+      if (finalBranchId) {
+        newClient.branchId = finalBranchId;
+      }
+
+      // Clean up undefined values before saving
+      const cleanedClient = Object.entries(newClient).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as any);
+
+      const docRef = await addDoc(collection(db, this.clientsCollection), cleanedClient);
       
       // Check for duplicates after creation
       this.checkForDuplicates(newClient).then(result => {
