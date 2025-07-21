@@ -25,13 +25,15 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { resourceService } from '../../services/resource.service';
-import type { Appointment } from '../../services/appointment.service';
+import RecurringSettings from './RecurringSettings';
+import type { Appointment, AppointmentRepeat } from '../../services/appointment.service';
 import type { Resource } from '../../services/resource.service';
 
 interface AdvancedFieldsProps {
   appointment: Appointment | null;
   companyId: string;
   branchId?: string;
+  appointmentDate?: Date;
   onFieldsChange?: (fields: any) => void;
 }
 
@@ -39,6 +41,7 @@ const AdvancedFields: React.FC<AdvancedFieldsProps> = ({
   appointment,
   companyId,
   branchId,
+  appointmentDate,
   onFieldsChange,
 }) => {
   const theme = useTheme();
@@ -50,9 +53,11 @@ const AdvancedFields: React.FC<AdvancedFieldsProps> = ({
     appointment?.resources?.map(r => r.resourceId) || []
   );
   const [categories, setCategories] = useState<string[]>([]);
-  const [colorCode, setColorCode] = useState(false);
+  const [colorCode, setColorCode] = useState(appointment?.color || '#2196F3');
+  const [useDefaultColor, setUseDefaultColor] = useState(!appointment?.color);
   const [availableResources, setAvailableResources] = useState<Resource[]>([]);
   const [loadingResources, setLoadingResources] = useState(true);
+  const [repeatSettings, setRepeatSettings] = useState<AppointmentRepeat | null>(appointment?.repeat || null);
 
   // Load resources from database
   useEffect(() => {
@@ -93,16 +98,20 @@ const AdvancedFields: React.FC<AdvancedFieldsProps> = ({
         internalNotes: comment,
         resources: appointmentResources,
         categories,
-        colorCode,
+        color: useDefaultColor ? null : colorCode,
+        repeat: repeatSettings,
       });
     }
-  }, [comment, selectedResources, categories, colorCode, availableResources]);
+  }, [comment, selectedResources, categories, colorCode, useDefaultColor, availableResources, repeatSettings]);
 
+  // Temporary hardcoded categories until we integrate with category service
   const categoryOptions = [
-    { id: '1', name: isRTL ? 'عملاء VIP' : 'VIP Clients' },
-    { id: '2', name: isRTL ? 'عملاء جدد' : 'New Clients' },
-    { id: '3', name: isRTL ? 'عملاء منتظمين' : 'Regular Clients' },
-    { id: '4', name: isRTL ? 'عروض خاصة' : 'Special Offers' },
+    { id: '1', name: isRTL ? 'عملاء VIP' : 'VIP Clients', color: '#FFD700' },
+    { id: '2', name: isRTL ? 'عملاء جدد' : 'New Clients', color: '#4CAF50' },
+    { id: '3', name: isRTL ? 'عملاء منتظمين' : 'Regular Clients', color: '#2196F3' },
+    { id: '4', name: isRTL ? 'عروض خاصة' : 'Special Offers', color: '#FF5722' },
+    { id: '5', name: isRTL ? 'متابعة' : 'Follow-up', color: '#9C27B0' },
+    { id: '6', name: isRTL ? 'طارئ' : 'Emergency', color: '#F44336' },
   ];
 
   const handleResourceAdd = () => {
@@ -118,6 +127,17 @@ const AdvancedFields: React.FC<AdvancedFieldsProps> = ({
 
   return (
     <Box>
+      {/* Recurring Settings */}
+      <Box sx={{ mb: 3 }}>
+        <RecurringSettings
+          appointment={appointment}
+          appointmentDate={appointmentDate || new Date()}
+          onRepeatChange={setRepeatSettings}
+        />
+      </Box>
+
+      <Divider sx={{ my: 3 }} />
+
       {/* Comment Section */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle2" gutterBottom>
@@ -294,35 +314,95 @@ const AdvancedFields: React.FC<AdvancedFieldsProps> = ({
         <FormControlLabel
           control={
             <Checkbox
-              checked={colorCode}
-              onChange={(e) => setColorCode(e.target.checked)}
+              checked={!useDefaultColor}
+              onChange={(e) => setUseDefaultColor(!e.target.checked)}
               icon={<Palette />}
               checkedIcon={<Palette color="primary" />}
             />
           }
-          label={isRTL ? 'بشكل افتراضي' : 'By default'}
+          label={isRTL ? 'استخدام لون مخصص' : 'Use custom color'}
         />
         
-        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-          {['#FF5722', '#4CAF50', '#2196F3', '#FFC107', '#9C27B0'].map((color) => (
-            <Box
-              key={color}
-              sx={{
-                width: 32,
-                height: 32,
-                backgroundColor: color,
-                borderRadius: 1,
-                cursor: 'pointer',
-                border: `2px solid ${theme.palette.divider}`,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  transform: 'scale(1.1)',
-                  boxShadow: theme.shadows[2],
-                },
-              }}
-            />
-          ))}
-        </Box>
+        {!useDefaultColor && (
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {[
+                { color: '#FF5722', name: isRTL ? 'أحمر' : 'Red' },
+                { color: '#4CAF50', name: isRTL ? 'أخضر' : 'Green' },
+                { color: '#2196F3', name: isRTL ? 'أزرق' : 'Blue' },
+                { color: '#FFC107', name: isRTL ? 'أصفر' : 'Yellow' },
+                { color: '#9C27B0', name: isRTL ? 'بنفسجي' : 'Purple' },
+                { color: '#795548', name: isRTL ? 'بني' : 'Brown' },
+                { color: '#607D8B', name: isRTL ? 'رمادي' : 'Grey' },
+                { color: '#FF9800', name: isRTL ? 'برتقالي' : 'Orange' },
+              ].map(({ color, name }) => (
+                <Box
+                  key={color}
+                  onClick={() => setColorCode(color)}
+                  sx={{
+                    position: 'relative',
+                    width: 40,
+                    height: 40,
+                    backgroundColor: color,
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    border: colorCode === color ? `3px solid ${theme.palette.primary.main}` : `2px solid ${theme.palette.divider}`,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    '&:hover': {
+                      transform: 'scale(1.1)',
+                      boxShadow: theme.shadows[4],
+                    },
+                  }}
+                  title={name}
+                >
+                  {colorCode === color && (
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        backgroundColor: 'white',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          backgroundColor: color,
+                          borderRadius: '50%',
+                        }}
+                      />
+                    </Box>
+                  )}
+                </Box>
+              ))}
+            </Box>
+            
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                {isRTL ? 'اللون المحدد:' : 'Selected color:'}
+              </Typography>
+              <Box
+                sx={{
+                  width: 24,
+                  height: 24,
+                  backgroundColor: colorCode,
+                  borderRadius: 1,
+                  border: `2px solid ${theme.palette.divider}`,
+                }}
+              />
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {colorCode}
+              </Typography>
+            </Box>
+          </Box>
+        )}
       </Box>
     </Box>
   );

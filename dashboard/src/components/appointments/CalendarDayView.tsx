@@ -5,25 +5,30 @@ import {
   Paper,
   useTheme,
   alpha,
+  Chip,
+  Avatar,
   Tooltip,
 } from '@mui/material';
-import { Repeat } from '@mui/icons-material';
-import { format, startOfWeek, addDays, isSameDay, parse, isWithinInterval } from 'date-fns';
+import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { motion } from 'framer-motion';
+import { Repeat, AccessTime, Person } from '@mui/icons-material';
 import type { Appointment } from '../../services/appointment.service';
+import type { Staff } from '../../services/staff.service';
 
-interface CalendarWeekViewProps {
+interface CalendarDayViewProps {
   currentDate: Date;
   appointments: Appointment[];
+  staff: Staff[];
   onAppointmentClick: (appointment: Appointment) => void;
   onTimeSlotClick: (date: Date, time: string) => void;
   selectedStaffId?: string;
 }
 
-const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
+const CalendarDayView: React.FC<CalendarDayViewProps> = ({
   currentDate,
   appointments,
+  staff,
   onAppointmentClick,
   onTimeSlotClick,
   selectedStaffId,
@@ -37,54 +42,48 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
     const slots = [];
     for (let hour = 9; hour <= 22; hour++) {
       slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      slots.push(`${hour.toString().padStart(2, '0')}:30`);
     }
     return slots;
   }, []);
 
-  // Get week days
-  const weekStart = startOfWeek(currentDate, { locale });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Filter staff based on selected staff
+  const displayStaff = useMemo(() => {
+    if (selectedStaffId) {
+      return staff.filter(s => s.id === selectedStaffId);
+    }
+    return staff;
+  }, [staff, selectedStaffId]);
 
-  // Group appointments by day and time
-  const appointmentsByDayTime = useMemo(() => {
+  // Group appointments by staff and time
+  const appointmentsByStaffTime = useMemo(() => {
     const grouped: Record<string, Record<string, Appointment[]>> = {};
     
-    weekDays.forEach(day => {
-      const dayKey = format(day, 'yyyy-MM-dd');
-      grouped[dayKey] = {};
+    displayStaff.forEach(staffMember => {
+      grouped[staffMember.id!] = {};
     });
 
     appointments.forEach(appointment => {
       if (!selectedStaffId || appointment.staffId === selectedStaffId) {
-        const dayKey = format(appointment.date.toDate(), 'yyyy-MM-dd');
-        const timeKey = appointment.startTime;
-        
-        if (grouped[dayKey]) {
-          if (!grouped[dayKey][timeKey]) {
-            grouped[dayKey][timeKey] = [];
+        if (grouped[appointment.staffId]) {
+          const timeKey = appointment.startTime;
+          if (!grouped[appointment.staffId][timeKey]) {
+            grouped[appointment.staffId][timeKey] = [];
           }
-          grouped[dayKey][timeKey].push(appointment);
+          grouped[appointment.staffId][timeKey].push(appointment);
         }
       }
     });
 
     return grouped;
-  }, [appointments, weekDays, selectedStaffId]);
-
-  // Calculate appointment height based on duration
-  const getAppointmentHeight = (appointment: Appointment) => {
-    const duration = appointment.totalDuration || 30;
-    return (duration / 60) * 60; // 60px per hour
-  };
+  }, [appointments, displayStaff, selectedStaffId]);
 
   // Get appointment color based on custom color or status
   const getAppointmentColor = (appointment: Appointment) => {
-    // Use custom color if available
     if (appointment.color) {
       return appointment.color;
     }
     
-    // Otherwise use status-based colors
     const colors = {
       pending: theme.palette.warning.main,
       confirmed: theme.palette.info.main,
@@ -97,6 +96,12 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
     return colors[appointment.status as keyof typeof colors] || theme.palette.grey[500];
   };
 
+  // Calculate appointment height based on duration
+  const getAppointmentHeight = (appointment: Appointment) => {
+    const duration = appointment.totalDuration || 30;
+    return (duration / 30) * 40 - 4; // 40px per 30 minutes, minus padding
+  };
+
   return (
     <Paper
       elevation={0}
@@ -106,19 +111,33 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
         backgroundColor: theme.palette.background.paper,
       }}
     >
-      <Box sx={{ display: 'flex', height: '100%' }}>
+      {/* Header with date */}
+      <Box sx={{
+        p: 2,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.default,
+      }}>
+        <Typography variant="h6">
+          {format(currentDate, 'EEEE, dd MMMM yyyy', { locale })}
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: 'flex', height: 'calc(100% - 64px)' }}>
         {/* Time column */}
         <Box
           sx={{
             width: 80,
             borderRight: `1px solid ${theme.palette.divider}`,
             backgroundColor: theme.palette.background.default,
+            position: 'sticky',
+            left: 0,
+            zIndex: 2,
           }}
         >
           {/* Empty header cell */}
           <Box
             sx={{
-              height: 60,
+              height: 80,
               borderBottom: `1px solid ${theme.palette.divider}`,
             }}
           />
@@ -128,7 +147,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
             <Box
               key={time}
               sx={{
-                height: 60,
+                height: 40,
                 borderBottom: `1px solid ${theme.palette.divider}`,
                 display: 'flex',
                 alignItems: 'center',
@@ -137,76 +156,62 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                 fontSize: 14,
               }}
             >
-              {time}
+              {time.endsWith(':00') ? time : ''}
             </Box>
           ))}
         </Box>
 
-        {/* Days columns */}
+        {/* Staff columns */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'auto' }}>
-          {weekDays.map((day) => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const isToday = isSameDay(day, new Date());
-
-            return (
+          {displayStaff.map((staffMember) => (
+            <Box
+              key={staffMember.id}
+              sx={{
+                flex: 1,
+                minWidth: 200,
+                borderRight: `1px solid ${theme.palette.divider}`,
+                '&:last-child': {
+                  borderRight: 'none',
+                },
+              }}
+            >
+              {/* Staff header */}
               <Box
-                key={dayKey}
                 sx={{
-                  flex: 1,
-                  minWidth: 150,
-                  borderRight: `1px solid ${theme.palette.divider}`,
-                  '&:last-child': {
-                    borderRight: 'none',
-                  },
+                  height: 80,
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  p: 1,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.05),
                 }}
               >
-                {/* Day header */}
-                <Box
-                  sx={{
-                    height: 60,
-                    borderBottom: `1px solid ${theme.palette.divider}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isToday
-                      ? alpha(theme.palette.primary.main, 0.1)
-                      : 'transparent',
-                  }}
+                <Avatar
+                  src={staffMember.avatar}
+                  sx={{ width: 40, height: 40, mb: 0.5 }}
                 >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: isToday
-                        ? theme.palette.primary.main
-                        : theme.palette.text.secondary,
-                      fontWeight: isToday ? 600 : 400,
-                    }}
-                  >
-                    {format(day, 'EEE', { locale })}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: isToday ? 600 : 400,
-                      color: isToday
-                        ? theme.palette.primary.main
-                        : theme.palette.text.primary,
-                    }}
-                  >
-                    {format(day, 'd', { locale })}
-                  </Typography>
-                </Box>
+                  {staffMember.name.charAt(0)}
+                </Avatar>
+                <Typography variant="caption" align="center" noWrap>
+                  {staffMember.name}
+                </Typography>
+              </Box>
 
-                {/* Time slots for this day */}
-                <Box sx={{ position: 'relative' }}>
-                  {timeSlots.map((time) => (
+              {/* Time slots for this staff */}
+              <Box sx={{ position: 'relative' }}>
+                {timeSlots.map((time) => {
+                  const isHalfHour = time.endsWith(':30');
+                  return (
                     <Box
-                      key={`${dayKey}-${time}`}
-                      onClick={() => onTimeSlotClick(day, time)}
+                      key={`${staffMember.id}-${time}`}
+                      onClick={() => onTimeSlotClick(currentDate, time)}
                       sx={{
-                        height: 60,
-                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        height: 40,
+                        borderBottom: isHalfHour 
+                          ? `1px dashed ${alpha(theme.palette.divider, 0.5)}`
+                          : `1px solid ${theme.palette.divider}`,
                         cursor: 'pointer',
                         position: 'relative',
                         transition: 'background-color 0.2s',
@@ -216,7 +221,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                       }}
                     >
                       {/* Appointments in this slot */}
-                      {appointmentsByDayTime[dayKey]?.[time]?.map((appointment, index) => (
+                      {appointmentsByStaffTime[staffMember.id!]?.[time]?.map((appointment, index) => (
                         <motion.div
                           key={appointment.id}
                           initial={{ opacity: 0, scale: 0.9 }}
@@ -233,7 +238,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                             left: isRTL ? 'auto' : 2 + (index * 4),
                             right: isRTL ? 2 + (index * 4) : 'auto',
                             width: `calc(100% - ${4 + (index * 4)}px)`,
-                            height: getAppointmentHeight(appointment) - 4,
+                            height: getAppointmentHeight(appointment),
                             backgroundColor: getAppointmentColor(appointment),
                             borderRadius: 4,
                             padding: '4px 8px',
@@ -246,30 +251,51 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                           }}
                         >
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box sx={{ fontWeight: 500, flex: 1 }}>
+                            <Box sx={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {appointment.clientName}
                             </Box>
                             {appointment.repeat && appointment.repeat.type !== 'none' && (
-                              <Tooltip title={isRTL ? 'موعد متكرر' : 'Recurring appointment'}>
+                              <Tooltip title={isRTL ? 'موعد متكرر' : 'Recurring'}>
                                 <Repeat sx={{ fontSize: 14 }} />
                               </Tooltip>
                             )}
                           </Box>
-                          <Box sx={{ opacity: 0.9, fontSize: 11 }}>
+                          <Box sx={{ opacity: 0.9, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {appointment.services[0]?.serviceName}
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.9 }}>
+                            <AccessTime sx={{ fontSize: 10 }} />
+                            <Typography variant="caption" sx={{ fontSize: 10 }}>
+                              {appointment.startTime} - {appointment.endTime}
+                            </Typography>
                           </Box>
                         </motion.div>
                       ))}
                     </Box>
-                  ))}
-                </Box>
+                  );
+                })}
               </Box>
-            );
-          })}
+            </Box>
+          ))}
+
+          {/* Show message if no staff */}
+          {displayStaff.length === 0 && (
+            <Box sx={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: theme.palette.text.secondary,
+            }}>
+              <Typography>
+                {isRTL ? 'لا يوجد موظفين' : 'No staff members'}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Box>
     </Paper>
   );
 };
 
-export default CalendarWeekView;
+export default CalendarDayView;

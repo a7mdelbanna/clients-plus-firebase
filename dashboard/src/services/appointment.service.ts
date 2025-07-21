@@ -19,7 +19,7 @@ import {
   startAt,
   endAt,
 } from 'firebase/firestore';
-import { format, parse, addMinutes, isBefore, isAfter, areIntervalsOverlapping, startOfDay, endOfDay } from 'date-fns';
+import { format, parse, addMinutes, isBefore, isAfter, areIntervalsOverlapping, startOfDay, endOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 import { staffService } from './staff.service';
 
 // Appointment Types
@@ -822,8 +822,68 @@ class AppointmentService {
     appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>,
     userId: string
   ): Promise<void> {
-    // TODO: Implement recurring appointments
-    console.log('Recurring appointments not yet implemented');
+    try {
+      if (!appointment.repeat || appointment.repeat.type === 'none') {
+        return;
+      }
+
+      const batch = writeBatch(db);
+      const repeatGroupId = originalId; // Use original appointment ID as group ID
+      
+      let currentDate = appointment.date.toDate ? appointment.date.toDate() : new Date(appointment.date as any);
+      const maxOccurrences = appointment.repeat.maxOccurrences || 52; // Default to 52 occurrences (1 year for weekly)
+      let occurrences = 0;
+      
+      // Calculate end date if using maxOccurrences
+      const endDate = appointment.repeat.endDate 
+        ? (appointment.repeat.endDate.toDate ? appointment.repeat.endDate.toDate() : new Date(appointment.repeat.endDate as any))
+        : null;
+
+      while (occurrences < maxOccurrences - 1) { // -1 because the original appointment counts as first occurrence
+        // Calculate next date based on repeat type
+        if (appointment.repeat.type === 'daily') {
+          currentDate = addDays(currentDate, appointment.repeat.interval);
+        } else if (appointment.repeat.type === 'weekly') {
+          currentDate = addWeeks(currentDate, appointment.repeat.interval);
+        } else if (appointment.repeat.type === 'monthly') {
+          currentDate = addMonths(currentDate, appointment.repeat.interval);
+        }
+
+        // Check if we've passed the end date
+        if (endDate && currentDate > endDate) {
+          break;
+        }
+
+        // Create new appointment
+        const newAppointmentRef = doc(collection(db, this.appointmentsCollection));
+        const newAppointment = {
+          ...appointment,
+          date: Timestamp.fromDate(currentDate),
+          repeatGroupId,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          createdBy: userId,
+          changeHistory: [{
+            changedAt: Timestamp.now(),
+            changedBy: userId,
+            changes: ['Recurring appointment created']
+          }]
+        };
+
+        batch.set(newAppointmentRef, newAppointment);
+        occurrences++;
+      }
+
+      // Update original appointment with repeatGroupId
+      const originalRef = doc(db, this.appointmentsCollection, originalId);
+      batch.update(originalRef, { repeatGroupId });
+
+      await batch.commit();
+      console.log(`Created ${occurrences} recurring appointments`);
+    } catch (error) {
+      console.error('Error creating recurring appointments:', error);
+      throw error;
+    }
   }
 
   // Get appointments by client

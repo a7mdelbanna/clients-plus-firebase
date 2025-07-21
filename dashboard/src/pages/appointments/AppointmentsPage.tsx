@@ -13,6 +13,7 @@ import {
   useTheme,
   Paper,
   Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   Add,
@@ -24,12 +25,14 @@ import {
   ViewModule,
   FilterList,
 } from '@mui/icons-material';
-import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isSameDay, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isSameDay, startOfDay, endOfDay, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { useAuth } from '../../contexts/AuthContext';
 import { appointmentService } from '../../services/appointment.service';
 import { staffService } from '../../services/staff.service';
 import CalendarWeekView from '../../components/appointments/CalendarWeekView';
+import CalendarDayView from '../../components/appointments/CalendarDayView';
+import CalendarMonthView from '../../components/appointments/CalendarMonthView';
 import AppointmentPanel from '../../components/appointments/AppointmentPanel';
 import AppointmentPanelForm from '../../components/appointments/AppointmentPanelForm';
 import type { Appointment } from '../../services/appointment.service';
@@ -119,8 +122,10 @@ const AppointmentsPage: React.FC = () => {
         endDate = endOfWeek(currentDate, { locale });
       } else {
         // Month view - load 6 weeks to ensure full month display
-        startDate = startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), { locale });
-        endDate = endOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), { locale });
+        const monthStart = startOfMonth(currentDate);
+        const monthEnd = endOfMonth(currentDate);
+        startDate = startOfWeek(monthStart, { locale });
+        endDate = endOfWeek(monthEnd, { locale });
       }
 
       const appointmentsList = await appointmentService.getAppointments(
@@ -249,11 +254,15 @@ const AppointmentsPage: React.FC = () => {
   // Get current view date range text
   const getDateRangeText = () => {
     if (viewType === 'day') {
-      return format(currentDate, 'EEEE, MMMM d, yyyy', { locale });
+      return format(currentDate, 'EEEE, d MMMM yyyy', { locale });
     } else if (viewType === 'week') {
       const start = startOfWeek(currentDate, { locale });
       const end = endOfWeek(currentDate, { locale });
-      return `${format(start, 'MMM d', { locale })} - ${format(end, 'MMM d, yyyy', { locale })}`;
+      if (start.getMonth() === end.getMonth()) {
+        return `${format(start, 'd', { locale })} - ${format(end, 'd MMMM yyyy', { locale })}`;
+      } else {
+        return `${format(start, 'd MMM', { locale })} - ${format(end, 'd MMM yyyy', { locale })}`;
+      }
     } else {
       return format(currentDate, 'MMMM yyyy', { locale });
     }
@@ -332,13 +341,19 @@ const AppointmentsPage: React.FC = () => {
             size="small"
           >
             <ToggleButton value="day">
-              <ViewDay />
+              <Tooltip title={isRTL ? 'عرض يومي' : 'Day view'}>
+                <ViewDay />
+              </Tooltip>
             </ToggleButton>
             <ToggleButton value="week">
-              <ViewWeek />
+              <Tooltip title={isRTL ? 'عرض أسبوعي' : 'Week view'}>
+                <ViewWeek />
+              </Tooltip>
             </ToggleButton>
             <ToggleButton value="month">
-              <ViewModule />
+              <Tooltip title={isRTL ? 'عرض شهري' : 'Month view'}>
+                <ViewModule />
+              </Tooltip>
             </ToggleButton>
           </ToggleButtonGroup>
 
@@ -373,7 +388,17 @@ const AppointmentsPage: React.FC = () => {
 
       {/* Calendar */}
       <Box sx={{ flexGrow: 1, overflow: 'hidden', p: 2 }}>
-        {viewType === 'week' ? (
+        {viewType === 'day' && (
+          <CalendarDayView
+            currentDate={currentDate}
+            appointments={appointments}
+            staff={staff}
+            onAppointmentClick={handleAppointmentClick}
+            onTimeSlotClick={handleTimeSlotClick}
+            selectedStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
+          />
+        )}
+        {viewType === 'week' && (
           <CalendarWeekView
             currentDate={currentDate}
             appointments={appointments}
@@ -381,13 +406,18 @@ const AppointmentsPage: React.FC = () => {
             onTimeSlotClick={handleTimeSlotClick}
             selectedStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
           />
-        ) : (
-          // Keep the existing calendar for day/month views for now
-          <Paper sx={{ p: 2, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography color="text.secondary">
-              {isRTL ? 'عرض اليوم والشهر قيد التطوير' : 'Day and Month views coming soon'}
-            </Typography>
-          </Paper>
+        )}
+        {viewType === 'month' && (
+          <CalendarMonthView
+            currentDate={currentDate}
+            appointments={appointments}
+            onAppointmentClick={handleAppointmentClick}
+            onDateClick={(date) => {
+              setCurrentDate(date);
+              setViewType('day');
+            }}
+            selectedStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
+          />
         )}
       </Box>
 

@@ -39,6 +39,7 @@ import {
   PersonOutline,
   PersonAdd,
   Close,
+  Repeat,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -58,7 +59,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { appointmentService } from '../../services/appointment.service';
 import { clientService } from '../../services/client.service';
 import { staffService } from '../../services/staff.service';
-import type { Appointment, AppointmentStatus } from '../../services/appointment.service';
+import type { Appointment, AppointmentStatus, AppointmentSource } from '../../services/appointment.service';
 import type { Client, ClientsFilter } from '../../services/client.service';
 import type { Staff } from '../../services/staff.service';
 
@@ -98,6 +99,8 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   const [clientPhone, setClientPhone] = useState(appointment?.clientPhone || '');
   const [clientEmail, setClientEmail] = useState(appointment?.clientEmail || '');
   const [notes, setNotes] = useState(appointment?.notes || '');
+  const [source, setSource] = useState<AppointmentSource>(appointment?.source || 'dashboard');
+  const [advancedFields, setAdvancedFields] = useState<any>({});
   const [appointmentDate, setAppointmentDate] = useState<Date>(
     appointment?.date?.toDate ? appointment.date.toDate() : (defaultDate || new Date())
   );
@@ -366,8 +369,10 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
       // Only add companyId for new appointments
       if (!appointment?.id) {
         appointmentData.companyId = companyId;
-        appointmentData.source = 'dashboard';
       }
+      
+      // Always update source
+      appointmentData.source = source;
 
       // Only add notes if they exist
       if (notes && notes.trim()) {
@@ -387,6 +392,23 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
         appointmentData.prepaidAmount = paidAmount;
       } else if (appointment?.prepaidAmount) {
         appointmentData.prepaidAmount = appointment.prepaidAmount;
+      }
+      
+      // Add advanced fields
+      if (advancedFields.internalNotes) {
+        appointmentData.internalNotes = advancedFields.internalNotes;
+      }
+      if (advancedFields.resources && advancedFields.resources.length > 0) {
+        appointmentData.resources = advancedFields.resources;
+      }
+      if (advancedFields.categories && advancedFields.categories.length > 0) {
+        appointmentData.categories = advancedFields.categories;
+      }
+      if (advancedFields.color) {
+        appointmentData.color = advancedFields.color;
+      }
+      if (advancedFields.repeat) {
+        appointmentData.repeat = advancedFields.repeat;
       }
 
       await onSave(appointmentData);
@@ -622,6 +644,28 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           </Box>
         </LocalizationProvider>
 
+        {/* Recurring Appointment Indicator */}
+        {(appointment?.repeat && appointment.repeat.type !== 'none') || advancedFields.repeat && (
+          <Alert 
+            severity="info" 
+            icon={<Repeat />}
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="body2">
+              {isRTL ? 'موعد متكرر' : 'Recurring appointment'}
+              {advancedFields.repeat && (
+                <>
+                  {' - '}
+                  {advancedFields.repeat.type === 'daily' && (isRTL ? 'يوميًا' : 'Daily')}
+                  {advancedFields.repeat.type === 'weekly' && (isRTL ? 'أسبوعيًا' : 'Weekly')}
+                  {advancedFields.repeat.type === 'monthly' && (isRTL ? 'شهريًا' : 'Monthly')}
+                  {advancedFields.repeat.interval > 1 && ` (${isRTL ? 'كل' : 'every'} ${advancedFields.repeat.interval})`}
+                </>
+              )}
+            </Typography>
+          </Alert>
+        )}
+
         {/* Client Info Display */}
         {(selectedClient || (isNewClient && newClientData.name)) && (
           <Box sx={{ 
@@ -727,7 +771,9 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
             companyId={companyId}
             staffId={selectedStaff}
             notes={notes}
+            source={source}
             onNotesChange={setNotes}
+            onSourceChange={setSource}
             onServicesChange={(services) => {
               setSelectedServices(services);
               const total = services.reduce((sum, service) => sum + (service.startingPrice || 0), 0);
@@ -740,6 +786,8 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           <AdvancedFields
             appointment={appointment}
             companyId={companyId}
+            appointmentDate={appointmentDate}
+            onFieldsChange={setAdvancedFields}
           />
         )}
         
