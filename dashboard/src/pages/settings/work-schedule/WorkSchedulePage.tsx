@@ -33,6 +33,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { workScheduleService, type MonthSchedule, type WeekSchedule, type ViewMode } from '../../../services/workSchedule.service';
 import { setupService } from '../../../services/setup.service';
 import ScheduleCalendar from './components/ScheduleCalendar';
@@ -43,6 +44,7 @@ const WorkSchedulePage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -97,7 +99,7 @@ const WorkSchedulePage: React.FC = () => {
       startOfWeek.setDate(diff);
       startOfWeek.setHours(0, 0, 0, 0);
       
-      const weekSchedule = await workScheduleService.getWeekSchedule(companyId, startOfWeek);
+      const weekSchedule = await workScheduleService.getWeekSchedule(companyId, startOfWeek, currentBranch?.id);
       setSchedule(weekSchedule);
     } catch (error) {
       console.error('Error loading schedule:', error);

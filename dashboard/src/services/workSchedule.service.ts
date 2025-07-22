@@ -64,9 +64,9 @@ export type ViewMode = 'month' | 'week';
 
 class WorkScheduleService {
   // Get all staff schedules for a company
-  async getStaffSchedules(companyId: string): Promise<Staff[]> {
+  async getStaffSchedules(companyId: string, branchId?: string): Promise<Staff[]> {
     try {
-      return await staffService.getStaff(companyId);
+      return await staffService.getStaff(companyId, branchId);
     } catch (error) {
       console.error('Error getting staff schedules:', error);
       throw error;
@@ -74,9 +74,9 @@ class WorkScheduleService {
   }
 
   // Get schedule for a specific month
-  async getMonthSchedule(companyId: string, year: number, month: number): Promise<MonthSchedule> {
+  async getMonthSchedule(companyId: string, year: number, month: number, branchId?: string): Promise<MonthSchedule> {
     try {
-      const staff = await this.getStaffSchedules(companyId);
+      const staff = await this.getStaffSchedules(companyId, branchId);
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const monthSchedule: MonthSchedule = {
         year,
@@ -121,9 +121,9 @@ class WorkScheduleService {
   }
 
   // Get schedule for a specific week
-  async getWeekSchedule(companyId: string, startDate: Date): Promise<WeekSchedule> {
+  async getWeekSchedule(companyId: string, startDate: Date, branchId?: string): Promise<WeekSchedule> {
     try {
-      const staff = await this.getStaffSchedules(companyId);
+      const staff = await this.getStaffSchedules(companyId, branchId);
       const endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
 
@@ -307,13 +307,13 @@ class WorkScheduleService {
   }
 
   // Get schedule summary for dashboard
-  async getScheduleSummary(companyId: string): Promise<{
+  async getScheduleSummary(companyId: string, branchId?: string): Promise<{
     todayScheduled: number;
     weekScheduled: number;
     monthScheduled: number;
   }> {
     try {
-      const staff = await this.getStaffSchedules(companyId);
+      const staff = await this.getStaffSchedules(companyId, branchId);
       const today = new Date();
       const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][today.getDay()];
       

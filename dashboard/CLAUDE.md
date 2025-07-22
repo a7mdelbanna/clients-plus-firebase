@@ -317,6 +317,18 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
      - Fixed ServiceSelection component in appointments
      - Branch filtering now works across entire application
 
+#### Work Schedule Branch Filtering
+   - ✓ **Fixed employee filtering by branch**:
+     - Work schedule now only shows employees assigned to current branch
+     - Updated WorkScheduleService to accept branch ID parameter
+     - Modified all schedule methods to filter staff by branch
+     - Maintains support for both new branchIds array and legacy branchId
+   - ✓ **Implementation Details**:
+     - Added BranchContext to WorkSchedulePage
+     - Updated getStaffSchedules, getMonthSchedule, getWeekSchedule methods
+     - Staff filtering handles multi-branch assignments correctly
+     - Employees with no branch assignment are excluded (not shown in any branch)
+
 ### Recent Additions (2025-07-19, 2025-07-20 & 2025-07-21)
 
 #### Appointment Management System (Complete Implementation)
