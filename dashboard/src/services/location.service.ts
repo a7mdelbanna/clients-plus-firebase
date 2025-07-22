@@ -261,9 +261,12 @@ class LocationService {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        // Update existing
+        // Update existing - merge contact details instead of replacing
+        const existingData = docSnap.data();
+        const existingContact = existingData.contact || {};
+        
         await updateDoc(docRef, {
-          contact: contactDetails,
+          contact: { ...existingContact, ...contactDetails },
           updatedAt: serverTimestamp(),
         });
       } else {

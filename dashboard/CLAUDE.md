@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-07-21 - Evening)
+## Current Status (Last Updated: 2025-07-22 - Morning)
 
 ### Completed Features
 1. **Authentication System**
@@ -851,6 +851,34 @@ firebase deploy                          # Deploy everything
     - **MUI Error Fix**: Added array safety checks to prevent `options.filter is not a function`
     - **UX Enhancement**: Added auto-load on dropdown open for better user experience
     - **Prevention**: Always ensure state arrays are properly initialized to prevent filter errors
+
+28. **WhatsApp Notification Business Name and Location Data Issues** (2025-07-22):
+    - **Error**: WhatsApp messages showing branch name instead of business name, missing coordinates and phone
+    - **Root Causes**:
+      1. Business name priority was using `locationName` before `businessName`
+      2. Location contact details were being replaced instead of merged when updating
+      3. Appointments created without branch ID defaulted to 'main' which had no data
+    - **Solutions Implemented**:
+      1. Fixed business name priority in `appointment.service.ts`:
+         ```typescript
+         const businessName = locationSettings?.basic?.businessName || 
+                             locationSettings?.basic?.locationName || 
+                             company?.businessName || 
+                             company?.name || 
+                             'Our Business';
+         ```
+      2. Fixed contact details merging in `location.service.ts`:
+         ```typescript
+         const existingContact = existingData.contact || {};
+         await updateDoc(docRef, {
+           contact: { ...existingContact, ...contactDetails },
+           updatedAt: serverTimestamp(),
+         });
+         ```
+      3. Added branch ID to `AppointmentForm` component
+      4. Added fallback to load branch '1' settings when 'main' has no data
+    - **Impact**: WhatsApp messages now correctly show business name, phone, and Google Maps link
+    - **Prevention**: Always include branch ID in appointments, ensure proper data merging in updates
 
 ## Next Major Features
 - Client management system

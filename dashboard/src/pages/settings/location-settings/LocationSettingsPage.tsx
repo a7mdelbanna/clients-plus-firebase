@@ -19,6 +19,7 @@ import {
   Schedule,
   Map,
   PhotoLibrary,
+  BugReport,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -199,6 +200,7 @@ const LocationSettingsPage: React.FC = () => {
     { label: 'ساعات العمل', icon: <Schedule />, index: 2 },
     { label: 'الخريطة', icon: <Map />, index: 3 },
     { label: 'الصور والمعرض', icon: <PhotoLibrary />, index: 4 },
+    { label: 'Debug WhatsApp', icon: <BugReport />, index: 5 },
   ];
 
   if (loading) {
@@ -323,6 +325,104 @@ const LocationSettingsPage: React.FC = () => {
             onSave={(data) => handleSave(data, 'photos')}
             saving={saving}
           />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={5}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 3 }}>
+              WhatsApp Debug Information
+            </Typography>
+            
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+              This shows what data would be sent in WhatsApp messages:
+            </Typography>
+            
+            <Box sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100', 
+              p: 2, 
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              mb: 3,
+              color: theme.palette.text.primary
+            }}>
+              <Typography variant="body2" component="pre" sx={{ 
+                whiteSpace: 'pre-wrap',
+                color: 'inherit',
+                fontFamily: 'inherit'
+              }}>
+{`Business Name: ${locationSettings?.basic?.businessName || locationSettings?.basic?.locationName || 'Not set'}
+
+Branch Name: ${currentBranch?.name || 'Not set'}
+
+Address: ${currentBranch?.address || locationSettings?.contact?.address || 'Not set'}
+
+Phone: ${(() => {
+  if (currentBranch?.phone) return currentBranch.phone;
+  if (locationSettings?.contact?.phones && locationSettings.contact.phones.length > 0) {
+    const phone = locationSettings.contact.phones[0];
+    return `${phone.countryCode || ''}${phone.number || ''}`.trim() || 'Not set';
+  }
+  return 'Not set';
+})()}
+
+Google Maps Link: ${(() => {
+  if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+    return `https://maps.google.com/?q=${locationSettings.contact.coordinates.lat},${locationSettings.contact.coordinates.lng}`;
+  }
+  return 'Not set (no coordinates)';
+})()}
+
+Coordinates: ${locationSettings?.contact?.coordinates ? 
+  `Lat: ${locationSettings.contact.coordinates.lat}, Lng: ${locationSettings.contact.coordinates.lng}` : 
+  'Not set'}`}
+              </Typography>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+              Raw Location Settings Data:
+            </Typography>
+            
+            <Box sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100', 
+              p: 2, 
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              maxHeight: 400,
+              overflow: 'auto',
+              color: theme.palette.text.primary
+            }}>
+              <Typography variant="body2" component="pre" sx={{ 
+                color: 'inherit',
+                fontFamily: 'inherit'
+              }}>
+                {JSON.stringify(locationSettings, null, 2)}
+              </Typography>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mt: 3, mb: 1, color: 'text.secondary' }}>
+              Current Branch Data:
+            </Typography>
+            
+            <Box sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100', 
+              p: 2, 
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              maxHeight: 200,
+              overflow: 'auto',
+              color: theme.palette.text.primary
+            }}>
+              <Typography variant="body2" component="pre" sx={{ 
+                color: 'inherit',
+                fontFamily: 'inherit'
+              }}>
+                {JSON.stringify(currentBranch, null, 2)}
+              </Typography>
+            </Box>
+          </Paper>
         </TabPanel>
       </Box>
     </motion.div>

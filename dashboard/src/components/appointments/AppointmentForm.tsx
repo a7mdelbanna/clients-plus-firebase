@@ -44,6 +44,7 @@ import { format, parse, addMinutes, setHours, setMinutes } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { appointmentService } from '../../services/appointment.service';
 import { clientService } from '../../services/client.service';
 import { serviceService } from '../../services/service.service';
@@ -91,6 +92,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
 }) => {
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const locale = isRTL ? ar : enUS;
 
@@ -323,6 +325,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
       
       const appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'> = {
         companyId,
+        branchId: currentBranch?.id,
         clientId: selectedClient?.id || 'walk-in',
         clientName: selectedClient?.name || clientPhone,
         clientPhone: selectedClient?.phoneNumbers?.[0] || clientPhone,

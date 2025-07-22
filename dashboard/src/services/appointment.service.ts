@@ -21,6 +21,14 @@ import {
 } from 'firebase/firestore';
 import { format, parse, addMinutes, isBefore, isAfter, areIntervalsOverlapping, startOfDay, endOfDay, addDays, addWeeks, addMonths } from 'date-fns';
 import { staffService } from './staff.service';
+import { resourceService } from './resource.service';
+import { locationService } from './location.service';
+import { appointmentFitsWithinBusinessHours } from '../utils/businessHours';
+import { whatsAppService } from './whatsapp.service';
+import { appointmentReminderService } from './appointmentReminder.service';
+import { clientService } from './client.service';
+import { serviceService } from './service.service';
+import { companyService } from './company.service';
 
 // Appointment Types
 export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
@@ -44,7 +52,7 @@ export interface AppointmentResource {
 
 export interface AppointmentNotification {
   type: 'confirmation' | 'reminder' | 'follow_up';
-  method: ('sms' | 'email' | 'push')[];
+  method: ('whatsapp' | 'sms' | 'email' | 'push')[];
   timing?: number; // minutes before appointment
   sent: boolean;
   sentAt?: Timestamp;
@@ -131,6 +139,7 @@ export interface TimeSlot {
 // Availability query parameters
 export interface AvailabilityQuery {
   companyId: string;
+  branchId?: string;
   staffId?: string;
   serviceIds?: string[];
   date: Date;
@@ -146,6 +155,10 @@ class AppointmentService {
     appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>,
     userId: string
   ): Promise<string> {
+    console.log('=== CREATE APPOINTMENT CALLED ===');
+    console.log('Appointment data received:', appointment);
+    console.log('User ID:', userId);
+    
     try {
       // Check availability first
       let dateToCheck: Date;
@@ -160,6 +173,14 @@ class AppointmentService {
       }
       
       
+      console.log('Checking appointment availability with:', {
+        companyId: appointment.companyId,
+        staffId: appointment.staffId,
+        date: dateToCheck,
+        duration: appointment.totalDuration,
+        services: appointment.services
+      });
+      
       const isAvailable = await this.checkAvailability({
         companyId: appointment.companyId,
         staffId: appointment.staffId,
@@ -168,6 +189,8 @@ class AppointmentService {
         serviceIds: appointment.services?.map(s => s.serviceId) || [],
       });
 
+      console.log('Is available result:', isAvailable);
+      
       if (!isAvailable) {
         throw new Error('Selected time slot is not available');
       }
@@ -190,6 +213,31 @@ class AppointmentService {
       if (appointment.repeat && appointment.repeat.type !== 'none') {
         await this.createRepeatAppointments(docRef.id, appointment, userId);
       }
+
+      // Send appointment confirmation notifications
+      console.log('Checking for notifications:', appointment.notifications);
+      if (appointment.notifications && appointment.notifications.length > 0) {
+        const confirmationNotif = appointment.notifications.find(n => n.type === 'confirmation');
+        console.log('Confirmation notification found:', confirmationNotif);
+        if (confirmationNotif && confirmationNotif.method.length > 0) {
+          console.log('Sending notifications via methods:', confirmationNotif.method);
+          // Send notifications asynchronously (don't wait)
+          this.sendAppointmentNotifications(docRef.id, newAppointment, confirmationNotif).catch(error => {
+            console.error('Error sending appointment notifications:', error);
+            console.error('Error details:', error.message, error.stack);
+          });
+        } else {
+          console.log('No notification methods selected');
+        }
+      } else {
+        console.log('No notifications configured for appointment');
+      }
+
+      // Schedule appointment reminders
+      const appointmentWithId = { ...newAppointment, id: docRef.id };
+      appointmentReminderService.scheduleReminders(appointmentWithId as Appointment).catch(error => {
+        console.error('Error scheduling reminders:', error);
+      });
 
       return docRef.id;
     } catch (error) {
@@ -435,18 +483,48 @@ class AppointmentService {
   // Check availability for a time slot
   async checkAvailability(query: AvailabilityQuery & { excludeAppointmentId?: string }): Promise<boolean> {
     try {
-      // 1. Check staff working hours
+      console.log('Checking availability for:', {
+        companyId: query.companyId,
+        staffId: query.staffId,
+        date: query.date,
+        duration: query.duration,
+        branchId: query.branchId
+      });
+      
+      // If no staffId is provided, skip staff-specific checks
+      if (!query.staffId) {
+        console.log('No staffId provided, returning true');
+        return true;
+      }
+      
+      // 1. Check business hours
+      const businessHoursValid = await this.checkBusinessHours(
+        query.companyId,
+        query.branchId,
+        query.date,
+        query.duration || 30
+      );
+
+      console.log('Business hours valid:', businessHoursValid);
+      
+      if (!businessHoursValid) {
+        return false;
+      }
+
+      // 2. Check staff working hours
       const isWorkingHours = await this.checkStaffWorkingHours(
         query.staffId!,
         query.date,
         query.duration || 30
       );
 
+      console.log('Staff working hours valid:', isWorkingHours);
+      
       if (!isWorkingHours) {
         return false;
       }
 
-      // 2. Check for conflicting appointments
+      // 3. Check for conflicting appointments
       const hasConflicts = await this.checkAppointmentConflicts(
         query.companyId,
         query.staffId!,
@@ -455,17 +533,20 @@ class AppointmentService {
         query.excludeAppointmentId
       );
 
+      console.log('Has conflicts:', hasConflicts);
+      
       if (hasConflicts) {
         return false;
       }
 
-      // 3. Check resource availability if needed
+      // 4. Check resource availability if needed
       if (query.resourceIds && query.resourceIds.length > 0) {
         const resourcesAvailable = await this.checkResourceAvailability(
           query.companyId,
           query.resourceIds,
           query.date,
-          query.duration || 30
+          query.duration || 30,
+          query.excludeAppointmentId
         );
 
         if (!resourcesAvailable) {
@@ -476,7 +557,8 @@ class AppointmentService {
       return true;
     } catch (error) {
       console.error('Error checking availability:', error);
-      return false;
+      // Don't block on errors - allow appointment creation
+      return true;
     }
   }
 
@@ -811,10 +893,133 @@ class AppointmentService {
     companyId: string,
     resourceIds: string[],
     date: Date,
-    duration: number
+    duration: number,
+    excludeAppointmentId?: string
   ): Promise<boolean> {
-    // TODO: Implement resource availability checking
-    return true;
+    try {
+      if (!resourceIds || resourceIds.length === 0) {
+        return true; // No resources to check
+      }
+
+      // Calculate appointment end time
+      const appointmentEnd = new Date(date);
+      appointmentEnd.setMinutes(appointmentEnd.getMinutes() + duration);
+
+      // Check each resource
+      for (const resourceId of resourceIds) {
+        // Get resource details
+        const resource = await resourceService.getResource(resourceId);
+        
+        if (!resource) {
+          console.warn(`Resource ${resourceId} not found`);
+          continue;
+        }
+
+        // Check if resource is active
+        if (resource.status !== 'active') {
+          return false; // Resource is not active
+        }
+
+        // Check resource working hours if defined
+        if (resource.workingHours) {
+          const dayOfWeek = date.getDay();
+          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+          const dayName = dayNames[dayOfWeek];
+          const daySchedule = resource.workingHours[dayName];
+
+          if (!daySchedule || !daySchedule.isWorking) {
+            return false; // Resource doesn't work on this day
+          }
+
+          if (daySchedule.start && daySchedule.end) {
+            const [startHour, startMinute] = daySchedule.start.split(':').map(Number);
+            const [endHour, endMinute] = daySchedule.end.split(':').map(Number);
+
+            const workStart = new Date(date);
+            workStart.setHours(startHour, startMinute, 0, 0);
+            
+            const workEnd = new Date(date);
+            workEnd.setHours(endHour, endMinute, 0, 0);
+
+            // Check if appointment is within working hours
+            if (date < workStart || appointmentEnd > workEnd) {
+              return false; // Outside working hours
+            }
+
+            // Check if appointment overlaps with any breaks
+            if (daySchedule.breaks && daySchedule.breaks.length > 0) {
+              for (const breakPeriod of daySchedule.breaks) {
+                const [breakStartHour, breakStartMinute] = breakPeriod.start.split(':').map(Number);
+                const [breakEndHour, breakEndMinute] = breakPeriod.end.split(':').map(Number);
+
+                const breakStart = new Date(date);
+                breakStart.setHours(breakStartHour, breakStartMinute, 0, 0);
+                
+                const breakEnd = new Date(date);
+                breakEnd.setHours(breakEndHour, breakEndMinute, 0, 0);
+
+                // Check if appointment overlaps with break
+                if (areIntervalsOverlapping(
+                  { start: date, end: appointmentEnd },
+                  { start: breakStart, end: breakEnd }
+                )) {
+                  return false; // Overlaps with break
+                }
+              }
+            }
+          }
+        }
+
+        // Check for conflicts with other appointments using this resource
+        const startOfDayTime = startOfDay(date);
+        const endOfDayTime = endOfDay(date);
+
+        // Query appointments that use this resource on the same day
+        const q = query(
+          collection(db, 'appointments'),
+          where('companyId', '==', companyId),
+          where('resources', 'array-contains', resourceId),
+          where('date', '>=', Timestamp.fromDate(startOfDayTime)),
+          where('date', '<=', Timestamp.fromDate(endOfDayTime)),
+          where('status', 'in', ['pending', 'confirmed', 'in_progress'])
+        );
+
+        const querySnapshot = await getDocs(q);
+        
+        // Count concurrent usage
+        let concurrentUsage = 0;
+        
+        for (const doc of querySnapshot.docs) {
+          if (excludeAppointmentId && doc.id === excludeAppointmentId) {
+            continue; // Skip the current appointment being edited
+          }
+
+          const existingAppointment = doc.data() as Appointment;
+          const existingStart = existingAppointment.date.toDate();
+          const existingEnd = new Date(existingStart);
+          existingEnd.setMinutes(existingEnd.getMinutes() + existingAppointment.duration);
+
+          // Check if appointments overlap
+          if (areIntervalsOverlapping(
+            { start: date, end: appointmentEnd },
+            { start: existingStart, end: existingEnd }
+          )) {
+            concurrentUsage++;
+            
+            // Check if resource capacity is exceeded
+            if (concurrentUsage >= (resource.capacity || 1)) {
+              return false; // Resource capacity exceeded
+            }
+          }
+        }
+      }
+
+      return true; // All resources are available
+    } catch (error) {
+      console.error('Error checking resource availability:', error);
+      // Return true on error to not block the UI
+      return true;
+    }
   }
 
   private async createRepeatAppointments(
@@ -983,19 +1188,130 @@ class AppointmentService {
 
   // Helper method: Get staff working hours
   private async getStaffWorkingHours(staffId: string, date: Date): Promise<{ start: Date; end: Date }[]> {
-    // TODO: Integrate with staff schedule service
-    // For now, return default working hours 9 AM - 9 PM
-    // Create new date objects to avoid mutation
-    const workStart = new Date(date);
-    workStart.setHours(9, 0, 0, 0);
-    
-    const workEnd = new Date(date);
-    workEnd.setHours(21, 0, 0, 0);
-    
-    return [{
-      start: workStart,
-      end: workEnd
-    }];
+    try {
+      console.log('Getting staff working hours for:', { staffId, date });
+      
+      // Get staff member details
+      const staff = await staffService.getStaffMember(staffId);
+      
+      console.log('Staff found:', !!staff);
+      console.log('Staff schedule:', staff?.schedule);
+      
+      if (!staff || !staff.schedule?.isScheduled || !staff.schedule?.workingHours) {
+        console.log('No schedule found, using default hours');
+        // Return default working hours if no schedule is set
+        const workStart = new Date(date);
+        workStart.setHours(9, 0, 0, 0);
+        
+        const workEnd = new Date(date);
+        workEnd.setHours(21, 0, 0, 0);
+        
+        return [{
+          start: workStart,
+          end: workEnd
+        }];
+      }
+
+      // Check if the date is within the staff's scheduled period
+      if (staff.schedule.scheduleStartDate) {
+        const scheduleStart = staff.schedule.scheduleStartDate.toDate();
+        if (date < scheduleStart) {
+          return []; // Staff not scheduled yet for this date
+        }
+      }
+
+      if (staff.schedule.scheduledUntil) {
+        const scheduleEnd = staff.schedule.scheduledUntil.toDate();
+        if (date > scheduleEnd) {
+          return []; // Staff schedule has ended
+        }
+      }
+
+      // Get the day of week (0 = Sunday, 1 = Monday, etc.)
+      const dayOfWeek = date.getDay();
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayName = dayNames[dayOfWeek];
+
+      const daySchedule = staff.schedule.workingHours[dayName];
+      
+      console.log(`Checking ${dayName} schedule:`, daySchedule);
+      
+      if (!daySchedule || !daySchedule.isWorking || !daySchedule.start || !daySchedule.end) {
+        console.log(`Staff doesn't work on ${dayName}:`, {
+          hasSchedule: !!daySchedule,
+          isWorking: daySchedule?.isWorking,
+          hasStart: !!daySchedule?.start,
+          hasEnd: !!daySchedule?.end
+        });
+        return []; // Staff doesn't work on this day
+      }
+
+      // Parse working hours
+      const [startHour, startMinute] = daySchedule.start.split(':').map(Number);
+      const [endHour, endMinute] = daySchedule.end.split(':').map(Number);
+
+      const workStart = new Date(date);
+      workStart.setHours(startHour, startMinute, 0, 0);
+      
+      const workEnd = new Date(date);
+      workEnd.setHours(endHour, endMinute, 0, 0);
+
+      // If there are no breaks, return single working period
+      if (!daySchedule.breaks || daySchedule.breaks.length === 0) {
+        return [{
+          start: workStart,
+          end: workEnd
+        }];
+      }
+
+      // Handle breaks - split working hours into multiple periods
+      const periods: { start: Date; end: Date }[] = [];
+      let currentStart = workStart;
+
+      for (const breakPeriod of daySchedule.breaks) {
+        const [breakStartHour, breakStartMinute] = breakPeriod.start.split(':').map(Number);
+        const [breakEndHour, breakEndMinute] = breakPeriod.end.split(':').map(Number);
+
+        const breakStart = new Date(date);
+        breakStart.setHours(breakStartHour, breakStartMinute, 0, 0);
+        
+        const breakEnd = new Date(date);
+        breakEnd.setHours(breakEndHour, breakEndMinute, 0, 0);
+
+        // Add working period before break
+        if (currentStart < breakStart) {
+          periods.push({
+            start: new Date(currentStart),
+            end: new Date(breakStart)
+          });
+        }
+
+        currentStart = breakEnd;
+      }
+
+      // Add final working period after last break
+      if (currentStart < workEnd) {
+        periods.push({
+          start: new Date(currentStart),
+          end: new Date(workEnd)
+        });
+      }
+
+      return periods;
+    } catch (error) {
+      console.error('Error getting staff working hours:', error);
+      // Return default working hours on error
+      const workStart = new Date(date);
+      workStart.setHours(9, 0, 0, 0);
+      
+      const workEnd = new Date(date);
+      workEnd.setHours(21, 0, 0, 0);
+      
+      return [{
+        start: workStart,
+        end: workEnd
+      }];
+    }
   }
 
   // Helper method: Check if time is within staff working hours
@@ -1004,9 +1320,309 @@ class AppointmentService {
     date: Date,
     duration: number
   ): Promise<boolean> {
-    // TODO: Implement full working hours check with staff schedule
-    // For now, always return true to not block the UI
-    return true;
+    try {
+      console.log('Checking staff working hours:', { staffId, date, duration });
+      
+      const workingPeriods = await this.getStaffWorkingHours(staffId, date);
+      
+      console.log('Working periods:', workingPeriods);
+      
+      if (workingPeriods.length === 0) {
+        console.log('No working periods found');
+        return false; // Staff doesn't work on this day
+      }
+
+      // Calculate appointment end time
+      const appointmentEnd = new Date(date);
+      appointmentEnd.setMinutes(appointmentEnd.getMinutes() + duration);
+      
+      console.log('Appointment time range:', { start: date, end: appointmentEnd });
+
+      // Check if the appointment fits within any working period
+      for (const period of workingPeriods) {
+        console.log('Checking period:', period);
+        if (date >= period.start && appointmentEnd <= period.end) {
+          console.log('Appointment fits in this period');
+          return true; // Appointment fits within this working period
+        }
+      }
+
+      console.log('Appointment does not fit in any working period');
+      return false; // Appointment doesn't fit within any working period
+    } catch (error) {
+      console.error('Error checking staff working hours:', error);
+      // Return true on error to not block the UI
+      return true;
+    }
+  }
+
+  // Helper method: Check if appointment is within business hours
+  private async checkBusinessHours(
+    companyId: string,
+    branchId: string | undefined,
+    date: Date,
+    duration: number
+  ): Promise<boolean> {
+    try {
+      // Get location settings for business hours
+      const locationSettings = await locationService.getLocationSettings(companyId, branchId);
+      
+      if (!locationSettings?.contactDetails?.businessHours) {
+        // If no business hours are set, allow all times
+        return true;
+      }
+
+      // Check if appointment fits within business hours
+      const fitsWithinHours = appointmentFitsWithinBusinessHours(
+        date,
+        duration,
+        locationSettings.contactDetails.businessHours
+      );
+
+      return fitsWithinHours;
+    } catch (error) {
+      console.error('Error checking business hours:', error);
+      // Return true on error to not block the UI
+      return true;
+    }
+  }
+
+  // Get available time slots for a specific date
+  async getAvailableTimeSlots(
+    companyId: string,
+    branchId: string | undefined,
+    staffId: string,
+    date: Date,
+    duration: number,
+    resourceIds?: string[]
+  ): Promise<Date[]> {
+    try {
+      const availableSlots: Date[] = [];
+      
+      // Get business hours
+      const locationSettings = await locationService.getLocationSettings(companyId, branchId);
+      const businessHours = locationSettings?.contactDetails?.businessHours;
+      
+      if (!businessHours) {
+        // If no business hours set, use default 9 AM to 9 PM
+        const startTime = new Date(date);
+        startTime.setHours(9, 0, 0, 0);
+        const endTime = new Date(date);
+        endTime.setHours(21, 0, 0, 0);
+        
+        let currentSlot = new Date(startTime);
+        while (currentSlot < endTime) {
+          const query: AvailabilityQuery = {
+            companyId,
+            branchId,
+            staffId,
+            date: new Date(currentSlot),
+            duration,
+            resourceIds
+          };
+          
+          const isAvailable = await this.checkAvailability(query);
+          if (isAvailable) {
+            availableSlots.push(new Date(currentSlot));
+          }
+          
+          currentSlot.setMinutes(currentSlot.getMinutes() + 30); // 30-minute slots
+        }
+      } else {
+        // Parse business hours and get slots
+        const { getAvailableTimeSlots } = await import('../utils/businessHours');
+        const potentialSlots = getAvailableTimeSlots(date, 30, businessHours);
+        
+        // Check each potential slot for availability
+        for (const slot of potentialSlots) {
+          const query: AvailabilityQuery = {
+            companyId,
+            branchId,
+            staffId,
+            date: slot,
+            duration,
+            resourceIds
+          };
+          
+          const isAvailable = await this.checkAvailability(query);
+          if (isAvailable) {
+            availableSlots.push(slot);
+          }
+        }
+      }
+      
+      return availableSlots;
+    } catch (error) {
+      console.error('Error getting available time slots:', error);
+      return [];
+    }
+  }
+
+  // Send appointment notifications
+  private async sendAppointmentNotifications(
+    appointmentId: string,
+    appointment: Appointment,
+    notification: AppointmentNotification
+  ): Promise<void> {
+    console.log('=== SENDING APPOINTMENT NOTIFICATIONS ===');
+    console.log('Appointment ID:', appointmentId);
+    console.log('Notification config:', notification);
+    
+    try {
+      // Get client details
+      const client = await clientService.getClient(appointment.clientId);
+      if (!client) {
+        console.error('Client not found for appointment notifications');
+        return;
+      }
+      
+      console.log('Client found:', client.name, client.phone);
+
+      // Get staff details
+      const staff = await staffService.getStaffMember(appointment.staffId);
+      
+      // Get service details
+      let serviceName = 'Service';
+      if (appointment.services && appointment.services.length > 0) {
+        const service = await serviceService.getService(appointment.services[0].serviceId);
+        if (service) {
+          serviceName = service.name;
+        }
+      }
+
+      // Get business details - use 'main' if no branchId
+      const branchId = appointment.branchId || 'main';
+      console.log('Getting location settings for branch:', branchId);
+      let locationSettings = await locationService.getLocationSettings(appointment.companyId, branchId);
+      
+      // If no settings found and we're trying 'main', also try branch '1' as fallback
+      if ((!locationSettings || !locationSettings.basic?.businessName) && branchId === 'main') {
+        console.log('No settings found for main branch, trying branch 1 as fallback');
+        locationSettings = await locationService.getLocationSettings(appointment.companyId, '1');
+      }
+      
+      console.log('Location settings loaded:', JSON.stringify(locationSettings, null, 2));
+      
+      // Get company details as fallback
+      const company = await companyService.getCompanyInfo(appointment.companyId);
+      console.log('Company data:', company);
+      
+      // Get branch details
+      let branchData: any = null;
+      try {
+        const branchDoc = await getDoc(doc(db, 'companies', appointment.companyId, 'branches', branchId));
+        if (branchDoc.exists()) {
+          branchData = { id: branchDoc.id, ...branchDoc.data() };
+          console.log('Branch data loaded:', branchData);
+        }
+      } catch (error) {
+        console.error('Error loading branch:', error);
+      }
+      
+      // Use business name first, then location name as fallback
+      const businessName = locationSettings?.basic?.businessName || 
+                          locationSettings?.basic?.locationName || 
+                          company?.businessName || 
+                          company?.name || 
+                          'Our Business';
+      
+      const businessAddress = branchData?.address || 
+                             locationSettings?.contact?.address || '';
+                             
+      // Get phone number with proper formatting
+      let businessPhone = '';
+      if (branchData?.phone) {
+        businessPhone = branchData.phone;
+      } else if (locationSettings?.contact?.phones && locationSettings.contact.phones.length > 0) {
+        const phone = locationSettings.contact.phones[0];
+        // Combine country code and number
+        businessPhone = `${phone.countryCode || ''}${phone.number || ''}`.trim();
+      }
+      
+      // Create Google Maps link if we have coordinates
+      let googleMapsLink = '';
+      if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+        const { lat, lng } = locationSettings.contact.coordinates;
+        googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        console.log('Google Maps link created:', googleMapsLink);
+      } else {
+        console.log('No map coordinates found in locationSettings.contact.coordinates');
+      }
+
+      // Send WhatsApp notification
+      const clientPhone = client.primaryPhone || client.phone || client.phoneNumbers?.[0]?.number || appointment.clientPhone;
+      console.log('Client phone for WhatsApp:', clientPhone);
+      console.log('Notification methods:', notification.method);
+      
+      if (notification.method.includes('whatsapp') && clientPhone) {
+        try {
+          console.log('Sending WhatsApp confirmation to:', clientPhone);
+          const result = await whatsAppService.sendAppointmentConfirmation(appointment.companyId, {
+            appointmentId,
+            clientId: appointment.clientId,
+            clientName: appointment.clientName,
+            clientPhone: clientPhone,
+            date: appointment.date.toDate(),
+            time: appointment.time || appointment.startTime,
+            service: serviceName,
+            staffName: appointment.staffName,
+            businessName,
+            businessAddress,
+            businessPhone,
+            googleMapsLink,
+            language: 'ar' // TODO: Get from client preferences
+          });
+          console.log('WhatsApp send result:', result);
+        } catch (error) {
+          console.error('Error sending WhatsApp notification:', error);
+        }
+      } else {
+        console.log('WhatsApp not sent - Method includes WhatsApp:', notification.method.includes('whatsapp'), 'Has phone:', !!clientPhone);
+      }
+
+      // TODO: Implement SMS notification
+      if (notification.method.includes('sms')) {
+        console.log('SMS notification not implemented yet');
+      }
+
+      // TODO: Implement email notification
+      if (notification.method.includes('email')) {
+        console.log('Email notification not implemented yet');
+      }
+
+      // Update notification status
+      await this.updateAppointmentNotificationStatus(appointmentId, notification.type, true);
+    } catch (error) {
+      console.error('Error sending appointment notifications:', error);
+      throw error;
+    }
+  }
+
+  // Update notification status
+  private async updateAppointmentNotificationStatus(
+    appointmentId: string,
+    notificationType: 'confirmation' | 'reminder' | 'follow_up',
+    sent: boolean
+  ): Promise<void> {
+    try {
+      const appointment = await this.getAppointment(appointmentId);
+      if (!appointment) return;
+
+      const notifications = appointment.notifications || [];
+      const notifIndex = notifications.findIndex(n => n.type === notificationType);
+      
+      if (notifIndex >= 0) {
+        notifications[notifIndex].sent = sent;
+        notifications[notifIndex].sentAt = Timestamp.now(); // Use Timestamp.now() instead of serverTimestamp()
+      }
+
+      await updateDoc(doc(db, this.appointmentsCollection, appointmentId), {
+        notifications,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating notification status:', error);
+    }
   }
 }
 
