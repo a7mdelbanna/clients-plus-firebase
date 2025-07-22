@@ -28,6 +28,7 @@ import {
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isSameDay, startOfDay, endOfDay, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { appointmentService } from '../../services/appointment.service';
 import { staffService } from '../../services/staff.service';
 import CalendarWeekView from '../../components/appointments/CalendarWeekView';
@@ -44,6 +45,7 @@ type ViewType = 'day' | 'week' | 'month';
 const AppointmentsPage: React.FC = () => {
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const locale = isRTL ? ar : enUS;
 
@@ -80,7 +82,7 @@ const AppointmentsPage: React.FC = () => {
 
         // Load staff
         try {
-          const staffList = await staffService.getStaff(userCompanyId);
+          const staffList = await staffService.getStaff(userCompanyId, currentBranch?.id);
           setStaff(staffList);
 
           // Set first staff as default if available
@@ -98,14 +100,14 @@ const AppointmentsPage: React.FC = () => {
     };
 
     loadInitialData();
-  }, [currentUser]);
+  }, [currentUser, currentBranch]);
 
   // Load appointments when date or staff changes
   useEffect(() => {
     if (companyId && selectedStaff !== 'all') {
       loadAppointments();
     }
-  }, [companyId, currentDate, selectedStaff, viewType]);
+  }, [companyId, currentDate, selectedStaff, viewType, currentBranch]);
 
   const loadAppointments = async () => {
     try {
@@ -132,7 +134,8 @@ const AppointmentsPage: React.FC = () => {
         companyId,
         startDate,
         endDate,
-        selectedStaff !== 'all' ? selectedStaff : undefined
+        selectedStaff !== 'all' ? selectedStaff : undefined,
+        currentBranch?.id
       );
 
       setAppointments(appointmentsList);

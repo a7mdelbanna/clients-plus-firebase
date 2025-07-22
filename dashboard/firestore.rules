@@ -404,6 +404,34 @@ service cloud.firestore {
         isCompanyAdmin(resource.data.companyId);
     }
     
+    // WhatsApp Configurations collection
+    match /whatsappConfigs/{configId} {
+      // Allow read if user belongs to the company (configId is the companyId)
+      allow read: if isAuthenticated() && belongsToCompany(configId);
+      
+      // Allow create/update if user is an admin of the company
+      allow create, update: if isAuthenticated() && 
+        isCompanyAdmin(configId) &&
+        request.resource.data.companyId == configId;
+      
+      // Only company admins can delete
+      allow delete: if isAuthenticated() && isCompanyAdmin(configId);
+    }
+    
+    // Reminder Configurations collection
+    match /reminderConfigs/{configId} {
+      // Allow read if user belongs to the company (configId is the companyId)
+      allow read: if isAuthenticated() && belongsToCompany(configId);
+      
+      // Allow create/update if user is an admin of the company
+      allow create, update: if isAuthenticated() && 
+        isCompanyAdmin(configId) &&
+        request.resource.data.companyId == configId;
+      
+      // Only company admins can delete
+      allow delete: if isAuthenticated() && isCompanyAdmin(configId);
+    }
+    
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

@@ -23,7 +23,8 @@ export type AccessLevel = 'Employee' | 'Administrator' | 'CallCenter' | 'Account
 export interface Staff {
   id?: string;
   companyId: string;
-  branchId?: string; // Branch assignment for multi-branch support
+  branchId?: string; // Deprecated - kept for backward compatibility
+  branchIds?: string[]; // Multiple branch assignments
   
   // Basic Info
   name: string; // Primary name in Arabic
@@ -134,7 +135,8 @@ export const staffService = {
   ): Promise<string> {
     const staffData = {
       ...staff,
-      branchId: branchId || staff.branchId, // Use provided branchId or fallback to staff.branchId
+      branchId: branchId || staff.branchId, // Keep for backward compatibility
+      branchIds: staff.branchIds || (branchId ? [branchId] : []), // New multi-branch support
       services: staff.services || [],
       servicesCount: staff.services?.length || 0,
       createdAt: serverTimestamp(),
@@ -173,11 +175,19 @@ export const staffService = {
       } as Staff;
     });
     
-    // Filter by branch on client side to handle legacy data
+    // Filter by branch on client side to handle both legacy and new data
     if (branchId) {
       staff = staff.filter(s => {
-        // Include staff that belong to this branch OR staff with no branchId (legacy data)
-        return s.branchId === branchId || !s.branchId;
+        // Check new branchIds array first
+        if (s.branchIds && s.branchIds.length > 0) {
+          return s.branchIds.includes(branchId);
+        }
+        // Fall back to legacy single branchId
+        if (s.branchId) {
+          return s.branchId === branchId;
+        }
+        // Include staff with no branch assignment (legacy data)
+        return !s.branchId && !s.branchIds;
       });
     }
     
@@ -303,11 +313,19 @@ export const staffService = {
           } as Staff;
         });
         
-        // Filter by branch on client side to handle legacy data
+        // Filter by branch on client side to handle both legacy and new data
         if (branchId) {
           staff = staff.filter(s => {
-            // Include staff that belong to this branch OR staff with no branchId (legacy data)
-            return s.branchId === branchId || !s.branchId;
+            // Check new branchIds array first
+            if (s.branchIds && s.branchIds.length > 0) {
+              return s.branchIds.includes(branchId);
+            }
+            // Fall back to legacy single branchId
+            if (s.branchId) {
+              return s.branchId === branchId;
+            }
+            // Include staff with no branch assignment (legacy data)
+            return !s.branchId && !s.branchIds;
           });
         }
         

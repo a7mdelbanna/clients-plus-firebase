@@ -26,6 +26,10 @@ import ClientCategoriesPage from './pages/settings/categories/ClientCategoriesPa
 import AppointmentCategoriesPage from './pages/settings/categories/AppointmentCategoriesPage';
 import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage';
 import LocationSettingsPage from './pages/settings/location-settings/LocationSettingsPage';
+import BranchManagementPage from './pages/settings/branches/BranchManagementPage';
+import BranchFormPage from './pages/settings/branches/BranchFormPage';
+import AppointmentCalendarSettingsPage from './pages/settings/appointment-calendar/AppointmentCalendarSettingsPage';
+import WhatsAppSettingsPage from './pages/settings/whatsapp/WhatsAppSettingsPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
 import BookingLinks from './pages/BookingLinks';
@@ -42,6 +46,7 @@ import { initializeUserOnAuth } from './utils/initializeUser';
 import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config/firebase';
+import './utils/clientBranchFix'; // Import for global debugging functions
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
@@ -231,6 +236,31 @@ function App() {
                 <Route path="/settings/location-settings" element={
                   <PageTransition>
                     <LocationSettingsPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/branches" element={
+                  <PageTransition>
+                    <BranchManagementPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/branches/new" element={
+                  <PageTransition>
+                    <BranchFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/branches/:branchId/edit" element={
+                  <PageTransition>
+                    <BranchFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/appointment-calendar" element={
+                  <PageTransition>
+                    <AppointmentCalendarSettingsPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/whatsapp" element={
+                  <PageTransition>
+                    <WhatsAppSettingsPage />
                   </PageTransition>
                 } />
                 <Route path="/employee/:employeeId/schedule" element={

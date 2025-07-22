@@ -36,7 +36,8 @@ export interface ServiceCategory {
 export interface Service {
   id?: string;
   companyId: string;
-  branchId?: string; // Branch assignment for multi-branch support
+  branchId?: string; // Deprecated - kept for backward compatibility
+  branchIds?: string[]; // Multiple branch assignments
   categoryId: string;
   name: string; // Primary name in Arabic
   nameAr?: string; // Deprecated - kept for backward compatibility
@@ -205,6 +206,11 @@ export const serviceService = {
     userId: string,
     branchId?: string
   ): Promise<string> {
+    console.log('[serviceService.createService] Starting service creation');
+    console.log('[serviceService.createService] Service data:', service);
+    console.log('[serviceService.createService] User ID:', userId);
+    console.log('[serviceService.createService] Branch ID:', branchId);
+    
     const serviceData = {
       ...service,
       branchId: branchId || service.branchId, // Use provided branchId or fallback to service.branchId
@@ -213,7 +219,11 @@ export const serviceService = {
       createdBy: userId,
     };
 
-    const docRef = await addDoc(collection(db, 'services'), serviceData);
+    console.log('[serviceService.createService] Service data to save:', serviceData);
+
+    try {
+      const docRef = await addDoc(collection(db, 'services'), serviceData);
+      console.log('[serviceService.createService] Service created with ID:', docRef.id);
     
     // Update category service count
     if (service.categoryId) {
@@ -228,7 +238,11 @@ export const serviceService = {
       }
     }
 
-    return docRef.id;
+      return docRef.id;
+    } catch (error) {
+      console.error('[serviceService.createService] Error creating service:', error);
+      throw error;
+    }
   },
 
   async getServices(companyId: string, categoryId?: string, branchId?: string): Promise<Service[]> {
@@ -236,11 +250,6 @@ export const serviceService = {
       where('companyId', '==', companyId),
       where('active', '==', true)
     ];
-    
-    // Add branch filtering if branchId is provided
-    if (branchId) {
-      conditions.push(where('branchId', '==', branchId));
-    }
     
     // Add category filtering if categoryId is provided
     if (categoryId) {
@@ -250,10 +259,26 @@ export const serviceService = {
     const q = query(collection(db, 'services'), ...conditions);
 
     const snapshot = await getDocs(q);
-    const services = snapshot.docs.map(doc => ({
+    let services = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     } as Service));
+    
+    // Filter by branch on client side to handle both legacy and new data
+    if (branchId) {
+      services = services.filter(s => {
+        // Check new branchIds array first
+        if (s.branchIds && s.branchIds.length > 0) {
+          return s.branchIds.includes(branchId);
+        }
+        // Fall back to legacy single branchId
+        if (s.branchId) {
+          return s.branchId === branchId;
+        }
+        // Include services with no branch assignment (company-wide services)
+        return !s.branchId && !s.branchIds;
+      });
+    }
     
     // Sort in memory
     return services.sort((a, b) => a.name.localeCompare(b.name));
@@ -376,10 +401,7 @@ export const serviceService = {
       where('active', '==', true)
     ];
     
-    // Add branch filtering if branchId is provided
-    if (branchId) {
-      conditions.push(where('branchId', '==', branchId));
-    }
+    // Don't add branch filtering in query - we'll filter client-side to support both old and new format
     
     // Add category filtering if categoryId is provided
     if (categoryId) {
@@ -391,10 +413,27 @@ export const serviceService = {
     return onSnapshot(
       q, 
       (snapshot) => {
-        const services = snapshot.docs.map(doc => ({
+        let services = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         } as Service));
+        
+        // Filter by branch on client side to handle both legacy and new data
+        if (branchId) {
+          services = services.filter(s => {
+            // Check new branchIds array first
+            if (s.branchIds && s.branchIds.length > 0) {
+              return s.branchIds.includes(branchId);
+            }
+            // Fall back to legacy single branchId
+            if (s.branchId) {
+              return s.branchId === branchId;
+            }
+            // Include services with no branch assignment (company-wide services)
+            return !s.branchId && !s.branchIds;
+          });
+        }
+        
         // Sort in memory
         const sortedServices = services.sort((a, b) => a.name.localeCompare(b.name));
         callback(sortedServices);

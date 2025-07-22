@@ -168,8 +168,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
   const loadLookupData = async () => {
     try {
       const [servicesData, staffData] = await Promise.all([
-        serviceService.getServices(companyId),
-        staffService.getStaff(companyId),
+        serviceService.getServices(companyId, undefined, currentBranch?.id),
+        staffService.getStaff(companyId, currentBranch?.id),
       ]);
       
       setServices(servicesData);

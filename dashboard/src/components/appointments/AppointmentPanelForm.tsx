@@ -48,6 +48,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 import AppointmentStatusBar from './AppointmentStatusBar';
 import BasicInfo from './BasicInfo';
 import NotificationSettings from './NotificationSettings';
@@ -56,6 +57,7 @@ import AdvancedFields from './AdvancedFields';
 import PaymentSection from './PaymentSection';
 import TimeSlotSelector from './TimeSlotSelector';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { appointmentService } from '../../services/appointment.service';
 import { clientService } from '../../services/client.service';
 import { staffService } from '../../services/staff.service';
@@ -88,7 +90,8 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   const isRTL = theme.direction === 'rtl';
   const locale = isRTL ? ar : enUS;
 
-  const { currentBranch, currentUser } = useAuth();
+  const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +130,9 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   const appointmentTime = new Date(appointmentDate);
   appointmentTime.setHours(appointmentHours, appointmentMinutes, 0, 0);
   const [selectedStaff, setSelectedStaff] = useState<string>(appointment?.staffId || defaultStaffId || '');
+  
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>(appointment?.notifications || []);
   
   // Lists
   const [clients, setClients] = useState<Client[]>([]);
@@ -195,7 +201,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   const loadStaff = async () => {
     try {
       setLoadingStaff(true);
-      const staffList = await staffService.getStaff(companyId);
+      const staffList = await staffService.getStaff(companyId, currentBranch?.id);
       setStaff(staffList);
     } catch (error) {
       console.error('Error loading staff:', error);
@@ -223,8 +229,12 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   const loadAllClients = async () => {
     try {
       setSearchingClients(true);
+      console.log('AppointmentForm - Loading clients with branch:', currentBranch?.id);
+      console.log('AppointmentForm - Current branch object:', currentBranch);
+      
       const result = await clientService.getClients(companyId, undefined, undefined, currentBranch?.id);
       const clientsArray = result?.clients || [];
+      console.log('AppointmentForm - Loaded clients count:', clientsArray.length);
       setClients(clientsArray);
     } catch (error) {
       console.error('Error loading clients:', error);
@@ -283,6 +293,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
       // Create new client if needed
       if (isNewClient) {
         try {
+          console.log('Creating new client with data:', newClientData);
           const clientData: any = {
             name: newClientData.name,
             phone: newClientData.phone,
@@ -303,16 +314,29 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
             clientData.branchId = currentBranch.id;
           }
           
+          console.log('Client data to create:', clientData);
+          console.log('Current user ID:', currentUser?.uid);
+          console.log('Current branch ID:', currentBranch?.id);
+          
           finalClientId = await clientService.createClient(
             clientData as Omit<Client, 'id'>, 
             currentUser?.uid || '', 
             currentBranch?.id
           );
+          
+          console.log('Client created successfully with ID:', finalClientId);
           finalClientName = newClientData.name;
           finalClientPhone = newClientData.phone;
           finalClientEmail = newClientData.email;
+          
+          // Show success message
+          toast.success(isRTL ? 'تم إنشاء العميل بنجاح' : 'Client created successfully');
+          
+          // Reload clients list to include the new client
+          await loadAllClients();
         } catch (clientError: any) {
           console.error('Error creating client:', clientError);
+          console.error('Error details:', clientError.message, clientError.code);
           setError(isRTL ? 'فشل إنشاء العميل' : 'Failed to create client');
           return;
         }
@@ -410,7 +434,17 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
       if (advancedFields.repeat) {
         appointmentData.repeat = advancedFields.repeat;
       }
+      
+      // Add notifications
+      if (notifications && notifications.length > 0) {
+        appointmentData.notifications = notifications;
+      }
 
+      console.log('Saving appointment with data:', appointmentData);
+      console.log('Selected staff:', selectedStaff);
+      console.log('Appointment time:', appointmentTime);
+      console.log('Notifications:', notifications);
+      
       await onSave(appointmentData);
 
       onClose();
@@ -454,7 +488,8 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
                 if (option.isSpecial) return option.name;
                 const phoneFromArray = option.phoneNumbers?.[0]?.number || option.phoneNumbers?.[0];
                 const phoneToDisplay = phoneFromArray || option.phone || '';
-                return `${option.name} - ${phoneToDisplay}`;
+                const branchInfo = option.branchId ? ` [${option.branchId}]` : '';
+                return `${option.name} - ${phoneToDisplay}${branchInfo}`;
               }}
               value={selectedClient}
               onChange={(_, newValue) => {
@@ -770,6 +805,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
             appointment={appointment}
             companyId={companyId}
             staffId={selectedStaff}
+            branchId={currentBranch?.id}
             notes={notes}
             source={source}
             onNotesChange={setNotes}
@@ -791,11 +827,15 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           />
         )}
         
-        {activeTab === 2 && (
+        <Box sx={{ display: activeTab === 2 ? 'block' : 'none' }}>
           <NotificationSettings
             appointment={appointment}
+            onNotificationChange={(newNotifications) => {
+              console.log('AppointmentPanelForm - Received notifications:', newNotifications);
+              setNotifications(newNotifications);
+            }}
           />
-        )}
+        </Box>
         
         {activeTab === 3 && (
           <VisitHistory

@@ -23,10 +23,12 @@ import {
   Email,
   Phone,
   Send,
+  Store,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { staffService, type Staff, type AccessLevel, AccessLevelDescriptions } from '../../../services/staff.service';
 import { positionService, type Position } from '../../../services/position.service';
+import { branchService, type Branch } from '../../../services/branch.service';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../config/firebase';
 
@@ -45,6 +47,10 @@ const InformationTab: React.FC<InformationTabProps> = ({
   const [loading, setLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(
+    employee.branchIds || (employee.branchId ? [employee.branchId] : [])
+  );
   const [formData, setFormData] = useState({
     name: employee.name,
     specialization: employee.specialization || '',
@@ -54,6 +60,7 @@ const InformationTab: React.FC<InformationTabProps> = ({
 
   React.useEffect(() => {
     loadPositions();
+    loadBranches();
   }, [companyId]);
 
   const loadPositions = async () => {
@@ -62,6 +69,15 @@ const InformationTab: React.FC<InformationTabProps> = ({
       setPositions(fetchedPositions);
     } catch (error) {
       console.error('Error loading positions:', error);
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      const fetchedBranches = await branchService.getBranches(companyId, true);
+      setBranches(fetchedBranches);
+    } catch (error) {
+      console.error('Error loading branches:', error);
     }
   };
 
@@ -111,6 +127,7 @@ const InformationTab: React.FC<InformationTabProps> = ({
         specialization: formData.specialization,
         positionId: formData.positionId,
         'access.level': formData.accessLevel,
+        branchIds: selectedBranches,
       };
 
       await staffService.updateStaff(employee.id!, updates);
@@ -125,6 +142,7 @@ const InformationTab: React.FC<InformationTabProps> = ({
           ...employee.access,
           level: formData.accessLevel,
         },
+        branchIds: selectedBranches,
       });
       
       toast.success('تم حفظ التغييرات بنجاح');
@@ -275,6 +293,57 @@ const InformationTab: React.FC<InformationTabProps> = ({
             </Stack>
           </Box>
         </Stack>
+      </Box>
+
+      <Divider />
+
+      {/* Branch Assignment Section */}
+      <Box>
+        <Typography variant="h6" sx={{ mb: 3 }}>
+          الفروع المخصصة
+        </Typography>
+        
+        <Paper sx={{ p: 3, backgroundColor: 'background.default' }}>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              حدد الفروع التي يمكن للموظف العمل فيها
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {branches.map((branch) => (
+                <Chip
+                  key={branch.id}
+                  label={branch.name}
+                  icon={<Store />}
+                  onClick={() => {
+                    if (selectedBranches.includes(branch.id!)) {
+                      setSelectedBranches(selectedBranches.filter(id => id !== branch.id));
+                    } else {
+                      setSelectedBranches([...selectedBranches, branch.id!]);
+                    }
+                  }}
+                  color={selectedBranches.includes(branch.id!) ? 'primary' : 'default'}
+                  variant={selectedBranches.includes(branch.id!) ? 'filled' : 'outlined'}
+                  clickable
+                  sx={{
+                    borderRadius: 2,
+                    '&:hover': {
+                      backgroundColor: selectedBranches.includes(branch.id!) 
+                        ? 'primary.dark' 
+                        : 'action.hover'
+                    }
+                  }}
+                />
+              ))}
+            </Box>
+            
+            {selectedBranches.length === 0 && (
+              <Typography variant="caption" color="error" sx={{ mt: 1 }}>
+                يجب تحديد فرع واحد على الأقل
+              </Typography>
+            )}
+          </Stack>
+        </Paper>
       </Box>
 
       <Divider />

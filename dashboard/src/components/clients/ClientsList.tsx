@@ -108,6 +108,10 @@ const ClientsList: React.FC<ClientsListProps> = ({ onAddClick, onEditClick }) =>
         return;
       }
 
+      console.log('ClientsList - Loading clients with branch:', currentBranch?.id);
+      console.log('ClientsList - Current branch object:', currentBranch);
+      
+      // Load clients for current branch
       const { clients: fetchedClients } = await clientService.getClients(
         companyId,
         { ...filter, searchTerm },

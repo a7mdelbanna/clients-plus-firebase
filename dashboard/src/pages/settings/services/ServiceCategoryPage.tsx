@@ -37,6 +37,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { serviceService } from '../../../services/service.service';
 import type { ServiceCategory as ServiceCategoryType, Service } from '../../../services/service.service';
 import { setupService } from '../../../services/setup.service';
@@ -46,6 +47,7 @@ const ServiceCategoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { categoryId } = useParams<{ categoryId: string }>();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -106,7 +108,8 @@ const ServiceCategoryPage: React.FC = () => {
           console.error('Error loading services:', error);
           toast.error('فشل تحميل الخدمات');
           setLoading(false);
-        }
+        },
+        currentBranch?.id // Pass the current branch ID for filtering
       );
 
       // Cleanup subscription on unmount

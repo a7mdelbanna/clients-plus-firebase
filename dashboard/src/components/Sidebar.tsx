@@ -58,6 +58,7 @@ import {
   Link,
   Webhook,
   Inventory2Outlined,
+  WhatsApp,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -215,6 +216,13 @@ const bottomMenuItems: MenuItem[] = [
         titleAr: 'تقويم المواعيد',
         icon: <CalendarToday />,
         path: '/settings/appointment-calendar',
+      },
+      {
+        id: 'whatsapp',
+        title: 'WhatsApp',
+        titleAr: 'واتساب',
+        icon: <WhatsApp />,
+        path: '/settings/whatsapp',
       },
     ],
   },

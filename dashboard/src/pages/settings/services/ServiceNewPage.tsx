@@ -32,6 +32,7 @@ import {
   AccessTime,
   Save,
   PhotoLibrary,
+  Store,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useForm, Controller } from 'react-hook-form';
@@ -39,9 +40,11 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { serviceService } from '../../../services/service.service';
 import type { ServiceCategory as ServiceCategoryType, Service } from '../../../services/service.service';
 import { setupService } from '../../../services/setup.service';
+import { branchService, type Branch } from '../../../services/branch.service';
 import ServiceImageUpload from '../../../components/services/ServiceImageUpload';
 
 interface TabPanelProps {
@@ -78,6 +81,7 @@ const serviceSchema = yup.object({
   onlineBookingDisplayName: yup.string().when('onlineBookingEnabled', {
     is: true,
     then: (schema) => schema.required('اسم العرض للحجز الإلكتروني مطلوب'),
+    otherwise: (schema) => schema,
   }),
   onlineBookingDescription: yup.string(),
   prepaymentRequired: yup.boolean(),
@@ -96,6 +100,7 @@ const ServiceNewPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -105,11 +110,17 @@ const ServiceNewPage: React.FC = () => {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [serviceImages, setServiceImages] = useState<Service['images']>([]);
   const [tempServiceId] = useState(`temp-${Date.now()}`); // Temporary ID for image uploads before service is created
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(
+    currentBranch?.id ? [currentBranch.id] : []
+  );
 
   const {
     control,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<ServiceFormData>({
     resolver: yupResolver(serviceSchema),
@@ -120,8 +131,8 @@ const ServiceNewPage: React.FC = () => {
       durationHours: 0,
       durationMinutes: 30,
       type: 'appointment',
-      onlineBookingEnabled: false,
-      onlineBookingDisplayName: '',
+      onlineBookingEnabled: true,
+      onlineBookingDisplayName: '', // Will be auto-filled from service name
       onlineBookingDescription: '',
       prepaymentRequired: false,
       membershipRequired: false,
@@ -134,10 +145,21 @@ const ServiceNewPage: React.FC = () => {
   });
 
   const onlineBookingEnabled = watch('onlineBookingEnabled');
+  const serviceName = watch('name');
 
   useEffect(() => {
     loadCategories();
+    loadBranches();
   }, [currentUser]);
+
+  // Auto-fill online booking display name with service name
+  useEffect(() => {
+    const currentDisplayName = getValues('onlineBookingDisplayName');
+    // Only auto-fill if display name is empty and online booking is enabled
+    if (onlineBookingEnabled && !currentDisplayName && serviceName) {
+      setValue('onlineBookingDisplayName', serviceName);
+    }
+  }, [serviceName, onlineBookingEnabled, setValue, getValues]);
 
   const loadCategories = async () => {
     if (!currentUser) return;
@@ -169,11 +191,48 @@ const ServiceNewPage: React.FC = () => {
     }
   };
 
-  const onSubmit = async (data: ServiceFormData) => {
+  const loadBranches = async () => {
     if (!currentUser) return;
+    
+    try {
+      const idTokenResult = await currentUser.getIdTokenResult();
+      let companyId = idTokenResult.claims.companyId as string;
+      
+      if (!companyId) {
+        companyId = await setupService.getUserCompanyId(currentUser.uid);
+      }
+      
+      if (companyId) {
+        const fetchedBranches = await branchService.getBranches(companyId, true);
+        setBranches(fetchedBranches);
+      }
+    } catch (error) {
+      console.error('Error loading branches:', error);
+    }
+  };
+
+  const onSubmit = async (data: ServiceFormData) => {
+    console.log('=== SERVICE FORM SUBMISSION START ===');
+    console.log('onSubmit function called with data:', data);
+    console.log('Selected branches:', selectedBranches);
+    console.log('Current user:', currentUser?.uid);
+    
+    if (!currentUser) {
+      console.error('No current user found');
+      toast.error('يجب تسجيل الدخول أولاً');
+      return;
+    }
+
+    // Validate branch selection
+    if (selectedBranches.length === 0) {
+      console.error('No branches selected');
+      toast.error('يجب تحديد فرع واحد على الأقل');
+      return;
+    }
 
     try {
       setLoading(true);
+      console.log('Getting company ID...');
 
       // Get company ID using the same method as dashboard
       const idTokenResult = await currentUser.getIdTokenResult();
@@ -185,45 +244,79 @@ const ServiceNewPage: React.FC = () => {
       }
 
       if (!companyId) {
+        console.error('Company ID not found');
         toast.error('لم يتم العثور على معرف الشركة');
         return;
       }
 
-      const service: Omit<Service, 'id' | 'createdAt' | 'updatedAt'> = {
+      console.log('Company ID found:', companyId);
+      console.log('Creating service object...');
+
+      // Build service object with proper defaults to avoid undefined values
+      const service: any = {
         companyId,
+        branchId: selectedBranches[0], // Keep for backward compatibility
+        branchIds: selectedBranches, // New multi-branch support
         categoryId: data.categoryId,
         name: data.name,
-        startingPrice: data.startingPrice,
+        startingPrice: data.startingPrice || 0,
         duration: {
-          hours: data.durationHours,
-          minutes: data.durationMinutes,
+          hours: data.durationHours || 0,
+          minutes: data.durationMinutes || 0,
         },
         type: data.type as 'appointment' | 'group-event',
         onlineBooking: {
-          enabled: data.onlineBookingEnabled,
-          displayName: data.onlineBookingEnabled ? data.onlineBookingDisplayName : undefined,
-          description: data.onlineBookingEnabled ? data.onlineBookingDescription : undefined,
-          prepaymentRequired: data.prepaymentRequired,
-          membershipRequired: data.membershipRequired,
-          availabilityPeriod: data.availabilityPeriod,
+          enabled: data.onlineBookingEnabled !== false, // Default to true unless explicitly set to false
+          displayName: (data.onlineBookingDisplayName && data.onlineBookingDisplayName.trim()) || data.name || '',
+          description: data.onlineBookingDescription || '',
+          prepaymentRequired: data.prepaymentRequired || false,
+          membershipRequired: data.membershipRequired || false,
+          availabilityPeriod: data.availabilityPeriod || 30,
         },
-        invoiceName: data.invoiceName,
-        vat: data.vat,
-        followUpDays: data.followUpDays,
-        autoDeduction: data.autoDeduction,
-        images: serviceImages,
         active: true,
       };
 
+      // Only add optional fields if they have values
+      if (data.invoiceName && data.invoiceName.trim()) {
+        service.invoiceName = data.invoiceName;
+      }
+      
+      if (data.vat !== undefined && data.vat !== null && data.vat > 0) {
+        service.vat = data.vat;
+      }
+      
+      if (data.followUpDays !== undefined && data.followUpDays !== null && data.followUpDays > 0) {
+        service.followUpDays = data.followUpDays;
+      }
+      
+      if (data.autoDeduction !== undefined && data.autoDeduction !== null) {
+        service.autoDeduction = data.autoDeduction;
+      }
+      
+      if (serviceImages && serviceImages.length > 0) {
+        service.images = serviceImages;
+      }
+
+      console.log('Service object created:', service);
+      console.log('Calling serviceService.createService...');
+      
       await serviceService.createService(service, currentUser.uid);
       
+      console.log('Service created successfully!');
       toast.success('تم إنشاء الخدمة بنجاح');
       navigate('/settings/services');
     } catch (error) {
       console.error('Error creating service:', error);
-      toast.error('فشل إنشاء الخدمة');
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        toast.error(`فشل إنشاء الخدمة: ${error.message}`);
+      } else {
+        toast.error('فشل إنشاء الخدمة');
+      }
     } finally {
       setLoading(false);
+      console.log('=== SERVICE FORM SUBMISSION END ===');
     }
   };
 
@@ -238,18 +331,19 @@ const ServiceNewPage: React.FC = () => {
     { label: 'الموارد', icon: <Inventory /> },
     { label: 'الصور', icon: <PhotoLibrary /> },
     { label: 'اللغات', icon: <Language /> },
+    { label: 'الفروع', icon: <Store /> },
   ];
 
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh' }}>
-      {/* Header */}
-      <Box
-        sx={{
-          p: 3,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          backgroundColor: theme.palette.background.paper,
-        }}
-      >
+        {/* Header */}
+        <Box
+          sx={{
+            p: 3,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            backgroundColor: theme.palette.background.paper,
+          }}
+        >
         <Box
           sx={{
             display: 'flex',
@@ -277,7 +371,25 @@ const ServiceNewPage: React.FC = () => {
             <Button
               variant="contained"
               startIcon={<Save />}
-              onClick={handleSubmit(onSubmit)}
+              onClick={() => {
+                console.log('Save button clicked - calling handleSubmit');
+                console.log('Current form state:', getValues());
+                console.log('Current errors:', errors);
+                console.log('Selected branches:', selectedBranches);
+                
+                handleSubmit(
+                  (data) => {
+                    console.log('Form is valid, calling onSubmit with:', data);
+                    onSubmit(data);
+                  },
+                  (errors) => {
+                    console.error('Form validation failed:', errors);
+                    Object.keys(errors).forEach(key => {
+                      console.error(`Field ${key}:`, errors[key]);
+                    });
+                  }
+                )();
+              }}
               disabled={loading}
               sx={{
                 backgroundColor: '#10B981',
@@ -292,11 +404,11 @@ const ServiceNewPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Content */}
-      <Box sx={{ p: 3 }}>
-        <Paper sx={{ width: '100%' }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs
+        {/* Content */}
+        <Box sx={{ p: 3 }}>
+          <Paper sx={{ width: '100%' }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs
               value={tabValue}
               onChange={handleTabChange}
               variant={isMobile ? 'scrollable' : 'standard'}
@@ -673,6 +785,50 @@ const ServiceNewPage: React.FC = () => {
                 يمكنك إضافة ترجمات للخدمة بلغات مختلفة بعد إنشائها
               </Typography>
             </Box>
+          </TabPanel>
+
+          {/* Branches Tab */}
+          <TabPanel value={tabValue} index={6}>
+            <Typography variant="h6" sx={{ mb: 3 }}>
+              الفروع المتاحة
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              حدد الفروع التي ستكون هذه الخدمة متاحة فيها
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {branches.map((branch) => (
+                <Chip
+                  key={branch.id}
+                  label={branch.name}
+                  icon={<Store />}
+                  onClick={() => {
+                    if (selectedBranches.includes(branch.id!)) {
+                      setSelectedBranches(selectedBranches.filter(id => id !== branch.id));
+                    } else {
+                      setSelectedBranches([...selectedBranches, branch.id!]);
+                    }
+                  }}
+                  color={selectedBranches.includes(branch.id!) ? 'primary' : 'default'}
+                  variant={selectedBranches.includes(branch.id!) ? 'filled' : 'outlined'}
+                  clickable
+                  sx={{
+                    borderRadius: 2,
+                    '&:hover': {
+                      backgroundColor: selectedBranches.includes(branch.id!) 
+                        ? 'primary.dark' 
+                        : 'action.hover'
+                    }
+                  }}
+                />
+              ))}
+            </Box>
+            
+            {selectedBranches.length === 0 && (
+              <Typography variant="caption" color="error" sx={{ mt: 2, display: 'block' }}>
+                يجب تحديد فرع واحد على الأقل
+              </Typography>
+            )}
           </TabPanel>
         </Paper>
       </Box>

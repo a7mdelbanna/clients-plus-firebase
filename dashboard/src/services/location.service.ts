@@ -8,6 +8,9 @@ import {
   serverTimestamp,
   Timestamp,
   onSnapshot,
+  query,
+  where,
+  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -240,6 +243,16 @@ class LocationService {
       if (basicSettings.locationName) {
         console.log('Updating branch name to:', basicSettings.locationName);
         await this.updateBranchName(companyId, branchId || 'main', basicSettings.locationName);
+      }
+      
+      // Sync business name with company document and ALL branches
+      if (basicSettings.businessName) {
+        console.log('Updating company business name to:', basicSettings.businessName);
+        // Update company document
+        await this.updateCompanyBusinessName(companyId, basicSettings.businessName);
+        
+        // Update all branch location settings with the new business name
+        await this.updateAllBranchesBusinessName(companyId, basicSettings.businessName);
       }
     } catch (error) {
       console.error('Error updating basic settings:', error);
@@ -677,6 +690,51 @@ class LocationService {
       }
     } catch (error) {
       console.error('Error updating branch name:', error);
+      // Don't throw here to avoid breaking the main save operation
+    }
+  }
+
+  // Update company business name in the main company document
+  async updateCompanyBusinessName(companyId: string, businessName: string): Promise<void> {
+    try {
+      const companyRef = doc(db, 'companies', companyId);
+      await updateDoc(companyRef, {
+        name: businessName,
+        businessName: businessName, // Some places might use businessName field
+        updatedAt: serverTimestamp(),
+      });
+      console.log(`Company business name updated to: ${businessName}`);
+    } catch (error) {
+      console.error('Error updating company business name:', error);
+      // Don't throw here to avoid breaking the main save operation
+    }
+  }
+
+  // Update business name for all branch location settings
+  async updateAllBranchesBusinessName(companyId: string, businessName: string): Promise<void> {
+    try {
+      // Get all location settings for this company
+      const q = query(
+        collection(db, this.collectionName),
+        where('companyId', '==', companyId)
+      );
+      
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      
+      // Update each location setting document
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        batch.update(doc.ref, {
+          'basic.businessName': businessName,
+          updatedAt: serverTimestamp(),
+        });
+      });
+      
+      await batch.commit();
+      console.log(`Updated business name to "${businessName}" for all ${snapshot.size} branches`);
+    } catch (error) {
+      console.error('Error updating all branches business name:', error);
       // Don't throw here to avoid breaking the main save operation
     }
   }

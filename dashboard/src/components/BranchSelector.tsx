@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -26,6 +27,7 @@ import { useBranch } from '../contexts/BranchContext';
 const BranchSelector: React.FC = () => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
+  const navigate = useNavigate();
   const { branches, currentBranch, switchBranch, loading } = useBranch();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -163,13 +165,19 @@ const BranchSelector: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                     <LocationOn sx={{ fontSize: 14, color: 'text.secondary' }} />
                     <Typography variant="caption" color="text.secondary">
-                      {branch.address}
+                      {typeof branch.address === 'string' 
+                        ? branch.address 
+                        : branch.address?.street || ''}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Phone sx={{ fontSize: 14, color: 'text.secondary' }} />
                     <Typography variant="caption" color="text.secondary">
-                      {branch.phone}
+                      {typeof branch.phone === 'string' 
+                        ? branch.phone 
+                        : branch.contact?.phones?.[0] 
+                          ? `${branch.contact.phones[0].countryCode}${branch.contact.phones[0].number}`
+                          : ''}
                     </Typography>
                   </Box>
                 </Box>
@@ -183,31 +191,26 @@ const BranchSelector: React.FC = () => {
         <Divider />
         
         <MenuItem
-          onClick={handleClose}
-          disabled={branches.length >= 2} // Trial limitation: max 2 branches
+          onClick={() => {
+            handleClose();
+            navigate('/settings/branches');
+          }}
           sx={{
             py: 1.5,
-            color: branches.length >= 2 ? 'text.disabled' : 'primary.main',
+            color: 'primary.main',
             '&:hover': {
-              backgroundColor: branches.length >= 2 ? 'transparent' : alpha(theme.palette.primary.main, 0.08),
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
             },
           }}
         >
           <ListItemIcon>
-            <Add sx={{ color: branches.length >= 2 ? 'text.disabled' : 'primary.main' }} />
+            <Add sx={{ color: 'primary.main' }} />
           </ListItemIcon>
           <ListItemText
             primary={
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {isRTL ? 'إضافة فرع جديد' : 'Add New Branch'}
+                {isRTL ? 'إدارة الفروع' : 'Manage Branches'}
               </Typography>
-            }
-            secondary={
-              branches.length >= 2 ? (
-                <Typography variant="caption" color="text.secondary">
-                  {isRTL ? 'الحد الأقصى للفترة التجريبية: 2 فروع' : 'Trial limit: 2 branches'}
-                </Typography>
-              ) : null
             }
           />
         </MenuItem>

@@ -24,6 +24,7 @@ interface BasicInfoProps {
   appointment: Appointment | null;
   companyId: string;
   staffId?: string;
+  branchId?: string;
   notes: string;
   source: AppointmentSource;
   onNotesChange: (notes: string) => void;
@@ -35,6 +36,7 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
   appointment,
   companyId,
   staffId,
+  branchId,
   notes,
   source,
   onNotesChange,
@@ -65,6 +67,7 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
             appointment={appointment}
             companyId={companyId}
             staffId={staffId}
+            branchId={branchId}
             onServicesChange={onServicesChange}
           />
         </Paper>

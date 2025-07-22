@@ -23,8 +23,13 @@ import {
   Sms,
   Send,
   Notifications,
+  WhatsApp,
 } from '@mui/icons-material';
 import type { Appointment } from '../../services/appointment.service';
+import { whatsAppService } from '../../services/whatsapp.service';
+import { appointmentReminderService } from '../../services/appointmentReminder.service';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-toastify';
 
 interface NotificationSettingsProps {
   appointment: Appointment | null;
@@ -37,14 +42,21 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
+  const { currentUser } = useAuth();
 
   // Notification states
-  const [bookingConfirmation, setBookingConfirmation] = useState(true);
+  const [bookingConfirmation, setBookingConfirmation] = useState({
+    enabled: true,
+    whatsapp: true,
+    sms: false,
+    email: true,
+  });
   const [preVisitReminder, setPreVisitReminder] = useState({
     enabled: true,
-    sms: true,
+    whatsapp: true,
+    sms: false,
     email: true,
-    timing: '1',
+    timing: '24', // Default to 24 hours
   });
   const [repeatVisitReminder, setRepeatVisitReminder] = useState({
     enabled: false,
@@ -53,10 +65,54 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   });
   const [customMessage, setCustomMessage] = useState('');
   const [sendVia, setSendVia] = useState({
+    whatsapp: false,
     sms: false,
     push: false,
     email: false,
   });
+  
+  // Call onNotificationChange whenever settings change
+  React.useEffect(() => {
+    if (onNotificationChange) {
+      const notifications = [];
+      
+      // Add booking confirmation notification
+      if (bookingConfirmation.enabled) {
+        const methods = [];
+        if (bookingConfirmation.whatsapp) methods.push('whatsapp');
+        if (bookingConfirmation.sms) methods.push('sms');
+        if (bookingConfirmation.email) methods.push('email');
+        
+        if (methods.length > 0) {
+          notifications.push({
+            type: 'confirmation',
+            method: methods,
+            timing: 'immediate'
+          });
+        }
+      }
+      
+      // Add pre-visit reminder notification
+      if (preVisitReminder.enabled) {
+        const methods = [];
+        if (preVisitReminder.whatsapp) methods.push('whatsapp');
+        if (preVisitReminder.sms) methods.push('sms');
+        if (preVisitReminder.email) methods.push('email');
+        
+        if (methods.length > 0) {
+          notifications.push({
+            type: 'reminder',
+            method: methods,
+            timing: `${preVisitReminder.timing}h`
+          });
+        }
+      }
+      
+      console.log('NotificationSettings - Building notifications:', notifications);
+      console.log('NotificationSettings - Booking confirmation:', bookingConfirmation);
+      onNotificationChange(notifications);
+    }
+  }, [bookingConfirmation, preVisitReminder, onNotificationChange]);
 
   const handleSendMessage = () => {
     console.log('Sending custom message:', customMessage, sendVia);
@@ -77,16 +133,70 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             : 'The notification will be sent to clients via the selected delivery channels.'}
         </Typography>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Chip
-            icon={<Email />}
-            label={isRTL ? 'بريد إلكتروني' : 'Email'}
-            size="small"
-            variant="outlined"
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={bookingConfirmation.whatsapp}
+                onChange={(e) => setBookingConfirmation({
+                  ...bookingConfirmation,
+                  whatsapp: e.target.checked,
+                })}
+                size="small"
+              />
+            }
+            label={
+              <Chip
+                icon={<WhatsApp />}
+                label="WhatsApp"
+                size="small"
+                variant={bookingConfirmation.whatsapp ? "filled" : "outlined"}
+                color={bookingConfirmation.whatsapp ? "success" : "default"}
+              />
+            }
           />
-          <Button variant="text" size="small">
-            {isRTL ? 'إرسال' : 'Send'}
-          </Button>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={bookingConfirmation.sms}
+                onChange={(e) => setBookingConfirmation({
+                  ...bookingConfirmation,
+                  sms: e.target.checked,
+                })}
+                size="small"
+              />
+            }
+            label={
+              <Chip
+                icon={<Sms />}
+                label="SMS"
+                size="small"
+                variant={bookingConfirmation.sms ? "filled" : "outlined"}
+                color={bookingConfirmation.sms ? "warning" : "default"}
+              />
+            }
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={bookingConfirmation.email}
+                onChange={(e) => setBookingConfirmation({
+                  ...bookingConfirmation,
+                  email: e.target.checked,
+                })}
+                size="small"
+              />
+            }
+            label={
+              <Chip
+                icon={<Email />}
+                label={isRTL ? 'بريد إلكتروني' : 'Email'}
+                size="small"
+                variant={bookingConfirmation.email ? "filled" : "outlined"}
+                color={bookingConfirmation.email ? "primary" : "default"}
+              />
+            }
+          />
         </Box>
       </Paper>
 
@@ -103,6 +213,23 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             <Typography variant="body2" color="text.secondary" gutterBottom>
               {isRTL ? 'طريقة الإشعار' : 'Notification method'}
             </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={preVisitReminder.whatsapp}
+                  onChange={(e) => setPreVisitReminder({
+                    ...preVisitReminder,
+                    whatsapp: e.target.checked,
+                  })}
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WhatsApp sx={{ fontSize: 20, color: theme.palette.success.main }} />
+                  WhatsApp
+                </Box>
+              }
+            />
             <FormControlLabel
               control={
                 <Checkbox
@@ -247,7 +374,21 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {isRTL ? 'إرسال عبر' : 'Send via'}
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={sendVia.whatsapp}
+                onChange={(e) => setSendVia({ ...sendVia, whatsapp: e.target.checked })}
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <WhatsApp sx={{ fontSize: 20, color: theme.palette.success.main }} />
+                WhatsApp
+              </Box>
+            }
+          />
           <FormControlLabel
             control={
               <Checkbox
@@ -255,7 +396,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 onChange={(e) => setSendVia({ ...sendVia, sms: e.target.checked })}
               />
             }
-            label="SMS"
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Sms sx={{ fontSize: 20, color: theme.palette.warning.main }} />
+                SMS
+              </Box>
+            }
           />
           <FormControlLabel
             control={
@@ -273,7 +419,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 onChange={(e) => setSendVia({ ...sendVia, email: e.target.checked })}
               />
             }
-            label={isRTL ? 'بريد إلكتروني' : 'Email'}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Email sx={{ fontSize: 20, color: theme.palette.primary.main }} />
+                {isRTL ? 'بريد إلكتروني' : 'Email'}
+              </Box>
+            }
           />
         </Box>
 
@@ -281,7 +432,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           variant="outlined"
           startIcon={<Send />}
           onClick={handleSendMessage}
-          disabled={!customMessage || (!sendVia.sms && !sendVia.push && !sendVia.email)}
+          disabled={!customMessage || (!sendVia.whatsapp && !sendVia.sms && !sendVia.push && !sendVia.email)}
         >
           {isRTL ? 'إرسال الرسالة' : 'Send message'}
         </Button>

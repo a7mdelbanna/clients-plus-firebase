@@ -25,9 +25,11 @@ import {
   TrendingDown,
   LocationOn,
   Business,
+  Store,
   Notifications,
   Link,
   Webhook,
+  WhatsApp,
   Inventory2Outlined,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -91,6 +93,14 @@ const settingsSections: SettingSection[] = [
     color: '#14B8A6',
     category: 'main',
   },
+  {
+    id: 'whatsapp',
+    title: 'واتساب',
+    icon: <WhatsApp sx={{ fontSize: 32 }} />,
+    path: '/settings/whatsapp',
+    color: '#25D366',
+    category: 'main',
+  },
   // الفئات
   {
     id: 'categories',
@@ -136,11 +146,19 @@ const settingsSections: SettingSection[] = [
   },
   // موقعي
   {
+    id: 'branches',
+    title: 'إدارة الفروع',
+    icon: <Store sx={{ fontSize: 32 }} />,
+    path: '/settings/branches',
+    color: '#F59E0B',
+    category: 'location',
+  },
+  {
     id: 'location-settings',
     title: 'إعدادات الموقع',
     icon: <LocationOn sx={{ fontSize: 32 }} />,
     path: '/settings/location-settings',
-    color: '#F59E0B',
+    color: '#14B8A6',
     category: 'location',
   },
   {

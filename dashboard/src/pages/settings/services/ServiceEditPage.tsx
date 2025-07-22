@@ -34,6 +34,7 @@ import {
   Save,
   Delete,
   PhotoLibrary,
+  Store,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useForm, Controller } from 'react-hook-form';
@@ -41,9 +42,11 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useBranch } from '../../../contexts/BranchContext';
 import { serviceService } from '../../../services/service.service';
 import { setupService } from '../../../services/setup.service';
 import type { ServiceCategory as ServiceCategoryType, Service } from '../../../services/service.service';
+import { branchService, type Branch } from '../../../services/branch.service';
 import ServiceImageUpload from '../../../components/services/ServiceImageUpload';
 
 interface TabPanelProps {
@@ -117,6 +120,7 @@ const ServiceEditPage: React.FC = () => {
   const navigate = useNavigate();
   const { serviceId } = useParams<{ serviceId: string }>();
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -130,6 +134,8 @@ const ServiceEditPage: React.FC = () => {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [translations, setTranslations] = useState<Record<string, { name: string; description?: string }>>({});
   const [serviceImages, setServiceImages] = useState<Service['images']>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
 
   const {
     control,
@@ -146,6 +152,10 @@ const ServiceEditPage: React.FC = () => {
   useEffect(() => {
     loadServiceAndCategories();
   }, [currentUser, serviceId]);
+
+  useEffect(() => {
+    loadBranches();
+  }, [currentUser]);
 
   const loadServiceAndCategories = async () => {
     if (!currentUser || !serviceId) return;
@@ -174,6 +184,17 @@ const ServiceEditPage: React.FC = () => {
       }
 
       setService(fetchedService);
+      
+      // Set selected branches
+      if (fetchedService.branchIds && fetchedService.branchIds.length > 0) {
+        setSelectedBranches(fetchedService.branchIds);
+      } else if (fetchedService.branchId) {
+        // Backward compatibility with single branchId
+        setSelectedBranches([fetchedService.branchId]);
+      } else if (currentBranch?.id) {
+        // Default to current branch if no branch is set
+        setSelectedBranches([currentBranch.id]);
+      }
       
       // Set form values
       reset({
@@ -234,8 +255,34 @@ const ServiceEditPage: React.FC = () => {
     }
   };
 
+  const loadBranches = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const idTokenResult = await currentUser.getIdTokenResult();
+      let companyId = idTokenResult.claims.companyId as string;
+      
+      if (!companyId) {
+        companyId = await setupService.getUserCompanyId(currentUser.uid);
+      }
+      
+      if (companyId) {
+        const fetchedBranches = await branchService.getBranches(companyId, true);
+        setBranches(fetchedBranches);
+      }
+    } catch (error) {
+      console.error('Error loading branches:', error);
+    }
+  };
+
   const onSubmit = async (data: ServiceFormData) => {
     if (!currentUser || !serviceId || !service) return;
+
+    // Validate branch selection
+    if (selectedBranches.length === 0) {
+      toast.error('يجب تحديد فرع واحد على الأقل');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -255,6 +302,8 @@ const ServiceEditPage: React.FC = () => {
 
       const updatedService: Partial<Service> = {
         name: data.name,
+        branchId: selectedBranches[0], // Keep for backward compatibility
+        branchIds: selectedBranches, // New multi-branch support
         translations: Object.keys(serviceTranslations).length > 0 ? serviceTranslations : undefined,
         categoryId: data.categoryId,
         startingPrice: data.startingPrice,
@@ -265,8 +314,8 @@ const ServiceEditPage: React.FC = () => {
         type: data.type as 'appointment' | 'group-event',
         onlineBooking: {
           enabled: data.onlineBookingEnabled,
-          displayName: data.onlineBookingEnabled ? data.onlineBookingDisplayName : undefined,
-          description: data.onlineBookingEnabled ? data.onlineBookingDescription : undefined,
+          displayName: data.onlineBookingEnabled ? data.onlineBookingDisplayName : data.name,
+          description: data.onlineBookingEnabled ? data.onlineBookingDescription : '',
           translations: Object.keys(descriptionTranslations).length > 0 ? descriptionTranslations : undefined,
           prepaymentRequired: data.prepaymentRequired,
           membershipRequired: data.membershipRequired,
@@ -317,6 +366,7 @@ const ServiceEditPage: React.FC = () => {
     { label: 'الموارد', icon: <Inventory /> },
     { label: 'الصور', icon: <PhotoLibrary /> },
     { label: 'اللغات', icon: <Language /> },
+    { label: 'الفروع', icon: <Store /> },
   ];
 
   if (loadingService) {
@@ -928,6 +978,52 @@ const ServiceEditPage: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 * سيتمكن العملاء من اختيار لغتهم المفضلة في التطبيق وسيتم عرض الخدمات بتلك اللغة
               </Typography>
+            </Box>
+          </TabPanel>
+
+          {/* Branches Tab */}
+          <TabPanel value={tabValue} index={6}>
+            <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                الفروع المتاحة
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                حدد الفروع التي ستكون هذه الخدمة متاحة فيها
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {branches.map((branch) => (
+                  <Chip
+                    key={branch.id}
+                    label={branch.name}
+                    icon={<Store />}
+                    onClick={() => {
+                      if (selectedBranches.includes(branch.id!)) {
+                        setSelectedBranches(selectedBranches.filter(id => id !== branch.id));
+                      } else {
+                        setSelectedBranches([...selectedBranches, branch.id!]);
+                      }
+                    }}
+                    color={selectedBranches.includes(branch.id!) ? 'primary' : 'default'}
+                    variant={selectedBranches.includes(branch.id!) ? 'filled' : 'outlined'}
+                    clickable
+                    sx={{
+                      borderRadius: 2,
+                      '&:hover': {
+                        backgroundColor: selectedBranches.includes(branch.id!) 
+                          ? 'primary.dark' 
+                          : 'action.hover'
+                      }
+                    }}
+                  />
+                ))}
+              </Box>
+              
+              {selectedBranches.length === 0 && (
+                <Typography variant="caption" color="error" sx={{ mt: 2, display: 'block' }}>
+                  يجب تحديد فرع واحد على الأقل
+                </Typography>
+              )}
             </Box>
           </TabPanel>
         </Paper>

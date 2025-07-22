@@ -190,7 +190,7 @@ const BasicSettingsTab: React.FC<BasicSettingsTabProps> = ({
                 label="اسم العمل"
                 fullWidth
                 error={!!errors.businessName}
-                helperText={errors.businessName?.message || 'يستخدم في الموارد الخارجية'}
+                helperText={errors.businessName?.message || 'اسم الشركة - ينطبق على جميع الفروع'}
               />
             )}
           />

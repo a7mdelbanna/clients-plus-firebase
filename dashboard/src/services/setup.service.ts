@@ -264,6 +264,25 @@ export const setupService = {
       await batch.commit();
       console.log('[setupService] Batch commit successful');
       
+      // Sync business name to location settings for ALL branches
+      try {
+        const { locationService } = await import('./location.service');
+        
+        // Create location settings for each branch with the same business name
+        for (const branch of setupData.branches) {
+          const branchId = branch.id === 'main' ? undefined : branch.id;
+          await locationService.updateBasicSettings(companyId, {
+            businessName: setupData.businessName,
+            locationName: branch.name,
+          }, branchId);
+        }
+        
+        console.log('[setupService] Business name synced to all branch location settings');
+      } catch (syncError) {
+        console.error('[setupService] Error syncing business name to location settings:', syncError);
+        // Don't throw - setup is still successful even if sync fails
+      }
+      
       // Call cloud function to update user claims if needed
       try {
         // Get the current user to update their claims

@@ -28,13 +28,16 @@ import {
   Category,
 } from '@mui/icons-material';
 import { serviceService } from '../../services/service.service';
+import { staffService } from '../../services/staff.service';
 import type { Service, ServiceCategory } from '../../services/service.service';
+import type { Staff } from '../../services/staff.service';
 import type { Appointment } from '../../services/appointment.service';
 
 interface ServiceSelectionProps {
   appointment: Appointment | null;
   companyId: string;
   staffId?: string;
+  branchId?: string;
   onServicesChange?: (services: Service[]) => void;
 }
 
@@ -56,6 +59,7 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
   appointment,
   companyId,
   staffId,
+  branchId,
   onServicesChange,
 }) => {
   const theme = useTheme();
@@ -64,14 +68,25 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
   const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [staffData, setStaffData] = useState<Staff | null>(null);
 
   useEffect(() => {
     loadData();
   }, [companyId]);
+
+  useEffect(() => {
+    if (staffId) {
+      loadStaffData();
+    } else {
+      // If no staff is selected, show all services
+      setServices(allServices);
+    }
+  }, [staffId, allServices]);
 
   useEffect(() => {
     if (appointment?.services) {
@@ -84,15 +99,41 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
     try {
       setLoading(true);
       const [servicesData, categoriesData] = await Promise.all([
-        serviceService.getServices(companyId),
+        serviceService.getServices(companyId, undefined, branchId),
         serviceService.getCategories(companyId),
       ]);
-      setServices(servicesData);
+      setAllServices(servicesData);
+      // If no staff is selected, show all services
+      if (!staffId) {
+        setServices(servicesData);
+      }
       setCategories(categoriesData);
     } catch (error) {
       console.error('Error loading services:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStaffData = async () => {
+    if (!staffId) return;
+    
+    try {
+      const staff = await staffService.getStaffMember(staffId);
+      setStaffData(staff);
+      
+      if (staff?.services && staff.services.length > 0) {
+        // Filter services to show only those assigned to the staff member
+        const filteredServices = allServices.filter(service => 
+          staff.services.includes(service.id!)
+        );
+        setServices(filteredServices);
+      } else {
+        // If staff has no services assigned, show empty list
+        setServices([]);
+      }
+    } catch (error) {
+      console.error('Error loading staff data:', error);
     }
   };
 
@@ -213,18 +254,45 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
               <MenuItem value="">
                 <em>{isRTL ? 'جميع الفئات' : 'All Categories'}</em>
               </MenuItem>
-              {categories.map((category) => (
-                <MenuItem key={category.id} value={category.id}>
-                  {category.name}
-                </MenuItem>
-              ))}
+              {categories
+                .filter(category => 
+                  // Only show categories that have services assigned to the staff
+                  services.some(service => service.categoryId === category.id)
+                )
+                .map((category) => (
+                  <MenuItem key={category.id} value={category.id}>
+                    {category.name}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
         </Box>
 
         {/* Services List */}
-        <List sx={{ bgcolor: theme.palette.background.paper, borderRadius: 1 }}>
-          {filteredServices.map((service) => {
+        {staffId && services.length === 0 ? (
+          <Box 
+            sx={{ 
+              p: 3, 
+              textAlign: 'center', 
+              bgcolor: theme.palette.background.paper, 
+              borderRadius: 1,
+              border: `1px dashed ${theme.palette.divider}`
+            }}
+          >
+            <Typography variant="body1" color="text.secondary">
+              {isRTL 
+                ? 'لم يتم تعيين أي خدمات لهذا الموظف'
+                : 'No services assigned to this staff member'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {isRTL 
+                ? 'يرجى تعيين الخدمات في صفحة تفاصيل الموظف'
+                : 'Please assign services in the employee details page'}
+            </Typography>
+          </Box>
+        ) : (
+          <List sx={{ bgcolor: theme.palette.background.paper, borderRadius: 1 }}>
+            {filteredServices.map((service) => {
             const isSelected = selectedServices.some(s => s.id === service.id);
             const durationInMinutes = service.duration 
               ? (service.duration.hours || 0) * 60 + (service.duration.minutes || 0)
@@ -289,7 +357,8 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
               </ListItem>
             );
           })}
-        </List>
+          </List>
+        )}
 
         {/* Totals */}
         {selectedServices.length > 0 && (

@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-07-22 - Morning)
+## Current Status (Last Updated: 2025-07-22 - Evening)
 
 ### Completed Features
 1. **Authentication System**
@@ -223,7 +223,7 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Firestore security rules for positions
    - ✅ Helper functions for getting translated position names/descriptions
 
-### Recent Additions (2025-07-22)
+### Recent Additions (2025-07-22 - Morning)
 
 #### Employee Working Hours Integration in Appointments
    - ✓ **Time Slot Availability Based on Staff Schedule**:
@@ -246,6 +246,76 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
      - Modified `CalendarDayView` with same working hours logic for daily view
      - Added `isTimeSlotAvailable` function for granular time checking
      - Maintains backward compatibility for employees without schedules
+
+#### Branch Management System (Multi-branch Support)
+   - ✓ **Complete Branch CRUD Operations**:
+     - Branch management page at `/settings/branches`
+     - Create new branches with wizard-style form
+     - Edit existing branches
+     - Activate/deactivate branches
+     - Delete branches (except main branch)
+   - ✓ **Branch Service (`branch.service.ts`)**:
+     - Full CRUD operations with Firestore
+     - Plan-based branch limits (trial: 2, basic: 3, pro: 5, enterprise: unlimited)
+     - Legacy data structure support
+     - Branch validation and counting
+   - ✓ **Branch Management UI**:
+     - List view showing all branches with status
+     - Staff and service count per branch
+     - Quick actions (edit, toggle status, delete)
+     - Plan limit alerts and enforcement
+     - Protected main branch from deletion/deactivation
+   - ✓ **Branch Form Pages**:
+     - Multi-step wizard for branch creation
+     - Step 1: Basic Information (name, type, status)
+     - Step 2: Location & Contact (address, phone, email)
+     - Step 3: Settings (online booking, auto-confirm)
+     - Form validation and error handling
+   - ✓ **Branch Context Integration**:
+     - Branch selector in header for switching branches
+     - All data scoped to selected branch
+     - Persistent branch selection
+     - Automatic refresh on branch changes
+   - ✓ **MUI Component Fixes**:
+     - Fixed tooltip warnings for disabled buttons by wrapping in spans
+     - Proper TypeScript types for branch data structures
+   - ✓ **Multi-Branch Staff Assignment** (2025-07-22):
+     - Updated Staff interface with `branchIds?: string[]` array field
+     - Backward compatibility maintained with legacy `branchId` field
+     - Created branch assignment UI in InformationTab with clickable chips
+     - Staff can now be assigned to work at multiple branches
+     - Updated filtering logic to check both branchIds array and legacy branchId
+     - Added Firestore indexes for branchIds array queries
+     - Created migration utility `migrateStaffBranches()` for existing data
+     - Appointments and other features automatically filter staff by current branch
+
+### Recent Additions (2025-07-22 - Evening)
+
+#### Multi-Branch Service Management
+   - ✓ **Service Branch Assignment**:
+     - Services can now be assigned to multiple branches
+     - Added `branchIds` array field to Service interface
+     - Backward compatibility maintained with legacy `branchId` field
+     - Branch selection UI with clickable chips in service forms
+   - ✓ **Service Creation/Edit Forms**:
+     - Added "Branches" tab to service creation and edit pages
+     - Branch selection with visual chips showing assigned branches
+     - Validation ensures at least one branch is selected
+     - Services default to current branch if none specified
+   - ✓ **Service Filtering by Branch**:
+     - Fixed real-time subscription filtering in `subscribeToServices()`
+     - Services only appear in their assigned branches
+     - Client-side filtering handles both old and new branch formats
+     - Company-wide services (no branch) show in all branches
+   - ✓ **UI/UX Improvements**:
+     - Fixed service creation save button not working
+     - Fixed online booking display name validation error
+     - Auto-fill online booking display name from service name
+     - Online booking enabled by default as requested
+   - ✓ **Component Updates**:
+     - Updated ServiceCategoryPage to use branch context
+     - Fixed ServiceSelection component in appointments
+     - Branch filtering now works across entire application
 
 ### Recent Additions (2025-07-19, 2025-07-20 & 2025-07-21)
 
@@ -903,6 +973,28 @@ firebase deploy                          # Deploy everything
       4. Added fallback to load branch '1' settings when 'main' has no data
     - **Impact**: WhatsApp messages now correctly show business name, phone, and Google Maps link
     - **Prevention**: Always include branch ID in appointments, ensure proper data merging in updates
+
+29. **Missing Routes Error (No routes matched location)**:
+    - **Error**: "No routes matched location '/settings/branches/new'" in console
+    - **Root Cause**: Route not defined in App.tsx Routes configuration
+    - **Solution**: Add missing routes to App.tsx:
+      ```typescript
+      // Import the component
+      import BranchFormPage from './pages/settings/branches/BranchFormPage';
+      
+      // Add routes after the main branches route
+      <Route path="/settings/branches/new" element={
+        <PageTransition>
+          <BranchFormPage />
+        </PageTransition>
+      } />
+      <Route path="/settings/branches/:branchId/edit" element={
+        <PageTransition>
+          <BranchFormPage />
+        </PageTransition>
+      } />
+      ```
+    - **Prevention**: Always add all related routes when creating new pages (list, create, edit)
 
 ## Next Major Features
 - Client management system
