@@ -26,7 +26,7 @@ interface TimeSlotPickerProps {
     start: string;
     end: string;
     breaks?: { start: string; end: string }[];
-  };
+  } | null; // null means employee doesn't work this day
 }
 
 const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
@@ -120,8 +120,16 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
     const slots: TimeSlot[] = [];
     const slotDuration = 30; // 30-minute slots
     
-    const startTime = parse(workingHours.start, 'HH:mm', date);
-    const endTime = parse(workingHours.end, 'HH:mm', date);
+    // If workingHours is null, employee doesn't work this day
+    if (workingHours === null) {
+      return [];
+    }
+    
+    // Use provided working hours or defaults
+    const effectiveWorkingHours = workingHours || { start: '09:00', end: '21:00' };
+    
+    const startTime = parse(effectiveWorkingHours.start, 'HH:mm', date);
+    const endTime = parse(effectiveWorkingHours.end, 'HH:mm', date);
     
     let currentTime = startTime;
     
@@ -135,7 +143,7 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
       }
       
       // Check if slot is during a break
-      const isDuringBreak = workingHours.breaks?.some(breakTime => {
+      const isDuringBreak = effectiveWorkingHours.breaks?.some(breakTime => {
         const breakStart = parse(breakTime.start, 'HH:mm', date);
         const breakEnd = parse(breakTime.end, 'HH:mm', date);
         return (
@@ -306,7 +314,9 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
 
       {timeSlots.length === 0 ? (
         <Alert severity="info">
-          {isRTL ? 'لا توجد مواعيد متاحة في هذا اليوم' : 'No time slots available for this day'}
+          {workingHours === null 
+            ? (isRTL ? 'هذا الموظف غير مجدول للعمل في هذا اليوم' : 'This staff member is not scheduled to work on this day')
+            : (isRTL ? 'لا توجد مواعيد متاحة في هذا اليوم' : 'No time slots available for this day')}
         </Alert>
       ) : (
         <>

@@ -223,6 +223,29 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Firestore security rules for positions
    - ✅ Helper functions for getting translated position names/descriptions
 
+### Recent Additions (2025-07-22)
+
+#### Employee Working Hours Integration in Appointments
+   - ✓ **Time Slot Availability Based on Staff Schedule**:
+     - Time slots now respect individual employee working hours
+     - Slots outside employee working hours are visually disabled
+     - Calendar week view shows unavailable slots with gray background
+     - Prevents booking appointments outside staff scheduled hours
+   - ✓ **Smart Time Slot Filtering**:
+     - When selecting a specific employee, only their working hours are available
+     - Non-working days show all slots as disabled
+     - Working days show only slots within start/end times as available
+     - Example: Employee working 09:00-17:00 → slots before 09:00 and after 17:00 are disabled
+   - ✓ **Visual Feedback**:
+     - Available slots: Normal appearance with hover effects
+     - Unavailable slots: Gray background, reduced opacity, "not-allowed" cursor
+     - Clear distinction between working and non-working hours
+   - ✓ **Implementation Details**:
+     - Updated `TimeSlotPicker` component to accept employee working hours
+     - Modified `CalendarWeekView` to check individual time slots against schedule
+     - Added `isTimeSlotAvailable` function for granular time checking
+     - Maintains backward compatibility for employees without schedules
+
 ### Recent Additions (2025-07-19, 2025-07-20 & 2025-07-21)
 
 #### Appointment Management System (Complete Implementation)

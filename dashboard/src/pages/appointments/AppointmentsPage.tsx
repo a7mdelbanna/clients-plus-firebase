@@ -405,6 +405,7 @@ const AppointmentsPage: React.FC = () => {
             onAppointmentClick={handleAppointmentClick}
             onTimeSlotClick={handleTimeSlotClick}
             selectedStaffId={selectedStaff !== 'all' ? selectedStaff : undefined}
+            staff={staff}
           />
         )}
         {viewType === 'month' && (

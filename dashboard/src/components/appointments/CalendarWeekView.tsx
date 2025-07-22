@@ -8,7 +8,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import { Repeat } from '@mui/icons-material';
-import { format, startOfWeek, addDays, isSameDay, parse, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import type { Appointment } from '../../services/appointment.service';
@@ -19,6 +19,7 @@ interface CalendarWeekViewProps {
   onAppointmentClick: (appointment: Appointment) => void;
   onTimeSlotClick: (date: Date, time: string) => void;
   selectedStaffId?: string;
+  staff?: any[]; // Staff array to check working hours
 }
 
 const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
@@ -27,6 +28,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
   onAppointmentClick,
   onTimeSlotClick,
   selectedStaffId,
+  staff = [],
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
@@ -44,6 +46,49 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
   // Get week days
   const weekStart = startOfWeek(currentDate, { locale });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // Get staff working hours for a specific day
+  const getStaffWorkingHours = (date: Date, staffId: string | undefined): { isWorking: boolean; start?: string; end?: string } | null => {
+    if (!staffId) return null; // If no specific staff selected, no restrictions
+    
+    const staffMember = staff.find(s => s.id === staffId);
+    if (!staffMember?.schedule?.workingHours) return null; // If no schedule info, no restrictions
+    
+    const dayName = format(date, 'EEEE').toLowerCase();
+    const daySchedule = staffMember.schedule.workingHours[dayName];
+    
+    if (!daySchedule?.isWorking) {
+      return { isWorking: false };
+    }
+    
+    return {
+      isWorking: true,
+      start: daySchedule.start || '09:00',
+      end: daySchedule.end || '18:00',
+    };
+  };
+
+  // Check if a specific time slot is within working hours
+  const isTimeSlotAvailable = (date: Date, time: string, staffId: string | undefined) => {
+    const workingHours = getStaffWorkingHours(date, staffId);
+    
+    // If no working hours info or no staff selected, slot is available
+    if (!workingHours) return true;
+    
+    // If staff doesn't work this day, slot is not available
+    if (!workingHours.isWorking) return false;
+    
+    // Check if time is within working hours
+    const [slotHour, slotMinute] = time.split(':').map(Number);
+    const [startHour, startMinute] = (workingHours.start || '09:00').split(':').map(Number);
+    const [endHour, endMinute] = (workingHours.end || '18:00').split(':').map(Number);
+    
+    const slotTotalMinutes = slotHour * 60 + slotMinute;
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    
+    return slotTotalMinutes >= startTotalMinutes && slotTotalMinutes < endTotalMinutes;
+  };
 
   // Group appointments by day and time
   const appointmentsByDayTime = useMemo(() => {
@@ -200,21 +245,26 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
 
                 {/* Time slots for this day */}
                 <Box sx={{ position: 'relative' }}>
-                  {timeSlots.map((time) => (
-                    <Box
-                      key={`${dayKey}-${time}`}
-                      onClick={() => onTimeSlotClick(day, time)}
-                      sx={{
-                        height: 60,
-                        borderBottom: `1px solid ${theme.palette.divider}`,
-                        cursor: 'pointer',
-                        position: 'relative',
-                        transition: 'background-color 0.2s',
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.05),
-                        },
-                      }}
-                    >
+                  {timeSlots.map((time) => {
+                    const isAvailable = isTimeSlotAvailable(day, time, selectedStaffId);
+                    
+                    return (
+                      <Box
+                        key={`${dayKey}-${time}`}
+                        onClick={() => isAvailable && onTimeSlotClick(day, time)}
+                        sx={{
+                          height: 60,
+                          borderBottom: `1px solid ${theme.palette.divider}`,
+                          cursor: isAvailable ? 'pointer' : 'not-allowed',
+                          position: 'relative',
+                          transition: 'background-color 0.2s',
+                          backgroundColor: isAvailable ? 'transparent' : alpha(theme.palette.action.disabled, 0.1),
+                          opacity: isAvailable ? 1 : 0.6,
+                          '&:hover': isAvailable ? {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                          } : {},
+                        }}
+                      >
                       {/* Appointments in this slot */}
                       {appointmentsByDayTime[dayKey]?.[time]?.map((appointment, index) => (
                         <motion.div
@@ -256,12 +306,13 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                             )}
                           </Box>
                           <Box sx={{ opacity: 0.9, fontSize: 11 }}>
-                            {appointment.services[0]?.serviceName}
+                            {appointment.services[0]?.name}
                           </Box>
                         </motion.div>
                       ))}
                     </Box>
-                  ))}
+                    );
+                  })}
                 </Box>
               </Box>
             );

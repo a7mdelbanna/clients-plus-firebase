@@ -533,6 +533,24 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({
                       const end = addMinutes(start, duration);
                       setEndTime(format(end, 'HH:mm'));
                     }}
+                    workingHours={(() => {
+                      const staffMember = staff.find(s => s.id === selectedStaff);
+                      if (staffMember?.schedule?.workingHours) {
+                        const dayName = format(selectedDate, 'EEEE').toLowerCase();
+                        const daySchedule = staffMember.schedule.workingHours[dayName];
+                        if (daySchedule?.isWorking) {
+                          return {
+                            start: daySchedule.start || '09:00',
+                            end: daySchedule.end || '18:00',
+                            breaks: daySchedule.breaks
+                          };
+                        }
+                        // Employee has a schedule but doesn't work this day
+                        return null;
+                      }
+                      // No schedule info available, use defaults
+                      return undefined;
+                    })()}
                   />
                 </>
               ) : (
