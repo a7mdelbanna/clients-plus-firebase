@@ -306,7 +306,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                             )}
                           </Box>
                           <Box sx={{ opacity: 0.9, fontSize: 11 }}>
-                            {appointment.services[0]?.name}
+                            {(appointment.services[0] as any)?.serviceName}
                           </Box>
                         </motion.div>
                       ))}

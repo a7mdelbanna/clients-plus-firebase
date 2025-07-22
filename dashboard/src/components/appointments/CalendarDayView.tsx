@@ -55,6 +55,47 @@ const CalendarDayView: React.FC<CalendarDayViewProps> = ({
     return staff;
   }, [staff, selectedStaffId]);
 
+  // Get staff working hours for current date
+  const getStaffWorkingHours = (staffId: string): { isWorking: boolean; start?: string; end?: string } | null => {
+    const staffMember = staff.find(s => s.id === staffId);
+    if (!staffMember?.schedule?.workingHours) return null;
+    
+    const dayName = format(currentDate, 'EEEE').toLowerCase();
+    const daySchedule = staffMember.schedule.workingHours[dayName];
+    
+    if (!daySchedule?.isWorking) {
+      return { isWorking: false };
+    }
+    
+    return {
+      isWorking: true,
+      start: daySchedule.start || '09:00',
+      end: daySchedule.end || '18:00',
+    };
+  };
+
+  // Check if a specific time slot is within working hours
+  const isTimeSlotAvailable = (time: string, staffId: string): boolean => {
+    const workingHours = getStaffWorkingHours(staffId);
+    
+    // If no working hours info, assume available
+    if (!workingHours) return true;
+    
+    // If staff doesn't work this day, slot is not available
+    if (!workingHours.isWorking) return false;
+    
+    // Check if time is within working hours
+    const [slotHour, slotMinute] = time.split(':').map(Number);
+    const [startHour, startMinute] = (workingHours.start || '09:00').split(':').map(Number);
+    const [endHour, endMinute] = (workingHours.end || '18:00').split(':').map(Number);
+    
+    const slotTotalMinutes = slotHour * 60 + slotMinute;
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    
+    return slotTotalMinutes >= startTotalMinutes && slotTotalMinutes < endTotalMinutes;
+  };
+
   // Group appointments by staff and time
   const appointmentsByStaffTime = useMemo(() => {
     const grouped: Record<string, Record<string, Appointment[]>> = {};
@@ -203,21 +244,25 @@ const CalendarDayView: React.FC<CalendarDayViewProps> = ({
               <Box sx={{ position: 'relative' }}>
                 {timeSlots.map((time) => {
                   const isHalfHour = time.endsWith(':30');
+                  const isAvailable = isTimeSlotAvailable(time, staffMember.id!);
+                  
                   return (
                     <Box
                       key={`${staffMember.id}-${time}`}
-                      onClick={() => onTimeSlotClick(currentDate, time)}
+                      onClick={() => isAvailable && onTimeSlotClick(currentDate, time)}
                       sx={{
                         height: 40,
                         borderBottom: isHalfHour 
                           ? `1px dashed ${alpha(theme.palette.divider, 0.5)}`
                           : `1px solid ${theme.palette.divider}`,
-                        cursor: 'pointer',
+                        cursor: isAvailable ? 'pointer' : 'not-allowed',
                         position: 'relative',
                         transition: 'background-color 0.2s',
-                        '&:hover': {
+                        backgroundColor: isAvailable ? 'transparent' : alpha(theme.palette.action.disabled, 0.1),
+                        opacity: isAvailable ? 1 : 0.6,
+                        '&:hover': isAvailable ? {
                           backgroundColor: alpha(theme.palette.primary.main, 0.05),
-                        },
+                        } : {},
                       }}
                     >
                       {/* Appointments in this slot */}
@@ -261,7 +306,7 @@ const CalendarDayView: React.FC<CalendarDayViewProps> = ({
                             )}
                           </Box>
                           <Box sx={{ opacity: 0.9, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {appointment.services[0]?.serviceName}
+                            {(appointment.services[0] as any)?.serviceName}
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.9 }}>
                             <AccessTime sx={{ fontSize: 10 }} />

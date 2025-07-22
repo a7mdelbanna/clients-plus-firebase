@@ -243,6 +243,7 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✓ **Implementation Details**:
      - Updated `TimeSlotPicker` component to accept employee working hours
      - Modified `CalendarWeekView` to check individual time slots against schedule
+     - Modified `CalendarDayView` with same working hours logic for daily view
      - Added `isTimeSlotAvailable` function for granular time checking
      - Maintains backward compatibility for employees without schedules
 
