@@ -42,6 +42,10 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';
 import SuperadminLogin from './pages/superadmin/SuperadminLogin';
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard';
+import BusinessListPage from './pages/superadmin/BusinessListPage';
+import BusinessDetailPage from './pages/superadmin/BusinessDetailPage';
+import PricingManagementPage from './pages/superadmin/PricingManagementPage';
+import AnnouncementsPage from './pages/superadmin/AnnouncementsPage';
 import SuperadminProtectedRoute from './components/superadmin/SuperadminProtectedRoute';
 import CreateSuperadminTemp from './components/superadmin/CreateSuperadminTemp';
 import PageTransition from './components/PageTransition';
@@ -146,6 +150,56 @@ function App() {
                     <Route path="dashboard" element={
                       <PageTransition>
                         <SuperadminDashboard />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/active" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/suspended" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/pending" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/:businessId" element={
+                      <PageTransition>
+                        <BusinessDetailPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/plans" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/overrides" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/addons" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/promotions" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="communications/announcements" element={
+                      <PageTransition>
+                        <AnnouncementsPage />
                       </PageTransition>
                     } />
                     <Route path="" element={<Navigate to="dashboard" replace />} />
