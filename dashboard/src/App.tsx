@@ -3,6 +3,7 @@ import { CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { BranchProvider } from './contexts/BranchContext';
+import { SuperadminAuthProvider } from './contexts/SuperadminAuthContext';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import ForgotPassword from './components/ForgotPassword';
@@ -38,6 +39,11 @@ import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
 import DashboardLayout from './layouts/DashboardLayout';
+import SuperadminLayout from './layouts/SuperadminLayout';
+import SuperadminLogin from './pages/superadmin/SuperadminLogin';
+import SuperadminDashboard from './pages/superadmin/SuperadminDashboard';
+import SuperadminProtectedRoute from './components/superadmin/SuperadminProtectedRoute';
+import CreateSuperadminTemp from './components/superadmin/CreateSuperadminTemp';
 import PageTransition from './components/PageTransition';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -47,9 +53,18 @@ import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config/firebase';
 import './utils/clientBranchFix'; // Import for global debugging functions
+import './utils/createSuperadminDev'; // Import for superadmin creation in dev
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
+
+// Make createSuperadminDev available globally in development
+if (import.meta.env.DEV) {
+  import('./utils/createSuperadminDev').then(module => {
+    (window as any).createSuperadminDev = module.createSuperadminDev;
+    console.log('✅ Superadmin creation tool loaded. Use createSuperadminDev() in console.');
+  });
+}
 
 // Check and migrate claims for existing users
 onAuthStateChanged(auth, async (user) => {
@@ -77,30 +92,64 @@ const cacheRtl = createCache({
 });
 
 function App() {
+  const urlHash = import.meta.env.VITE_SUPERADMIN_URL_HASH;
+  const superadminBasePath = `/sa-${urlHash}`;
+
   return (
     <CacheProvider value={cacheRtl}>
       <Router>
-        <AuthProvider>
-          <ThemeProvider>
-            <BranchProvider>
-              <CssBaseline />
-              <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/login" element={
-                <PageTransition>
-                  <Login />
-                </PageTransition>
-              } />
-              <Route path="/signup" element={
-                <PageTransition>
-                  <Signup />
-                </PageTransition>
-              } />
-              <Route path="/forgot-password" element={
-                <PageTransition>
-                  <ForgotPassword />
-                </PageTransition>
-              } />
+        <SuperadminAuthProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <BranchProvider>
+                <CssBaseline />
+                <Routes>
+                  {/* Regular Routes */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/login" element={
+                    <PageTransition>
+                      <Login />
+                    </PageTransition>
+                  } />
+                  <Route path="/signup" element={
+                    <PageTransition>
+                      <Signup />
+                    </PageTransition>
+                  } />
+                  <Route path="/forgot-password" element={
+                    <PageTransition>
+                      <ForgotPassword />
+                    </PageTransition>
+                  } />
+                  
+                  {/* TEMPORARY - Remove in production */}
+                  <Route path="/create-superadmin-temp" element={
+                    <PageTransition>
+                      <CreateSuperadminTemp />
+                    </PageTransition>
+                  } />
+                  
+                  {/* Superadmin Routes */}
+                  <Route path={`${superadminBasePath}/login`} element={
+                    <PageTransition>
+                      <SuperadminLogin />
+                    </PageTransition>
+                  } />
+                  <Route
+                    path={`${superadminBasePath}/*`}
+                    element={
+                      <SuperadminProtectedRoute>
+                        <SuperadminLayout />
+                      </SuperadminProtectedRoute>
+                    }
+                  >
+                    <Route path="dashboard" element={
+                      <PageTransition>
+                        <SuperadminDashboard />
+                      </PageTransition>
+                    } />
+                    <Route path="" element={<Navigate to="dashboard" replace />} />
+                  </Route>
               <Route
                 element={
                   <PrivateRoute>
@@ -286,25 +335,26 @@ function App() {
                   </PageTransition>
                 </PrivateRoute>
               } />
-            </Routes>
-            <ToastContainer
-              position="top-center"
-              autoClose={5000}
-              hideProgressBar={false}
-              newestOnTop
-              closeOnClick
-              rtl
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-              theme="colored"
-              style={{
-                fontFamily: 'Tajawal, sans-serif',
-              }}
-            />
-            </BranchProvider>
-          </ThemeProvider>
-        </AuthProvider>
+                </Routes>
+                <ToastContainer
+                  position="top-center"
+                  autoClose={5000}
+                  hideProgressBar={false}
+                  newestOnTop
+                  closeOnClick
+                  rtl
+                  pauseOnFocusLoss
+                  draggable
+                  pauseOnHover
+                  theme="colored"
+                  style={{
+                    fontFamily: 'Tajawal, sans-serif',
+                  }}
+                />
+              </BranchProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </SuperadminAuthProvider>
       </Router>
     </CacheProvider>
   );
