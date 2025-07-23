@@ -36,7 +36,7 @@ If you want to use WhatsApp Cloud API, we would need to:
 Your current settings show:
 - Provider: `whatsapp_cloud`
 - Access Token: `280b6b450ab13fe478ab24ed1b3820b5` 
-- Phone Number ID: `ACda907ec8652676a68a5454683f6a5b7d`
+- Phone Number ID: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
 But the Phone Number ID looks like a Twilio Account SID (starts with "AC").
 
@@ -44,7 +44,7 @@ But the Phone Number ID looks like a Twilio Account SID (starts with "AC").
 
 1. Switch to Twilio provider
 2. Use these test credentials:
-   - Account SID: `ACda907ec8652676a68a5454683f6a5b7d` (move from Phone Number ID)
+   - Account SID: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (move from Phone Number ID)
    - Auth Token: `280b6b450ab13fe478ab24ed1b3820b5` (move from Access Token)
    - WhatsApp Number: `+14155238886`
 
