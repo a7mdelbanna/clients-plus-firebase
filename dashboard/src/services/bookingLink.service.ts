@@ -70,10 +70,16 @@ export interface BookingLinkAnalytics {
   bookingsByDate: Record<string, number>;
 }
 
+export interface BookingLinkBranchSettings {
+  mode: 'single' | 'multi';
+  allowedBranches: string[]; // Branch IDs that can be used with this link
+  defaultBranch?: string; // Default branch for single mode
+}
+
 export interface BookingLink {
   id?: string;
   companyId: string;
-  branchId?: string;
+  branchId?: string; // Deprecated - kept for backward compatibility
   name: string;
   slug: string; // unique within company
   type: BookingLinkType;
@@ -82,6 +88,9 @@ export interface BookingLink {
   description?: string;
   isMain: boolean;
   isActive: boolean;
+  
+  // Branch Configuration
+  branchSettings?: BookingLinkBranchSettings;
   
   // Full URL for easy copying
   fullUrl?: string;
@@ -415,7 +424,16 @@ class BookingLinkService {
     
     return onSnapshot(q, (snapshot) => {
       const links: BookingLink[] = [];
+      const seenIds = new Set<string>();
+      
       snapshot.forEach((doc) => {
+        // Skip if we've already seen this ID
+        if (seenIds.has(doc.id)) {
+          console.warn(`Duplicate booking link ID found: ${doc.id}`);
+          return;
+        }
+        
+        seenIds.add(doc.id);
         links.push({
           id: doc.id,
           ...doc.data()
