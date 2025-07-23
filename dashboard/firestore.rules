@@ -69,18 +69,20 @@ service cloud.firestore {
         request.resource.data.active == true &&
         request.resource.data.id == companyId;
       
-      // Allow reading company if user belongs to it OR if they are the owner (for setup flow)
+      // Allow reading company if user belongs to it OR if they are the owner OR if they are superadmin
       allow read: if belongsToCompany(companyId) || 
-        (isAuthenticated() && resource.data.ownerId == request.auth.uid);
+        (isAuthenticated() && resource.data.ownerId == request.auth.uid) ||
+        isSuperadmin();
       
-      // Allow updating company if user is admin OR if they are the owner
+      // Allow updating company if user is admin OR if they are the owner OR if they are superadmin
       // Note: During setup, the user might not have companyId in claims yet
       allow update: if isCompanyAdmin(companyId) || 
         (isAuthenticated() && resource.data.ownerId == request.auth.uid) ||
-        (belongsToCompany(companyId) && request.auth.token.get('role', 'USER') == 'ADMIN');
+        (belongsToCompany(companyId) && request.auth.token.get('role', 'USER') == 'ADMIN') ||
+        isSuperadmin();
       
-      // Don't allow deletion
-      allow delete: if false;
+      // Don't allow deletion except by superadmin
+      allow delete: if isSuperadmin();
       
       // Company subcollections
       match /users/{userId} {
@@ -430,6 +432,98 @@ service cloud.firestore {
       
       // Only company admins can delete
       allow delete: if isAuthenticated() && isCompanyAdmin(configId);
+    }
+    
+    // Superadmin collections - HIGHLY RESTRICTED
+    // Helper function to check if user is a superadmin
+    function isSuperadmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/superadmins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/superadmins/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
+    // Superadmins collection - stores superadmin users
+    match /superadmins/{adminId} {
+      // Allow users to check if they are a superadmin (read their own document)
+      // OR allow existing superadmins to read any superadmin document
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == adminId || isSuperadmin());
+      // TEMPORARY: Allow creation for development (REMOVE IN PRODUCTION)
+      allow create: if isAuthenticated() && 
+        request.auth.uid == adminId &&
+        request.resource.data.role == 'superadmin';
+      // Superadmins cannot be deleted through client SDK
+      allow delete: if false;
+      // Only allow updating last login timestamp
+      allow update: if isAuthenticated() && 
+        request.auth.uid == adminId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']);
+    }
+    
+    // Pricing configurations
+    match /pricing_configs/{configId} {
+      // Anyone can read pricing configs (for landing page)
+      allow read: if true;
+      // Only superadmins can write
+      allow write: if isSuperadmin();
+    }
+    
+    // Pricing overrides
+    match /pricing_overrides/{overrideId} {
+      // Only superadmins can access
+      allow read, write: if isSuperadmin();
+    }
+    
+    // Add-on subscriptions
+    match /addon_subscriptions/{subscriptionId} {
+      // Companies can read their own add-on subscriptions
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      // Only superadmins can write
+      allow write: if isSuperadmin();
+    }
+    
+    // Billing transactions
+    match /billing_transactions/{transactionId} {
+      // Companies can read their own transactions
+      allow read: if isAuthenticated() && 
+        belongsToCompany(resource.data.companyId);
+      // Only superadmins can write
+      allow write: if isSuperadmin();
+    }
+    
+    // System announcements
+    match /system_announcements/{announcementId} {
+      // All authenticated users can read active announcements
+      allow read: if isAuthenticated() && 
+        resource.data.active == true;
+      // Only superadmins can write
+      allow write: if isSuperadmin();
+    }
+    
+    // Audit logs - superadmin actions
+    match /audit_logs/{logId} {
+      // Only superadmins can access
+      allow read: if isSuperadmin();
+      // Audit logs are write-once, no updates or deletes
+      allow create: if isSuperadmin();
+      allow update, delete: if false;
+    }
+    
+    // Feature flags
+    match /feature_flags/{flagId} {
+      // All authenticated users can read feature flags
+      allow read: if isAuthenticated();
+      // Only superadmins can write
+      allow write: if isSuperadmin();
+    }
+    
+    // Promotional campaigns
+    match /promotional_campaigns/{campaignId} {
+      // All users can read active campaigns
+      allow read: if resource.data.active == true;
+      // Only superadmins can write
+      allow write: if isSuperadmin();
     }
     
     // Deny all other access by default
