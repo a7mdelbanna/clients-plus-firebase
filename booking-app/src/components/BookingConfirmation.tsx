@@ -118,10 +118,17 @@ const BookingConfirmation: React.FC = () => {
         date: bookingData.date!,
         startTime: bookingData.time,
         duration: totalDuration,
+        totalDuration: totalDuration, // Add totalDuration for dashboard compatibility
         status: 'pending' as const,
         source: 'online' as const,
         notes: bookingData.comments,
         bookingLinkId: bookingData.linkData.id,
+        // Add notifications array to trigger WhatsApp confirmation
+        notifications: [{
+          type: 'confirmation' as const,
+          method: ['whatsapp'],
+          sent: false
+        }]
       };
 
       const id = await bookingService.createAppointment(appointmentData);
