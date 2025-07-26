@@ -181,8 +181,11 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   // Load initial data
   useEffect(() => {
     loadStaff();
-    if (appointment?.clientId) {
+    if (appointment?.clientId && appointment.clientId !== 'guest') {
       loadClientById(appointment.clientId);
+    } else if (appointment?.clientId === 'guest' && appointment?.clientPhone) {
+      // For guest appointments, try to find client by phone
+      handleClientSearch(appointment.clientPhone);
     }
   }, []);
 
@@ -223,6 +226,20 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
       }
     } catch (error) {
       console.error('Error loading client:', error);
+      // If client not found but we have client info in appointment, use that
+      if (appointment?.clientName && appointment?.clientPhone) {
+        // Try to find by phone
+        const normalizedPhone = appointment.clientPhone.replace(/[\s\-\(\)]/g, '').replace(/^\+20/, '');
+        const filter: ClientsFilter = {
+          searchTerm: normalizedPhone,
+          status: 'active'
+        };
+        const result = await clientService.getClients(companyId, filter, undefined, currentBranch?.id);
+        const clientsArray = result?.clients || [];
+        if (clientsArray.length > 0) {
+          setSelectedClient(clientsArray[0]);
+        }
+      }
     }
   };
 

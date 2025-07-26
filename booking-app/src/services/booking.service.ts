@@ -452,11 +452,15 @@ class BookingService {
   // Find or create client
   async findOrCreateClient(companyId: string, branchId: string, name: string, phone: string, email?: string): Promise<string> {
     try {
+      
+      // Normalize phone number - remove spaces, dashes, and country code if present
+      const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '').replace(/^\+20/, '');
+      
       // First try to find existing client by phone
       const clientQuery = query(
         collection(db, 'clients'),
         where('companyId', '==', companyId),
-        where('phone', '==', phone)
+        where('phone', '==', normalizedPhone)
       );
       
       const clientSnap = await getDocs(clientQuery);
@@ -477,11 +481,11 @@ class BookingService {
         firstName,
         lastName,
         name, // Full name for backward compatibility
-        phone,
+        phone: normalizedPhone,
         email: email || '',
         // Initialize contact arrays
         phones: [{
-          number: phone,
+          number: normalizedPhone,
           type: 'mobile' as const,
           isPrimary: true,
           canReceiveSMS: true
