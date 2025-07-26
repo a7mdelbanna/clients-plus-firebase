@@ -69,10 +69,9 @@ service cloud.firestore {
         request.resource.data.active == true &&
         request.resource.data.id == companyId;
       
-      // Allow reading company if user belongs to it OR if they are the owner OR if they are superadmin
-      allow read: if belongsToCompany(companyId) || 
-        (isAuthenticated() && resource.data.ownerId == request.auth.uid) ||
-        isSuperadmin();
+      // Allow public read for online booking (to get company info by slug)
+      // Also allow reading company if user belongs to it OR if they are the owner OR if they are superadmin
+      allow read: if true;
       
       // Allow updating company if user is admin OR if they are the owner OR if they are superadmin
       // Note: During setup, the user might not have companyId in claims yet
@@ -99,9 +98,9 @@ service cloud.firestore {
       }
       
       match /branches/{branchId} {
-        // Users in company can read branches
-        allow read: if belongsToCompany(companyId) || 
-          (isAuthenticated() && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid);
+        // Allow public read for online booking
+        // Also allow users in company to read branches
+        allow read: if true;
         
         // Allow creation during setup by owner, or management by admins
         allow create: if isAuthenticated() && 
@@ -219,9 +218,9 @@ service cloud.firestore {
     
     // Services collection
     match /services/{serviceId} {
-      // Allow read if user has a companyId (for queries) or if the document belongs to their company
-      allow read: if isAuthenticated() && 
-        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      // Allow public read for online booking
+      // Also allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if true;
       allow create: if isAuthenticated() && 
         belongsToCompany(request.resource.data.companyId) &&
         request.resource.data.companyId != null;
@@ -257,9 +256,9 @@ service cloud.firestore {
     
     // Staff collection
     match /staff/{staffId} {
-      // Allow read if user has a companyId (for queries) or if the document belongs to their company
-      allow read: if isAuthenticated() && 
-        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      // Allow public read for online booking
+      // Also allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if true;
       allow create: if isAuthenticated() && 
         belongsToCompany(request.resource.data.companyId) &&
         request.resource.data.companyId != null;
@@ -361,9 +360,9 @@ service cloud.firestore {
     
     // Booking Links collection
     match /bookingLinks/{linkId} {
-      // Allow read if user has a companyId (for queries) or if the document belongs to their company
-      allow read: if isAuthenticated() && 
-        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      // Allow public read for online booking
+      // Also allow read if user has a companyId (for queries) or if the document belongs to their company
+      allow read: if true;
       
       // Only authenticated users in the company can create booking links
       allow create: if isAuthenticated() && 
@@ -383,17 +382,28 @@ service cloud.firestore {
     
     // Appointments collection
     match /appointments/{appointmentId} {
-      // Allow read if user has a companyId (for queries) or if the document belongs to their company
-      allow read: if isAuthenticated() && 
-        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      // Allow public read for online booking availability checking
+      // Also allow authenticated users with companyId
+      allow read: if true;
       
-      // Only authenticated users in the company can create appointments
-      allow create: if isAuthenticated() && 
-        belongsToCompany(request.resource.data.companyId) &&
-        request.resource.data.companyId != null &&
-        request.resource.data.createdBy == request.auth.uid &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.updatedAt == request.time;
+      // Allow public create for online bookings with source = 'online'
+      // Also allow authenticated users in the company to create appointments
+      allow create: if (
+        // Public booking - no auth required
+        (!isAuthenticated() && 
+         request.resource.data.source == 'online' &&
+         request.resource.data.companyId != null &&
+         request.resource.data.createdAt == request.time &&
+         request.resource.data.updatedAt == request.time)
+        ||
+        // Authenticated users in the company
+        (isAuthenticated() && 
+         belongsToCompany(request.resource.data.companyId) &&
+         request.resource.data.companyId != null &&
+         request.resource.data.createdBy == request.auth.uid &&
+         request.resource.data.createdAt == request.time &&
+         request.resource.data.updatedAt == request.time)
+      );
       
       // Users in the company can update appointments
       allow update: if isAuthenticated() && 

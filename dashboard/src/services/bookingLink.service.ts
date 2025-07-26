@@ -15,6 +15,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import type { Unsubscribe } from 'firebase/firestore';
+import { getBookingAppUrl } from '../config/urls';
 
 // Booking Link Types
 export type BookingLinkType = 'company' | 'general' | 'employee';
@@ -144,7 +145,7 @@ class BookingLinkService {
         ...linkData,
         companyId,
         slug: uniqueSlug,
-        fullUrl: `${window.location.origin}/book/${companySlug}/${uniqueSlug}`,
+        fullUrl: `${getBookingAppUrl()}/book/${companySlug}/${uniqueSlug}`,
         analytics,
         createdAt: serverTimestamp() as Timestamp,
         updatedAt: serverTimestamp() as Timestamp,

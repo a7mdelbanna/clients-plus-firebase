@@ -36,6 +36,7 @@ import { staffService } from '../../services/staff.service';
 import type { Staff } from '../../services/staff.service';
 import { db } from '../../config/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getBookingAppUrl } from '../../config/urls';
 
 interface BookingLinkFormProps {
   open: boolean;
@@ -214,7 +215,7 @@ const BookingLinkForm: React.FC<BookingLinkFormProps> = ({
       const companyData = companyDoc.data();
       
       if (companyData && companyData.slug) {
-        setGeneratedUrl(`https://bookings.clientsplus.com/c/${companyData.slug}/${watchedSlug}`);
+        setGeneratedUrl(`${getBookingAppUrl()}/book/${companyData.slug}/${watchedSlug}`);
       }
     } catch (error) {
       console.error('Error generating URL preview:', error);

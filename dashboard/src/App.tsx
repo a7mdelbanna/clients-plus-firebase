@@ -49,6 +49,7 @@ import AnnouncementsPage from './pages/superadmin/AnnouncementsPage';
 import SuperadminProtectedRoute from './components/superadmin/SuperadminProtectedRoute';
 import CreateSuperadminTemp from './components/superadmin/CreateSuperadminTemp';
 import PageTransition from './components/PageTransition';
+import PublicBookingWrapper from './pages/public/PublicBookingWrapper';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
@@ -58,15 +59,21 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config/firebase';
 import './utils/clientBranchFix'; // Import for global debugging functions
 import './utils/createSuperadminDev'; // Import for superadmin creation in dev
+import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
 
-// Make createSuperadminDev available globally in development
+// Make utility functions available globally in development
 if (import.meta.env.DEV) {
   import('./utils/createSuperadminDev').then(module => {
     (window as any).createSuperadminDev = module.createSuperadminDev;
     console.log('✅ Superadmin creation tool loaded. Use createSuperadminDev() in console.');
+  });
+  
+  import('./utils/fixBookingLinkUrls').then(module => {
+    (window as any).fixBookingLinkUrls = module.fixBookingLinkUrls;
+    console.log('✅ Booking link URL fix tool loaded. Use fixBookingLinkUrls() in console.');
   });
 }
 
@@ -108,6 +115,13 @@ function App() {
               <BranchProvider>
                 <CssBaseline />
                 <Routes>
+                  {/* Public Booking Routes - No Auth Required */}
+                  <Route path="/book/:companySlug/:linkSlug" element={
+                    <PageTransition>
+                      <PublicBookingWrapper />
+                    </PageTransition>
+                  } />
+                  
                   {/* Regular Routes */}
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/login" element={

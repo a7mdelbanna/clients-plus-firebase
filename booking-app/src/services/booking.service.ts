@@ -198,11 +198,6 @@ class BookingService {
     try {
       console.log('Getting time slots:', { companyId, branchId, staffId, date, serviceDuration });
       
-      // Temporary: Always return default slots to ensure booking works
-      const generatedSlots = this.generateTimeSlots('09:00', '21:00', serviceDuration, staffId);
-      console.log('Generated', generatedSlots.length, 'time slots');
-      return generatedSlots;
-      
       // Handle "any" staff selection
       if (!staffId || staffId === 'any' || staffId === '') {
         console.log('Any staff selected - returning default slots');
@@ -327,17 +322,29 @@ class BookingService {
         collection(db, 'appointments'),
         where('staffId', '==', staffId),
         where('date', '>=', Timestamp.fromDate(startOfDay)),
-        where('date', '<=', Timestamp.fromDate(endOfDay)),
-        where('status', 'in', ['pending', 'confirmed', 'arrived', 'in_progress'])
+        where('date', '<=', Timestamp.fromDate(endOfDay))
       );
       
       const appointmentsSnap = await getDocs(appointmentsQuery);
-      const appointments = appointmentsSnap.docs.map(doc => doc.data() as Appointment);
+      const appointments = appointmentsSnap.docs
+        .map(doc => doc.data() as Appointment)
+        .filter(apt => ['pending', 'confirmed', 'arrived', 'in_progress'].includes(apt.status));
       
       // Generate slots
       let currentTime = startTime;
       console.log('Generating slots from', startTime, 'to', endTime, 'duration:', serviceDuration);
       console.log('Appointments for the day:', appointments.length);
+      
+      // Log appointment details for debugging
+      appointments.forEach(apt => {
+        console.log('Appointment:', {
+          startTime: apt.startTime,
+          endTime: apt.endTime,
+          duration: apt.duration,
+          totalDuration: apt.totalDuration,
+          status: apt.status
+        });
+      });
       
       while (currentTime + serviceDuration <= endTime) {
         const timeString = this.formatTime(currentTime);
@@ -345,12 +352,20 @@ class BookingService {
         // Check if slot is available
         const isAvailable = !appointments.some(apt => {
           const aptStart = this.parseTime(apt.startTime);
-          const aptEnd = aptStart + apt.duration;
+          // Use totalDuration if duration is not available
+          const aptDuration = apt.duration || apt.totalDuration || 60; // Default to 60 minutes
+          const aptEnd = aptStart + aptDuration;
           const slotEnd = currentTime + serviceDuration;
           
-          return (currentTime >= aptStart && currentTime < aptEnd) ||
-                 (slotEnd > aptStart && slotEnd <= aptEnd) ||
-                 (currentTime <= aptStart && slotEnd >= aptEnd);
+          const overlaps = (currentTime >= aptStart && currentTime < aptEnd) ||
+                          (slotEnd > aptStart && slotEnd <= aptEnd) ||
+                          (currentTime <= aptStart && slotEnd >= aptEnd);
+          
+          if (overlaps) {
+            console.log(`Slot ${timeString} overlaps with appointment ${apt.startTime}-${apt.endTime}`);
+          }
+          
+          return overlaps;
         });
         
         slots.push({
