@@ -255,6 +255,15 @@ class AppointmentService {
     branchId?: string
   ): Promise<Appointment[]> {
     try {
+      console.log('=== APPOINTMENT SERVICE GET APPOINTMENTS ===');
+      console.log('Query parameters:', {
+        companyId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        staffId,
+        branchId
+      });
+      
       // Build constraints - all where clauses must come before orderBy
       const constraints: QueryConstraint[] = [
         where('companyId', '==', companyId),
@@ -284,6 +293,18 @@ class AppointmentService {
         id: doc.id,
         ...doc.data()
       } as Appointment));
+
+      console.log('Query returned', appointments.length, 'appointments');
+      appointments.forEach(apt => {
+        console.log('Appointment from DB:', {
+          id: apt.id,
+          date: apt.date?.toDate ? apt.date.toDate() : apt.date,
+          companyId: apt.companyId,
+          branchId: apt.branchId,
+          clientName: apt.clientName,
+          source: apt.source
+        });
+      });
 
       // Sort by startTime in JavaScript while index is building
       appointments.sort((a, b) => {
