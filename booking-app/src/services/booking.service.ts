@@ -449,15 +449,95 @@ class BookingService {
     return slots;
   }
 
+  // Find or create client
+  async findOrCreateClient(companyId: string, branchId: string, name: string, phone: string, email?: string): Promise<string> {
+    try {
+      // First try to find existing client by phone
+      const clientQuery = query(
+        collection(db, 'clients'),
+        where('companyId', '==', companyId),
+        where('phone', '==', phone)
+      );
+      
+      const clientSnap = await getDocs(clientQuery);
+      
+      if (!clientSnap.empty) {
+        // Client exists, return their ID
+        return clientSnap.docs[0].id;
+      }
+      
+      // Create new client
+      const nameParts = name.trim().split(' ');
+      const firstName = nameParts[0] || name;
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      const newClient = {
+        companyId,
+        branchId,
+        firstName,
+        lastName,
+        name, // Full name for backward compatibility
+        phone,
+        email: email || '',
+        // Initialize contact arrays
+        phones: [{
+          number: phone,
+          type: 'mobile' as const,
+          isPrimary: true,
+          canReceiveSMS: true
+        }],
+        emails: email ? [{
+          address: email,
+          type: 'personal' as const,
+          isPrimary: true,
+          canReceiveEmails: true
+        }] : [],
+        // Default values
+        status: 'active',
+        source: 'online_booking',
+        marketing: {
+          acceptsSMS: true,
+          acceptsEmail: true,
+          acceptsPromotions: true
+        },
+        // Statistics
+        totalRevenue: 0,
+        projectsCount: 0,
+        totalVisits: 0,
+        completedVisits: 0,
+        cancelledVisits: 0,
+        noShows: 0,
+        noShowRate: 0,
+        currentBalance: 0,
+        loyaltyPoints: 0,
+        // Timestamps
+        createdAt: serverTimestamp() as Timestamp,
+        updatedAt: serverTimestamp() as Timestamp,
+        createdBy: 'online-booking'
+      };
+      
+      const docRef = await addDoc(collection(db, 'clients'), newClient);
+      return docRef.id;
+      
+    } catch (error) {
+      console.error('Error finding/creating client:', error);
+      // If client creation fails, return 'guest' to allow appointment to proceed
+      return 'guest';
+    }
+  }
+
   // Create appointment
   async createAppointment(appointmentData: Partial<Appointment>): Promise<string> {
     try {
+      // Ensure totalDuration is included
       const appointment: Partial<Appointment> = {
         ...appointmentData,
         status: 'pending',
         source: 'online',
         createdAt: serverTimestamp() as Timestamp,
         updatedAt: serverTimestamp() as Timestamp,
+        // Ensure totalDuration is not lost
+        totalDuration: appointmentData.totalDuration || appointmentData.duration || 30,
       };
       
       const docRef = await addDoc(collection(db, 'appointments'), appointment);

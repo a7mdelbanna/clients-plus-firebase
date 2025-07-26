@@ -188,6 +188,16 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
 
   const { totalDuration, totalPrice } = calculateTotals();
 
+  // Format duration from minutes to hours:minutes
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${hours}:00`;
+    }
+    return `${mins} ${isRTL ? 'دقيقة' : 'min'}`;
+  };
+
   return (
     <Box>
       {/* Search Bar */}
@@ -387,7 +397,7 @@ const ServiceSelection: React.FC<ServiceSelectionProps> = ({
                 {isRTL ? 'إجمالي المدة:' : 'Total duration:'}
               </Typography>
               <Typography variant="body2">
-                {totalDuration} {isRTL ? 'دقيقة' : 'minutes'}
+                {formatDuration(totalDuration)}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

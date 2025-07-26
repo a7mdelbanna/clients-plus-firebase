@@ -88,9 +88,10 @@ service cloud.firestore {
     
     // Clients collection
     match /clients/{clientId} {
-      allow read: if isSuperAdmin() || hasCompanyId();
+      allow read: if isSuperAdmin() || hasCompanyId() || true; // Allow public read for client lookup during booking
       allow create: if isSuperAdmin() || 
-        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId) ||
+        (request.resource.data.source == 'online_booking'); // Allow public creation through online booking
       allow update: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
       allow delete: if isSuperAdmin() || 

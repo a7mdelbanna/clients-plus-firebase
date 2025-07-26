@@ -25,6 +25,16 @@ interface AppointmentCardProps {
 const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, compact = false }) => {
   const theme = useTheme();
 
+  // Format duration from minutes to hours:minutes
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${hours}:00`;
+    }
+    return `${mins} min`;
+  };
+
   // Get status color and icon
   const getStatusConfig = (status: AppointmentStatus) => {
     switch (status) {
@@ -142,11 +152,11 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, compact 
       {/* Duration and price */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
         <Typography variant="caption">
-          {appointment.totalDuration} min
+          {formatDuration(appointment.totalDuration)}
         </Typography>
         {appointment.totalPrice > 0 && (
           <Typography variant="caption" sx={{ fontWeight: 600 }}>
-            ${appointment.totalPrice}
+            {appointment.totalPrice} EGP
           </Typography>
         )}
       </Box>

@@ -39,11 +39,14 @@ const BookingConfirmation: React.FC = () => {
   const [branch, setBranch] = useState<Branch | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const dateLocale = language === 'ar' ? ar : enUS;
 
   useEffect(() => {
-    createAppointment();
+    if (!isCreating) {
+      createAppointment();
+    }
   }, []);
 
   const loadBookingDetails = async () => {
@@ -96,7 +99,27 @@ const BookingConfirmation: React.FC = () => {
       return;
     }
 
+    // Prevent duplicate creation
+    if (isCreating || appointmentId) {
+      return;
+    }
+
+    setIsCreating(true);
+
     try {
+      // Load services first
+      let selectedServices: Service[] = [];
+      if (bookingData.serviceIds && bookingData.serviceIds.length > 0) {
+        const allServices = await bookingService.getServicesForBooking(
+          bookingData.linkData.companyId,
+          bookingData.branchId!
+        );
+        selectedServices = allServices.filter(s => 
+          bookingData.serviceIds?.includes(s.id)
+        );
+        setServices(selectedServices);
+      }
+
       await loadBookingDetails();
 
       // Calculate total duration and price
@@ -104,9 +127,9 @@ const BookingConfirmation: React.FC = () => {
       let totalPrice = 0;
       const appointmentServices = [];
       
-      if (services.length > 0) {
+      if (selectedServices.length > 0) {
         totalDuration = 0;
-        for (const service of services) {
+        for (const service of selectedServices) {
           const duration = (service.duration.hours || 0) * 60 + (service.duration.minutes || 0);
           totalDuration += duration;
           totalPrice += service.startingPrice || 0;
@@ -120,6 +143,7 @@ const BookingConfirmation: React.FC = () => {
           });
         }
       }
+      
 
       // Calculate end time
       const [hours, minutes] = bookingData.time!.split(':').map(Number);
@@ -132,10 +156,19 @@ const BookingConfirmation: React.FC = () => {
       // Create appointment with proper date format
       const appointmentDate = Timestamp.fromDate(bookingData.date!);
       
+      // Find or create client
+      const clientId = await bookingService.findOrCreateClient(
+        bookingData.linkData.companyId,
+        bookingData.branchId!,
+        bookingData.customerName!,
+        bookingData.customerPhone!,
+        bookingData.customerEmail
+      );
+      
       const appointmentData = {
         companyId: bookingData.linkData.companyId,
         branchId: bookingData.branchId!,
-        clientId: 'guest', // Guest appointment
+        clientId: clientId,
         clientPhone: bookingData.customerPhone!,
         clientName: bookingData.customerName!,
         clientEmail: bookingData.customerEmail || '',
@@ -153,7 +186,7 @@ const BookingConfirmation: React.FC = () => {
         source: 'online' as const,
         notes: bookingData.comments || '',
         bookingLinkId: bookingData.linkData.id,
-        isNewClient: true,
+        isNewClient: clientId !== 'guest', // Mark as new client if we created one
         createdBy: 'online-booking', // Add createdBy field
         categoryId: '', // No category for online bookings
         resources: [], // No resources
@@ -164,15 +197,18 @@ const BookingConfirmation: React.FC = () => {
           sent: false
         }]
       };
+      
 
       const id = await bookingService.createAppointment(appointmentData);
       setAppointmentId(id);
       setSuccess(true);
       setLoading(false);
+      setIsCreating(false);
     } catch (err) {
       console.error('Error creating appointment:', err);
       setError('Failed to create booking. Please try again.');
       setLoading(false);
+      setIsCreating(false);
     }
   };
 
