@@ -131,14 +131,6 @@ const AppointmentsPage: React.FC = () => {
         endDate = endOfWeek(monthEnd, { locale });
       }
 
-      console.log('=== LOADING APPOINTMENTS IN DASHBOARD ===');
-      console.log('Query parameters:', {
-        companyId,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        staffId: selectedStaff !== 'all' ? selectedStaff : 'all',
-        branchId: currentBranch?.id
-      });
 
       const appointmentsList = await appointmentService.getAppointments(
         companyId,
@@ -148,62 +140,8 @@ const AppointmentsPage: React.FC = () => {
         currentBranch?.id
       );
 
-      console.log('Appointments loaded:', appointmentsList.length);
-      appointmentsList.forEach(apt => {
-        console.log('Appointment:', {
-          id: apt.id,
-          date: apt.date?.toDate ? apt.date.toDate() : apt.date,
-          clientName: apt.clientName,
-          source: apt.source,
-          branchId: apt.branchId
-        });
-      });
 
       setAppointments(appointmentsList);
-      
-      // DEBUG: Load ALL appointments for this company to check if online bookings exist
-      console.log('DEBUG: Checking for online appointments without branch filter...');
-      try {
-        const allAppointmentsQuery = query(
-          collection(db, 'appointments'),
-          where('companyId', '==', companyId),
-          where('source', '==', 'online')
-        );
-        const snapshot = await getDocs(allAppointmentsQuery);
-        console.log('Found', snapshot.size, 'online appointments for this company');
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          console.log('Online appointment:', {
-            id: doc.id,
-            date: data.date?.toDate ? data.date.toDate() : data.date,
-            branchId: data.branchId,
-            clientName: data.clientName,
-            startTime: data.startTime
-          });
-        });
-        
-        // Also check appointments in the date range without branch filter
-        const dateRangeQuery = query(
-          collection(db, 'appointments'),
-          where('companyId', '==', companyId),
-          where('date', '>=', Timestamp.fromDate(startDate)),
-          where('date', '<=', Timestamp.fromDate(endDate))
-        );
-        const dateRangeSnapshot = await getDocs(dateRangeQuery);
-        console.log('Found', dateRangeSnapshot.size, 'appointments in date range without branch filter');
-        dateRangeSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          console.log('Appointment in range:', {
-            id: doc.id,
-            date: data.date?.toDate ? data.date.toDate() : data.date,
-            branchId: data.branchId,
-            source: data.source,
-            clientName: data.clientName
-          });
-        });
-      } catch (debugError) {
-        console.error('Debug query error:', debugError);
-      }
     } catch (error) {
       console.error('Error loading appointments:', error);
     } finally {

@@ -533,10 +533,6 @@ class BookingService {
   // Create appointment
   async createAppointment(appointmentData: Partial<Appointment>): Promise<string> {
     try {
-      console.log('=== BOOKING SERVICE CREATE APPOINTMENT ===');
-      console.log('Received appointment data:', appointmentData);
-      console.log('Date type:', appointmentData.date?.constructor.name);
-      console.log('Date value:', appointmentData.date);
       
       // Ensure totalDuration is included
       const appointment: Partial<Appointment> = {
@@ -549,11 +545,7 @@ class BookingService {
         totalDuration: appointmentData.totalDuration || appointmentData.duration || 30,
       };
       
-      console.log('Final appointment to save:', appointment);
-      console.log('Saving to Firestore...');
-      
       const docRef = await addDoc(collection(db, 'appointments'), appointment);
-      console.log('Appointment saved with ID:', docRef.id);
       
       // Track booking in link analytics
       if (appointmentData.bookingLinkId) {

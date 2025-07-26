@@ -165,18 +165,6 @@ const BookingConfirmation: React.FC = () => {
         bookingData.customerEmail
       );
       
-      // Debug logging
-      console.log('=== ONLINE BOOKING APPOINTMENT CREATION ===');
-      console.log('Booking Data:', {
-        date: bookingData.date,
-        dateString: bookingData.date?.toISOString(),
-        time: bookingData.time,
-        companyId: bookingData.linkData.companyId,
-        branchId: bookingData.branchId,
-        staffId: bookingData.staffId,
-        services: bookingData.serviceIds
-      });
-      console.log('Appointment Date Timestamp:', appointmentDate.toDate());
       
       const appointmentData = {
         companyId: bookingData.linkData.companyId,
@@ -214,11 +202,8 @@ const BookingConfirmation: React.FC = () => {
         }]
       };
       
-      console.log('Final appointment data:', appointmentData);
-      
 
       const id = await bookingService.createAppointment(appointmentData);
-      console.log('Appointment created successfully with ID:', id);
       setAppointmentId(id);
       setSuccess(true);
       setLoading(false);
