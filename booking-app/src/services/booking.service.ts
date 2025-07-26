@@ -318,6 +318,22 @@ class BookingService {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
       
+      // First, try a simple query to test permissions
+      console.log('Testing simple appointments query...');
+      try {
+        const testQuery = query(
+          collection(db, 'appointments'),
+          limit(1)
+        );
+        const testSnap = await getDocs(testQuery);
+        console.log('Simple query successful, found', testSnap.size, 'documents');
+      } catch (testError) {
+        console.error('Simple query failed:', testError);
+        throw testError;
+      }
+      
+      // Now try the actual query
+      console.log('Running full appointments query for staff:', staffId);
       const appointmentsQuery = query(
         collection(db, 'appointments'),
         where('staffId', '==', staffId),

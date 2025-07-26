@@ -383,7 +383,7 @@ service cloud.firestore {
     // Appointments collection
     match /appointments/{appointmentId} {
       // Allow public read for online booking availability checking
-      // Also allow authenticated users with companyId
+      // This enables the booking app to check time slot availability
       allow read: if true;
       
       // Allow public create for online bookings with source = 'online'
