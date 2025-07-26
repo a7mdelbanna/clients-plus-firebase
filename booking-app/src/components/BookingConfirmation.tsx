@@ -11,6 +11,7 @@ import {
   Alert,
   Chip,
 } from '@mui/material';
+import { Timestamp } from 'firebase/firestore';
 import {
   CheckCircle,
   CalendarToday,
@@ -98,31 +99,64 @@ const BookingConfirmation: React.FC = () => {
     try {
       await loadBookingDetails();
 
-      // Calculate total duration
+      // Calculate total duration and price
       let totalDuration = 30; // Default
+      let totalPrice = 0;
+      const appointmentServices = [];
+      
       if (services.length > 0) {
-        totalDuration = services.reduce((sum, service) => {
-          return sum + (service.duration.hours || 0) * 60 + (service.duration.minutes || 0);
-        }, 0);
+        totalDuration = 0;
+        for (const service of services) {
+          const duration = (service.duration.hours || 0) * 60 + (service.duration.minutes || 0);
+          totalDuration += duration;
+          totalPrice += service.startingPrice || 0;
+          
+          // Create service object in dashboard format
+          appointmentServices.push({
+            serviceId: service.id,
+            serviceName: service.name,
+            duration: duration,
+            price: service.startingPrice || 0
+          });
+        }
       }
 
-      // Create appointment
+      // Calculate end time
+      const [hours, minutes] = bookingData.time!.split(':').map(Number);
+      const startMinutes = hours * 60 + minutes;
+      const endMinutes = startMinutes + totalDuration;
+      const endHours = Math.floor(endMinutes / 60);
+      const endMins = endMinutes % 60;
+      const endTime = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
+
+      // Create appointment with proper date format
+      const appointmentDate = Timestamp.fromDate(bookingData.date!);
+      
       const appointmentData = {
         companyId: bookingData.linkData.companyId,
         branchId: bookingData.branchId!,
+        clientId: 'guest', // Guest appointment
         clientPhone: bookingData.customerPhone!,
         clientName: bookingData.customerName!,
-        clientEmail: bookingData.customerEmail,
+        clientEmail: bookingData.customerEmail || '',
         staffId: bookingData.staffId === 'any' ? '' : bookingData.staffId!,
-        services: bookingData.serviceIds || [],
-        date: bookingData.date!,
+        staffName: staff?.name || 'Any Available',
+        services: appointmentServices,
+        date: appointmentDate,
+        time: bookingData.time,
         startTime: bookingData.time,
+        endTime: endTime,
         duration: totalDuration,
-        totalDuration: totalDuration, // Add totalDuration for dashboard compatibility
+        totalDuration: totalDuration,
+        totalPrice: totalPrice,
         status: 'pending' as const,
         source: 'online' as const,
-        notes: bookingData.comments,
+        notes: bookingData.comments || '',
         bookingLinkId: bookingData.linkData.id,
+        isNewClient: true,
+        createdBy: 'online-booking', // Add createdBy field
+        categoryId: '', // No category for online bookings
+        resources: [], // No resources
         // Add notifications array to trigger WhatsApp confirmation
         notifications: [{
           type: 'confirmation' as const,
