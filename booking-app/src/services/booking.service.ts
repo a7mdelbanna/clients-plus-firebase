@@ -282,7 +282,7 @@ class BookingService {
           startTimeStr = branchHours.openTime || '09:00';
           endTimeStr = branchHours.closeTime || '21:00';
         }
-      } else if (!staffHours || !staffHours.enabled) {
+      } else if (!staffHours || (!staffHours.enabled && !staffHours.isWorking)) {
         console.log('Staff does not work on', dayOfWeek, '- using branch hours as fallback');
         // Use branch hours as fallback
         if (branchHours && branchHours.isOpen) {
@@ -294,11 +294,12 @@ class BookingService {
         }
       } else {
         // Staff works this day - use their hours
-        if (staffHours.startTime) {
-          startTimeStr = staffHours.startTime;
+        // Check both possible field names: startTime/endTime and start/end
+        if (staffHours.startTime || staffHours.start) {
+          startTimeStr = staffHours.startTime || staffHours.start;
         }
-        if (staffHours.endTime) {
-          endTimeStr = staffHours.endTime;
+        if (staffHours.endTime || staffHours.end) {
+          endTimeStr = staffHours.endTime || staffHours.end;
         }
         console.log('Using staff hours:', startTimeStr, 'to', endTimeStr);
       }
@@ -318,22 +319,8 @@ class BookingService {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
       
-      // First, try a simple query to test permissions
-      console.log('Testing simple appointments query...');
-      try {
-        const testQuery = query(
-          collection(db, 'appointments'),
-          limit(1)
-        );
-        const testSnap = await getDocs(testQuery);
-        console.log('Simple query successful, found', testSnap.size, 'documents');
-      } catch (testError) {
-        console.error('Simple query failed:', testError);
-        throw testError;
-      }
-      
-      // Now try the actual query
-      console.log('Running full appointments query for staff:', staffId);
+      // Get appointments for the day
+      console.log('Fetching appointments for staff:', staffId, 'on date:', date);
       const appointmentsQuery = query(
         collection(db, 'appointments'),
         where('staffId', '==', staffId),

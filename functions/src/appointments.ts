@@ -7,10 +7,6 @@ const db = admin.firestore();
 export const onAppointmentCreated = functionsV1.firestore
   .document('appointments/{appointmentId}')
   .onCreate(async (snap: any, context: any) => {
-    // Temporarily disabled to debug booking app issue
-    return;
-    
-    /*
     const appointment = snap.data();
     const appointmentId = context.params.appointmentId;
     
@@ -171,5 +167,4 @@ export const onAppointmentCreated = functionsV1.firestore
     } catch (error) {
       console.error('Error sending WhatsApp notification for appointment:', appointmentId, error);
     }
-    */
   });
