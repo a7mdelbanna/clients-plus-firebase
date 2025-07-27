@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import type { BookingLink } from './bookingLink.service';
+import { clientService } from './client.service';
 
 export interface Branch {
   id: string;
@@ -262,8 +263,53 @@ class BookingService {
   // Create appointment
   async createAppointment(appointmentData: Partial<Appointment>): Promise<string> {
     try {
+      let clientId = appointmentData.clientId;
+      
+      // If no clientId provided, check if client exists or create new one
+      if (!clientId && appointmentData.clientPhone && appointmentData.companyId) {
+        // Check if client exists by phone number
+        const existingClients = await clientService.searchClients(
+          appointmentData.companyId,
+          appointmentData.clientPhone
+        );
+        
+        if (existingClients.length > 0) {
+          // Use existing client
+          clientId = existingClients[0].id!;
+        } else {
+          // Create new client
+          const newClientData = {
+            companyId: appointmentData.companyId,
+            branchId: appointmentData.branchId,
+            name: appointmentData.clientName || 'عميل جديد',
+            phone: appointmentData.clientPhone,
+            email: appointmentData.clientEmail,
+            source: 'online_booking',
+            active: true,
+            createdAt: serverTimestamp() as Timestamp,
+            updatedAt: serverTimestamp() as Timestamp,
+          };
+          
+          // Remove undefined fields
+          Object.keys(newClientData).forEach(key => {
+            if (newClientData[key as keyof typeof newClientData] === undefined) {
+              delete newClientData[key as keyof typeof newClientData];
+            }
+          });
+          
+          clientId = await clientService.createClient(
+            newClientData as any,
+            'online-booking-system',
+            appointmentData.branchId
+          );
+          
+          console.log('Created new client from online booking:', clientId);
+        }
+      }
+      
       const appointment: Partial<Appointment> = {
         ...appointmentData,
+        clientId: clientId || appointmentData.clientId || '',
         status: 'pending',
         source: 'online',
         createdAt: serverTimestamp() as Timestamp,

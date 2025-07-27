@@ -46,6 +46,8 @@ if (process.env.NODE_ENV === 'development') {
   import('./debug/checkAppointmentQueries');
   import('./debug/fixBranchData');
   import('./debug/debugBranchIssue');
+  import('./debug/checkStaffAssignments');
+  import('./debug/checkAppointmentData');
 }
 import DashboardLayout from './layouts/DashboardLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';
@@ -70,6 +72,8 @@ import './utils/clientBranchFix'; // Import for global debugging functions
 import './utils/createSuperadminDev'; // Import for superadmin creation in dev
 import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
 import './utils/debugBookingLinks'; // Import for debugging booking links
+import './utils/syncStaffBranches'; // Import for syncing staff-branch assignments
+import './utils/fixMissingClients'; // Import for fixing missing clients from online booking
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();

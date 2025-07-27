@@ -455,4 +455,74 @@ export const staffService = {
       updatedAt: serverTimestamp(),
     });
   },
+
+  // Sync staff branch assignments to branch documents
+  async syncStaffBranchAssignments(
+    companyId: string,
+    staffId: string,
+    newBranchIds: string[]
+  ): Promise<void> {
+    try {
+      // Get current staff data to find old branches
+      const staffDoc = await getDoc(doc(db, 'staff', staffId));
+      if (!staffDoc.exists()) return;
+      
+      const staffData = staffDoc.data();
+      const oldBranchIds = staffData.branchIds || (staffData.branchId ? [staffData.branchId] : []);
+      
+      // Find branches to remove staff from
+      const branchesToRemove = oldBranchIds.filter((id: string) => !newBranchIds.includes(id));
+      
+      // Find branches to add staff to
+      const branchesToAdd = newBranchIds.filter(id => !oldBranchIds.includes(id));
+      
+      // Update branch documents
+      const updatePromises: Promise<void>[] = [];
+      
+      // Remove staff from old branches
+      for (const branchId of branchesToRemove) {
+        const branchRef = doc(db, 'companies', companyId, 'branches', branchId);
+        const branchDoc = await getDoc(branchRef);
+        
+        if (branchDoc.exists()) {
+          const currentStaff = branchDoc.data().staff || [];
+          const newStaff = currentStaff.filter((id: string) => id !== staffId);
+          
+          updatePromises.push(
+            updateDoc(branchRef, {
+              staff: newStaff,
+              updatedAt: serverTimestamp(),
+            })
+          );
+        }
+      }
+      
+      // Add staff to new branches
+      for (const branchId of branchesToAdd) {
+        const branchRef = doc(db, 'companies', companyId, 'branches', branchId);
+        const branchDoc = await getDoc(branchRef);
+        
+        if (branchDoc.exists()) {
+          const currentStaff = branchDoc.data().staff || [];
+          if (!currentStaff.includes(staffId)) {
+            currentStaff.push(staffId);
+          }
+          
+          updatePromises.push(
+            updateDoc(branchRef, {
+              staff: currentStaff,
+              updatedAt: serverTimestamp(),
+            })
+          );
+        }
+      }
+      
+      // Execute all updates
+      await Promise.all(updatePromises);
+      
+    } catch (error) {
+      console.error('Error syncing staff branch assignments:', error);
+      throw error;
+    }
+  },
 };
