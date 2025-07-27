@@ -128,10 +128,10 @@ class BookingService {
     try {
       console.log('Fetching services for company:', companyId, 'branch:', branchId);
       
+      // First get all services
       const servicesQuery = query(
         collection(db, 'services'),
         where('companyId', '==', companyId)
-        // Remove active filter for now to see all services
       );
       
       const snapshot = await getDocs(servicesQuery);
@@ -142,21 +142,37 @@ class BookingService {
         ...doc.data()
       })) as Service[];
       
-      console.log('All services:', services);
+      // Get all staff for this branch who are available for online booking
+      const availableStaff = await this.getStaffForBooking(companyId, branchId);
+      console.log('Available staff for online booking:', availableStaff.length);
       
-      // Filter services that are available for online booking and assigned to branch
+      // Filter services that are available for online booking and have at least one available employee
       const filteredServices = services.filter(service => {
-        const isActive = service.active !== false; // Check active field
+        const isActive = service.active !== false;
         const isOnlineEnabled = service.onlineBooking?.enabled === true;
         const isInBranch = !service.branchIds || service.branchIds.length === 0 || service.branchIds.includes(branchId);
         
-        console.log(`Service ${service.name}: active=${isActive}, online=${isOnlineEnabled}, inBranch=${isInBranch}`);
+        // Check if at least one available staff member can provide this service
+        const hasAvailableStaff = availableStaff.some(staff => 
+          staff.services && staff.services.includes(service.id!)
+        );
         
-        return isActive && isOnlineEnabled && isInBranch;
+        console.log(`Service ${service.name}: active=${isActive}, online=${isOnlineEnabled}, inBranch=${isInBranch}, hasStaff=${hasAvailableStaff}`);
+        
+        return isActive && isOnlineEnabled && isInBranch && hasAvailableStaff;
       });
       
-      console.log('Filtered services:', filteredServices);
-      return filteredServices;
+      console.log('Filtered services (with staff check):', filteredServices.length);
+      
+      // Add available staff count to each service for UI display (optional enhancement)
+      const servicesWithStaffInfo = filteredServices.map(service => ({
+        ...service,
+        availableStaffCount: availableStaff.filter(staff => 
+          staff.services && staff.services.includes(service.id!)
+        ).length
+      }));
+      
+      return servicesWithStaffInfo;
     } catch (error) {
       console.error('Error getting services:', error);
       throw error;
@@ -180,10 +196,14 @@ class BookingService {
       })) as Staff[];
       
       // Filter staff that are available for online booking and assigned to branch
-      staffList = staffList.filter(staff => 
-        staff.onlineBooking?.enabled &&
-        staff.branchIds?.includes(branchId)
-      );
+      staffList = staffList.filter(staff => {
+        const isOnlineEnabled = staff.onlineBooking?.enabled;
+        // Support both new branchIds array and legacy branchId field
+        const isInBranch = staff.branchIds?.includes(branchId) || 
+                          (staff as any).branchId === branchId;
+        
+        return isOnlineEnabled && isInBranch;
+      });
       
       // Filter by service if provided
       if (serviceId) {
