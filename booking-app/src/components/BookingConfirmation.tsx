@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -42,11 +42,13 @@ const BookingConfirmation: React.FC = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [testPhone, setTestPhone] = useState('');
+  const creatingRef = useRef(false);
 
   const dateLocale = language === 'ar' ? ar : enUS;
 
   useEffect(() => {
-    if (!isCreating) {
+    // Only create appointment if not already creating
+    if (!creatingRef.current && !isCreating && !appointmentId) {
       createAppointment();
     }
   }, []);
@@ -95,17 +97,22 @@ const BookingConfirmation: React.FC = () => {
   };
 
   const createAppointment = async () => {
+    console.log('createAppointment called, creatingRef.current:', creatingRef.current, 'appointmentId:', appointmentId);
+    
     if (!bookingData.linkData || !bookingData.date || !bookingData.time) {
       setError('Missing booking information');
       setLoading(false);
       return;
     }
 
-    // Prevent duplicate creation
-    if (isCreating || appointmentId) {
+    // Prevent duplicate creation using ref that persists across renders
+    if (creatingRef.current || appointmentId) {
+      console.log('Preventing duplicate appointment creation');
       return;
     }
 
+    // Set the ref immediately to prevent any other calls
+    creatingRef.current = true;
     setIsCreating(true);
 
     try {
