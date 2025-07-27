@@ -79,8 +79,9 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
 
         // Subscribe to branches collection
         const branchesRef = collection(db, 'companies', cId, 'branches');
-        // Query for branches with status 'active' instead of active: true
-        const q = query(branchesRef, where('status', '==', 'active'));
+        // Get ALL branches, we'll filter inactive ones in the client
+        // This ensures branches without status field are still loaded
+        const q = query(branchesRef);
         
         unsubscribe = onSnapshot(
           q,
@@ -99,11 +100,28 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
             }
             
             snapshot.forEach((doc) => {
-              branchList.push({
-                id: doc.id,
-                ...doc.data(),
-                businessName
-              } as Branch);
+              const data = doc.data();
+              // Include branch if:
+              // 1. It has status: 'active'
+              // 2. It has active: true
+              // 3. It has no status field (legacy branches)
+              // 4. It's the main branch (type: 'main' or isMain: true)
+              
+              const isMainBranch = data.type === 'main' || data.isMain === true;
+              const hasActiveStatus = data.status === 'active';
+              const hasActiveField = data.active === true;
+              const hasNoStatus = data.status === undefined && data.active === undefined;
+              
+              if (isMainBranch || hasActiveStatus || hasActiveField || hasNoStatus) {
+                branchList.push({
+                  id: doc.id,
+                  ...data,
+                  businessName,
+                  // Ensure compatibility fields
+                  isMain: isMainBranch,
+                  active: hasActiveStatus || hasActiveField || hasNoStatus
+                } as Branch);
+              }
             });
 
             // Sort branches so main branch is first
@@ -118,21 +136,34 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
             });
 
             setBranches(branchList);
+            
+            console.log('[BranchContext] Loaded branches:', branchList.map(b => ({
+              id: b.id,
+              name: b.name,
+              type: b.type,
+              status: b.status
+            })));
 
             // Set current branch
             if (branchList.length > 0) {
               // Try to restore previously selected branch
               const savedBranchId = localStorage.getItem(BRANCH_STORAGE_KEY);
+              console.log('[BranchContext] Saved branch ID:', savedBranchId);
+              
               const savedBranch = branchList.find(b => b.id === savedBranchId);
               
               if (savedBranch) {
+                console.log('[BranchContext] Found saved branch:', savedBranch.name);
                 setCurrentBranch(savedBranch);
               } else {
                 // Default to main branch or first branch
                 const mainBranch = branchList.find(b => b.isMain || b.type === 'main') || branchList[0];
+                console.log('[BranchContext] Using default branch:', mainBranch?.name);
                 setCurrentBranch(mainBranch);
                 localStorage.setItem(BRANCH_STORAGE_KEY, mainBranch.id);
               }
+            } else {
+              console.warn('[BranchContext] No branches loaded!');
             }
 
             setLoading(false);
