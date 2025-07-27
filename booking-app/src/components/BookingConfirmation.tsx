@@ -273,32 +273,35 @@ const BookingConfirmation: React.FC = () => {
           
           // Get location settings for better business info
           let locationSettings: any = null;
+          let companySettings: any = null;
           let googleMapsLink = '';
           let businessPhone = '';
           let businessAddress = '';
-          let businessName = branch?.name || 'الصالون';
+          let businessName = 'الصالون';
           
           try {
-            // Try to get location settings
-            const branchId = bookingData.branchId || 'main';
-            const locationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
-            
-            if (!locationDoc.exists() && branchId === 'main') {
-              // Try branch 1 as fallback
+            // First try to get company-wide settings (main branch)
+            const mainLocationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_main`));
+            if (mainLocationDoc.exists()) {
+              companySettings = mainLocationDoc.data();
+            } else {
+              // Try branch 1 as fallback for company settings
               const locationDoc1 = await getDoc(doc(db, 'locationSettings', `${companyId}_1`));
               if (locationDoc1.exists()) {
-                locationSettings = locationDoc1.data();
+                companySettings = locationDoc1.data();
               }
-            } else if (locationDoc.exists()) {
-              locationSettings = locationDoc.data();
             }
             
-            // Get business details from location settings
-            if (locationSettings) {
-              businessName = locationSettings.basic?.businessName || 
-                            locationSettings.basic?.locationName || 
-                            branch?.name || 
-                            'الصالون';
+            // Get business name from company settings (not branch-specific)
+            if (companySettings?.basic?.businessName) {
+              businessName = companySettings.basic.businessName;
+            }
+            
+            // Now try to get branch-specific location settings for coordinates and address
+            const branchId = bookingData.branchId || 'main';
+            const branchLocationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
+            if (branchLocationDoc.exists()) {
+              locationSettings = branchLocationDoc.data();
               
               // Get coordinates for Google Maps link
               if (locationSettings.contact?.coordinates?.lat && locationSettings.contact?.coordinates?.lng) {
@@ -700,30 +703,33 @@ const BookingConfirmation: React.FC = () => {
                   let testBusinessPhone = '+201234567890';
                   
                   try {
-                    const branchId = bookingData.branchId || 'main';
-                    const locationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
-                    
-                    if (!locationDoc.exists() && branchId === 'main') {
+                    // First get company-wide settings for business name
+                    const mainLocationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_main`));
+                    if (mainLocationDoc.exists()) {
+                      const mainData = mainLocationDoc.data();
+                      if (mainData.basic?.businessName) {
+                        testBusinessName = mainData.basic.businessName;
+                      }
+                    } else {
+                      // Try branch 1 as fallback for company settings
                       const locationDoc1 = await getDoc(doc(db, 'locationSettings', `${companyId}_1`));
                       if (locationDoc1.exists()) {
                         const locData = locationDoc1.data();
-                        if (locData.contact?.coordinates?.lat && locData.contact?.coordinates?.lng) {
-                          testGoogleMapsLink = `https://maps.google.com/?q=${locData.contact.coordinates.lat},${locData.contact.coordinates.lng}`;
-                        }
-                        testBusinessName = locData.basic?.businessName || testBusinessName;
-                        if (locData.contact?.phones?.[0]) {
-                          testBusinessPhone = `${locData.contact.phones[0].countryCode || ''}${locData.contact.phones[0].number || ''}`.trim();
-                        }
-                        if (locData.contact?.address) {
-                          testBusinessAddress = locData.contact.address.formatted || testBusinessAddress;
+                        if (locData.basic?.businessName) {
+                          testBusinessName = locData.basic.businessName;
                         }
                       }
-                    } else if (locationDoc.exists()) {
-                      const locData = locationDoc.data();
+                    }
+                    
+                    // Now get branch-specific data for coordinates and address
+                    const branchId = bookingData.branchId || 'main';
+                    const branchLocationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
+                    
+                    if (branchLocationDoc.exists()) {
+                      const locData = branchLocationDoc.data();
                       if (locData.contact?.coordinates?.lat && locData.contact?.coordinates?.lng) {
                         testGoogleMapsLink = `https://maps.google.com/?q=${locData.contact.coordinates.lat},${locData.contact.coordinates.lng}`;
                       }
-                      testBusinessName = locData.basic?.businessName || testBusinessName;
                       if (locData.contact?.phones?.[0]) {
                         testBusinessPhone = `${locData.contact.phones[0].countryCode || ''}${locData.contact.phones[0].number || ''}`.trim();
                       }
