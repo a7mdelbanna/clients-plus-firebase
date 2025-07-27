@@ -238,8 +238,99 @@ const BookingConfirmation: React.FC = () => {
           
           // Get service names
           let serviceName = 'خدمة';
-          if (services.length > 0) {
-            serviceName = services.map(s => s.name).join(', ');
+          if (selectedServices && selectedServices.length > 0) {
+            serviceName = selectedServices.map(s => s.name).join(', ');
+            console.log('Service names:', serviceName);
+          } else {
+            console.log('No services found, using default');
+          }
+          
+          // Get staff name
+          let staffName = 'الفريق';
+          if (bookingData.staffId && bookingData.staffId !== 'any') {
+            // Load staff if not already loaded
+            if (!staff) {
+              const staffList = await bookingService.getStaffForBooking(
+                bookingData.linkData.companyId,
+                bookingData.branchId!
+              );
+              const selectedStaff = staffList.find(s => s.id === bookingData.staffId);
+              if (selectedStaff) {
+                staffName = selectedStaff.name;
+                console.log('Staff name loaded:', staffName);
+              }
+            } else {
+              staffName = staff.name;
+            }
+          }
+          
+          // Get location settings for better business info
+          let locationSettings: any = null;
+          let googleMapsLink = '';
+          let businessPhone = '';
+          let businessAddress = '';
+          let businessName = branch?.name || 'الصالون';
+          
+          try {
+            // Try to get location settings
+            const branchId = bookingData.branchId || 'main';
+            const locationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
+            
+            if (!locationDoc.exists() && branchId === 'main') {
+              // Try branch 1 as fallback
+              const locationDoc1 = await getDoc(doc(db, 'locationSettings', `${companyId}_1`));
+              if (locationDoc1.exists()) {
+                locationSettings = locationDoc1.data();
+              }
+            } else if (locationDoc.exists()) {
+              locationSettings = locationDoc.data();
+            }
+            
+            // Get business details from location settings
+            if (locationSettings) {
+              businessName = locationSettings.basic?.businessName || 
+                            locationSettings.basic?.locationName || 
+                            branch?.name || 
+                            'الصالون';
+              
+              // Get coordinates for Google Maps link
+              if (locationSettings.contact?.coordinates?.lat && locationSettings.contact?.coordinates?.lng) {
+                const { lat, lng } = locationSettings.contact.coordinates;
+                googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+              }
+              
+              // Get phone with country code
+              if (locationSettings.contact?.phones && locationSettings.contact.phones.length > 0) {
+                const phone = locationSettings.contact.phones[0];
+                businessPhone = `${phone.countryCode || ''}${phone.number || ''}`.trim();
+              }
+              
+              // Get address
+              if (locationSettings.contact?.address) {
+                // Try formatted first, then build from parts
+                if (locationSettings.contact.address.formatted) {
+                  businessAddress = locationSettings.contact.address.formatted;
+                } else if (locationSettings.contact.address.street || locationSettings.contact.address.city) {
+                  const parts = [];
+                  if (locationSettings.contact.address.street) parts.push(locationSettings.contact.address.street);
+                  if (locationSettings.contact.address.city) parts.push(locationSettings.contact.address.city);
+                  if (locationSettings.contact.address.state) parts.push(locationSettings.contact.address.state);
+                  businessAddress = parts.join(', ');
+                }
+                console.log('Business address from location settings:', businessAddress);
+              }
+            }
+          } catch (error) {
+            console.error('Error loading location settings:', error);
+          }
+          
+          // Fallback to branch data if no location settings
+          if (!businessPhone && branch?.contact?.phones?.[0]) {
+            businessPhone = branch.contact.phones[0].number;
+          }
+          
+          if (!businessAddress && branch?.address) {
+            businessAddress = `${branch.address.street}, ${branch.address.city}`;
           }
           
           // 2. Create message in Firestore (like dashboard does)
@@ -261,16 +352,26 @@ const BookingConfirmation: React.FC = () => {
               }),
               time: bookingData.time || appointmentData.startTime,
               service: serviceName,
-              staffName: staff?.name || 'الفريق',
-              businessName: branch?.name || 'الصالون',
-              businessAddress: branch?.address ? `${branch.address.street}, ${branch.address.city}` : '',
-              businessPhone: branch?.contact?.phones?.[0]?.number || '',
+              staffName: staffName,
+              businessName,
+              businessAddress,
+              businessPhone,
+              googleMapsLink,
               language: 'ar'
             },
             status: 'pending' as const,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           };
+          
+          console.log('WhatsApp message parameters:', {
+            service: serviceName,
+            staffName: staffName,
+            businessName,
+            businessAddress,
+            businessPhone,
+            googleMapsLink
+          });
           
           console.log('Saving WhatsApp message to Firestore...');
           const docRef = await addDoc(
@@ -585,6 +686,48 @@ const BookingConfirmation: React.FC = () => {
                     return;
                   }
                   
+                  // Get location settings for test
+                  let testGoogleMapsLink = '';
+                  let testBusinessName = 'صالون تجريبي';
+                  let testBusinessAddress = 'عنوان تجريبي';
+                  let testBusinessPhone = '+201234567890';
+                  
+                  try {
+                    const branchId = bookingData.branchId || 'main';
+                    const locationDoc = await getDoc(doc(db, 'locationSettings', `${companyId}_${branchId}`));
+                    
+                    if (!locationDoc.exists() && branchId === 'main') {
+                      const locationDoc1 = await getDoc(doc(db, 'locationSettings', `${companyId}_1`));
+                      if (locationDoc1.exists()) {
+                        const locData = locationDoc1.data();
+                        if (locData.contact?.coordinates?.lat && locData.contact?.coordinates?.lng) {
+                          testGoogleMapsLink = `https://maps.google.com/?q=${locData.contact.coordinates.lat},${locData.contact.coordinates.lng}`;
+                        }
+                        testBusinessName = locData.basic?.businessName || testBusinessName;
+                        if (locData.contact?.phones?.[0]) {
+                          testBusinessPhone = `${locData.contact.phones[0].countryCode || ''}${locData.contact.phones[0].number || ''}`.trim();
+                        }
+                        if (locData.contact?.address) {
+                          testBusinessAddress = locData.contact.address.formatted || testBusinessAddress;
+                        }
+                      }
+                    } else if (locationDoc.exists()) {
+                      const locData = locationDoc.data();
+                      if (locData.contact?.coordinates?.lat && locData.contact?.coordinates?.lng) {
+                        testGoogleMapsLink = `https://maps.google.com/?q=${locData.contact.coordinates.lat},${locData.contact.coordinates.lng}`;
+                      }
+                      testBusinessName = locData.basic?.businessName || testBusinessName;
+                      if (locData.contact?.phones?.[0]) {
+                        testBusinessPhone = `${locData.contact.phones[0].countryCode || ''}${locData.contact.phones[0].number || ''}`.trim();
+                      }
+                      if (locData.contact?.address) {
+                        testBusinessAddress = locData.contact.address.formatted || testBusinessAddress;
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Error loading location for test:', error);
+                  }
+                  
                   // 2. Create message in Firestore (like dashboard does)
                   const messageData = {
                     companyId,
@@ -600,9 +743,10 @@ const BookingConfirmation: React.FC = () => {
                       time: '10:00',
                       service: 'خدمة تجريبية',
                       staffName: 'موظف تجريبي',
-                      businessName: 'صالون تجريبي',
-                      businessAddress: 'عنوان تجريبي',
-                      businessPhone: '+201234567890',
+                      businessName: testBusinessName,
+                      businessAddress: testBusinessAddress,
+                      businessPhone: testBusinessPhone,
+                      googleMapsLink: testGoogleMapsLink,
                       language: 'ar'
                     },
                     status: 'pending' as const,
