@@ -168,7 +168,7 @@ const BookingConfirmation: React.FC = () => {
       );
       
       
-      const appointmentData = {
+      const appointmentData: any = {
         companyId: bookingData.linkData.companyId,
         branchId: bookingData.branchId!,
         clientId: clientId,
@@ -212,26 +212,26 @@ const BookingConfirmation: React.FC = () => {
       
       // Send WhatsApp notification using the same logic as test button
       try {
-        console.log('Sending WhatsApp notification for appointment:', id);
-        
-        // Import required Firebase functions
-        const { doc, getDoc, addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-        const { db } = await import('../config/firebase');
-        const { getFunctions, httpsCallable } = await import('firebase/functions');
-        const functions = getFunctions();
-        
-        const companyId = bookingData.linkData?.companyId;
-        
-        // 1. Get WhatsApp config from Firestore
-        console.log('Getting WhatsApp config for company:', companyId);
-        const configDoc = await getDoc(doc(db, 'whatsappConfigs', companyId));
-        
-        if (configDoc.exists() && configDoc.data().enabled) {
+          console.log('Sending WhatsApp notification for appointment:', id);
+          
+          // Import required Firebase functions
+          const { doc, getDoc, addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+          const { db } = await import('../config/firebase');
+          const { getFunctions, httpsCallable } = await import('firebase/functions');
+          const functions = getFunctions();
+          
+          const companyId = bookingData.linkData?.companyId;
+          
+          // 1. Get WhatsApp config from Firestore
+          console.log('Getting WhatsApp config for company:', companyId);
+          const configDoc = await getDoc(doc(db, 'whatsappConfigs', companyId));
+          
+          if (configDoc.exists() && configDoc.data().enabled) {
           const config = configDoc.data();
           console.log('WhatsApp config found and enabled');
           
           // Format phone number
-          let formattedPhone = bookingData.customerPhone.replace(/[\s\-\(\)]/g, '');
+          let formattedPhone = bookingData.customerPhone!.replace(/[\s\-\(\)]/g, '');
           if (!formattedPhone.startsWith('+')) {
             formattedPhone = '+20' + formattedPhone.replace(/^0+/, '');
           }
