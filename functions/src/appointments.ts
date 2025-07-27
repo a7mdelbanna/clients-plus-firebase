@@ -34,6 +34,10 @@ export const onAppointmentCreated = functionsV1.firestore
     
     console.log(`New appointment created: ${appointmentId}`, appointment);
     
+    // Skip this function - WhatsApp is now handled directly in the booking app
+    console.log('Skipping - WhatsApp notifications are now handled in the booking app');
+    return;
+    
     // Only process online bookings that have notifications configured
     if (appointment.source !== 'online' || !appointment.notifications || appointment.notifications.length === 0) {
       console.log('Skipping - not an online booking or no notifications configured');

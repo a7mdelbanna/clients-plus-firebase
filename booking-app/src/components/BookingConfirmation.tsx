@@ -209,6 +209,101 @@ const BookingConfirmation: React.FC = () => {
       const id = await bookingService.createAppointment(appointmentData);
       console.log('Appointment created with ID:', id);
       setAppointmentId(id);
+      
+      // Send WhatsApp notification using the same logic as test button
+      try {
+        console.log('Sending WhatsApp notification for appointment:', id);
+        
+        // Import required Firebase functions
+        const { doc, getDoc, addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../config/firebase');
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const functions = getFunctions();
+        
+        const companyId = bookingData.linkData?.companyId;
+        
+        // 1. Get WhatsApp config from Firestore
+        console.log('Getting WhatsApp config for company:', companyId);
+        const configDoc = await getDoc(doc(db, 'whatsappConfigs', companyId));
+        
+        if (configDoc.exists() && configDoc.data().enabled) {
+          const config = configDoc.data();
+          console.log('WhatsApp config found and enabled');
+          
+          // Format phone number
+          let formattedPhone = bookingData.customerPhone.replace(/[\s\-\(\)]/g, '');
+          if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+20' + formattedPhone.replace(/^0+/, '');
+          }
+          
+          // Get service names
+          let serviceName = 'خدمة';
+          if (services.length > 0) {
+            serviceName = services.map(s => s.name).join(', ');
+          }
+          
+          // 2. Create message in Firestore (like dashboard does)
+          const messageData = {
+            companyId,
+            clientId: clientId,
+            appointmentId: id,
+            to: formattedPhone,
+            type: 'appointment_confirmation' as const,
+            templateName: 'appointment_confirmation',
+            templateLanguage: 'ar' as const,
+            parameters: {
+              clientName: bookingData.customerName,
+              date: bookingData.date!.toLocaleDateString('ar-EG', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              }),
+              time: bookingData.time || appointmentData.startTime,
+              service: serviceName,
+              staffName: staff?.name || 'الفريق',
+              businessName: branch?.name || 'الصالون',
+              businessAddress: branch?.address ? `${branch.address.street}, ${branch.address.city}` : '',
+              businessPhone: branch?.contact?.phones?.[0]?.number || '',
+              language: 'ar'
+            },
+            status: 'pending' as const,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+          
+          console.log('Saving WhatsApp message to Firestore...');
+          const docRef = await addDoc(
+            collection(db, 'companies', companyId, 'whatsappMessages'),
+            messageData
+          );
+          console.log('Message saved with ID:', docRef.id);
+          
+          // 3. Call Cloud Function with message ID and full config
+          const sendWhatsApp = httpsCallable(functions, 'sendWhatsAppMessage');
+          
+          const functionData = {
+            messageId: docRef.id,
+            companyId,
+            config,
+            message: {
+              ...messageData,
+              id: docRef.id
+            }
+          };
+          
+          console.log('Calling Cloud Function to send WhatsApp...');
+          
+          const result = await sendWhatsApp(functionData);
+          console.log('WhatsApp notification sent:', result.data);
+        } else {
+          console.log('WhatsApp not configured or not enabled for company');
+        }
+      } catch (error) {
+        console.error('Error sending WhatsApp notification:', error);
+        // Don't throw - we don't want to break the booking flow
+      }
+      
       setSuccess(true);
       setLoading(false);
       setIsCreating(false);
