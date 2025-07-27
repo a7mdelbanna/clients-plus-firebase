@@ -44,6 +44,7 @@ if (process.env.NODE_ENV === 'development') {
   import('./debug/checkAppointment');
   import('./debug/checkBranches');
   import('./debug/checkAppointmentQueries');
+  import('./debug/fixBranchData');
 }
 import DashboardLayout from './layouts/DashboardLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';

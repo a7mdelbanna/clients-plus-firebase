@@ -9,8 +9,10 @@ export interface Branch {
   name: string;
   address: string;
   phone: string;
-  isMain: boolean;
-  active?: boolean;
+  type?: 'main' | 'secondary';
+  status?: 'active' | 'inactive';
+  isMain?: boolean; // For backward compatibility
+  active?: boolean; // For backward compatibility
   createdAt?: any;
   businessName?: string; // Business name from company document
 }
@@ -77,7 +79,8 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
 
         // Subscribe to branches collection
         const branchesRef = collection(db, 'companies', cId, 'branches');
-        const q = query(branchesRef, where('active', '==', true));
+        // Query for branches with status 'active' instead of active: true
+        const q = query(branchesRef, where('status', '==', 'active'));
         
         unsubscribe = onSnapshot(
           q,
@@ -105,8 +108,12 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
 
             // Sort branches so main branch is first
             branchList.sort((a, b) => {
-              if (a.isMain) return -1;
-              if (b.isMain) return 1;
+              // Check both isMain and type for backward compatibility
+              const aIsMain = a.isMain || a.type === 'main';
+              const bIsMain = b.isMain || b.type === 'main';
+              
+              if (aIsMain) return -1;
+              if (bIsMain) return 1;
               return 0;
             });
 
@@ -122,7 +129,7 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
                 setCurrentBranch(savedBranch);
               } else {
                 // Default to main branch or first branch
-                const mainBranch = branchList.find(b => b.isMain) || branchList[0];
+                const mainBranch = branchList.find(b => b.isMain || b.type === 'main') || branchList[0];
                 setCurrentBranch(mainBranch);
                 localStorage.setItem(BRANCH_STORAGE_KEY, mainBranch.id);
               }
