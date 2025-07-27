@@ -1521,19 +1521,37 @@ class AppointmentService {
         console.error('Error loading branch:', error);
       }
       
-      // Use business name first, then location name as fallback
-      const businessName = locationSettings?.basic?.businessName || 
+      // Use branch name for the appointment, fallback to business name
+      const businessName = branchData?.name || 
                           locationSettings?.basic?.locationName || 
+                          locationSettings?.basic?.businessName || 
                           company?.businessName || 
                           company?.name || 
                           'Our Business';
       
-      const businessAddress = branchData?.address || 
-                             locationSettings?.contact?.address || '';
+      // Format address properly from branch data
+      let businessAddress = '';
+      if (branchData?.address) {
+        if (typeof branchData.address === 'string') {
+          businessAddress = branchData.address;
+        } else if (branchData.address.street || branchData.address.city) {
+          businessAddress = [branchData.address.street, branchData.address.city]
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
+      if (!businessAddress && locationSettings?.contact?.address) {
+        businessAddress = locationSettings.contact.address;
+      }
                              
       // Get phone number with proper formatting
       let businessPhone = '';
-      if (branchData?.phone) {
+      if (branchData?.contact?.phones && branchData.contact.phones.length > 0) {
+        // Use branch phone if available
+        const phone = branchData.contact.phones.find((p: any) => p.isPrimary) || branchData.contact.phones[0];
+        businessPhone = phone.number || '';
+      } else if (branchData?.phone) {
+        // Legacy single phone field
         businessPhone = branchData.phone;
       } else if (locationSettings?.contact?.phones && locationSettings.contact.phones.length > 0) {
         const phone = locationSettings.contact.phones[0];
@@ -1543,12 +1561,18 @@ class AppointmentService {
       
       // Create Google Maps link if we have coordinates
       let googleMapsLink = '';
-      if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+      // First try branch coordinates
+      if (branchData?.coordinates?.lat && branchData?.coordinates?.lng) {
+        const { lat, lng } = branchData.coordinates;
+        googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        console.log('Google Maps link created from branch:', googleMapsLink);
+      } else if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+        // Fallback to location settings coordinates
         const { lat, lng } = locationSettings.contact.coordinates;
         googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
-        console.log('Google Maps link created:', googleMapsLink);
+        console.log('Google Maps link created from location settings:', googleMapsLink);
       } else {
-        console.log('No map coordinates found in locationSettings.contact.coordinates');
+        console.log('No map coordinates found in branch or location settings');
       }
 
       // Send WhatsApp notification
