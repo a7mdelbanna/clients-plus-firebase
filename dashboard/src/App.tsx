@@ -38,6 +38,13 @@ import OnlineBooking from './pages/OnlineBooking';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
+
+// Import debug utilities (development only)
+if (process.env.NODE_ENV === 'development') {
+  import('./debug/checkAppointment');
+  import('./debug/checkBranches');
+  import('./debug/checkAppointmentQueries');
+}
 import DashboardLayout from './layouts/DashboardLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';
 import SuperadminLogin from './pages/superadmin/SuperadminLogin';
