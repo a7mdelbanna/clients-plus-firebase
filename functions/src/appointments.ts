@@ -3,6 +3,28 @@ import * as admin from 'firebase-admin';
 
 const db = admin.firestore();
 
+// Format phone number for WhatsApp (must include country code)
+function formatPhoneNumber(phone: string, countryCode: string = '20'): string {
+  // Remove all non-numeric characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If starts with +, preserve it
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  
+  // Remove leading zeros
+  cleaned = cleaned.replace(/^0+/, '');
+  
+  // Add country code if not present
+  if (!cleaned.startsWith(countryCode)) {
+    cleaned = countryCode + cleaned;
+  }
+  
+  // Always add + prefix for international format
+  return '+' + cleaned;
+}
+
 // Trigger function for new appointments created through online booking
 export const onAppointmentCreated = functionsV1.firestore
   .document('appointments/{appointmentId}')
@@ -89,64 +111,88 @@ export const onAppointmentCreated = functionsV1.firestore
       
       // Get WhatsApp config
       const whatsappConfig = await db.collection('whatsappConfigs').doc(appointment.companyId).get();
-      if (!whatsappConfig.exists || !whatsappConfig.data()?.isActive) {
-        console.log('WhatsApp not configured or inactive for company:', appointment.companyId);
+      if (!whatsappConfig.exists || !whatsappConfig.data()?.enabled) {
+        console.log('WhatsApp not configured or not enabled for company:', appointment.companyId);
         return;
       }
       
       const config = whatsappConfig.data()!;
       
-      // Send WhatsApp notification using the Cloud Function
+      // Send WhatsApp notification using the same pattern as dashboard
       const clientPhone = client?.primaryPhone || client?.phone || 
                          client?.phoneNumbers?.[0]?.number || appointment.clientPhone;
                          
       console.log('Sending WhatsApp confirmation to:', clientPhone);
       
+      // Format phone number
+      const formattedPhone = formatPhoneNumber(clientPhone);
+      console.log('Formatted phone:', formattedPhone);
+      
+      // 1. First save the message to Firestore (like dashboard does)
       const messageData = {
-        messageId: `apt-${appointmentId}-confirm`,
         companyId: appointment.companyId,
-        config: {
-          provider: config.provider,
-          accountSid: config.accountSid,
-          authToken: config.authToken,
-          fromNumber: config.fromNumber
+        clientId: appointment.clientId,
+        appointmentId: appointmentId,
+        to: formattedPhone,
+        type: 'appointment_confirmation' as const,
+        templateName: 'appointment_confirmation',
+        templateLanguage: 'ar' as const,
+        parameters: {
+          appointmentId,
+          clientId: appointment.clientId,
+          clientName: appointment.clientName,
+          clientPhone: formattedPhone,
+          date: appointment.date.toDate().toLocaleDateString('ar-EG', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          time: appointment.startTime || appointment.time,
+          service: serviceName,
+          staffName: appointment.staffName || 'الفريق',
+          businessName,
+          businessAddress,
+          businessPhone,
+          googleMapsLink,
+          language: 'ar'
         },
+        status: 'pending' as const,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      console.log('Saving WhatsApp message to Firestore...');
+      const messageRef = await db
+        .collection('companies')
+        .doc(appointment.companyId)
+        .collection('whatsappMessages')
+        .add(messageData);
+      
+      console.log('Message saved with ID:', messageRef.id);
+      
+      // 2. Now call the sendWhatsAppMessage function with the message ID
+      const { sendWhatsAppMessage } = await import('./whatsapp');
+      const sendFunction = sendWhatsAppMessage as any;
+      
+      const functionData = {
+        messageId: messageRef.id,
+        companyId: appointment.companyId,
+        config,
         message: {
-          to: clientPhone,
-          type: 'appointment_confirmation',
-          parameters: {
-            appointmentId,
-            clientId: appointment.clientId,
-            clientName: appointment.clientName,
-            clientPhone: clientPhone,
-            date: appointment.date.toDate().toLocaleDateString('ar-EG', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            }),
-            time: appointment.startTime || appointment.time,
-            service: serviceName,
-            staffName: appointment.staffName || 'الفريق',
-            businessName,
-            businessAddress,
-            businessPhone,
-            googleMapsLink,
-            language: 'ar'
-          }
+          ...messageData,
+          id: messageRef.id
         }
       };
       
-      // Call the sendWhatsAppMessage function
-      const { sendWhatsAppMessage } = await import('./whatsapp');
-      const sendFunction = sendWhatsAppMessage as any;
+      console.log('Calling sendWhatsAppMessage function...');
       
       // Create a mock context for the callable function
       const mockContext = {
         auth: { uid: 'system' }
       };
       
-      const result = await sendFunction({ data: messageData }, mockContext);
+      const result = await sendFunction({ data: functionData }, mockContext);
       console.log('WhatsApp send result:', result);
       
       // Update notification status

@@ -10,6 +10,7 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  TextField,
 } from '@mui/material';
 import { Timestamp } from 'firebase/firestore';
 import {
@@ -40,6 +41,7 @@ const BookingConfirmation: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
 
   const dateLocale = language === 'ar' ? ar : enUS;
 
@@ -203,7 +205,9 @@ const BookingConfirmation: React.FC = () => {
       };
       
 
+      console.log('Creating appointment with data:', JSON.stringify(appointmentData, null, 2));
       const id = await bookingService.createAppointment(appointmentData);
+      console.log('Appointment created with ID:', id);
       setAppointmentId(id);
       setSuccess(true);
       setLoading(false);
@@ -418,6 +422,158 @@ const BookingConfirmation: React.FC = () => {
           {t('book_another')}
         </Button>
       </Box>
+
+      {/* WhatsApp Test Section - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ mt: 4, p: 3, bgcolor: 'grey.100', borderRadius: 2 }}>
+          <Typography variant="h6" gutterBottom>Test WhatsApp Notification</Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Test WhatsApp message sending without creating an appointment
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+            <TextField
+              label="Phone Number"
+              placeholder="01234567890"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              size="small"
+              sx={{ flex: 1 }}
+              helperText="Egyptian number without country code"
+            />
+            
+            <Button 
+              variant="contained" 
+              onClick={async () => {
+                if (!testPhone) {
+                  alert('Please enter a phone number');
+                  return;
+                }
+                
+                try {
+                  console.log('Testing WhatsApp to:', testPhone);
+                  
+                  // Import required Firebase functions
+                  const { doc, getDoc, addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+                  const { db } = await import('../config/firebase');
+                  const { getFunctions, httpsCallable } = await import('firebase/functions');
+                  const functions = getFunctions();
+                  
+                  const companyId = bookingData.linkData?.companyId || 'au2wTbq7XDNcRGTtTkNm';
+                  
+                  // Format phone number
+                  let formattedPhone = testPhone.replace(/[\s\-\(\)]/g, '');
+                  if (!formattedPhone.startsWith('+')) {
+                    formattedPhone = '+20' + formattedPhone.replace(/^0+/, '');
+                  }
+                  
+                  // 1. Get WhatsApp config from Firestore
+                  console.log('Getting WhatsApp config for company:', companyId);
+                  const configDoc = await getDoc(doc(db, 'whatsappConfigs', companyId));
+                  
+                  if (!configDoc.exists()) {
+                    alert('WhatsApp is not configured for this company');
+                    return;
+                  }
+                  
+                  const config = configDoc.data();
+                  console.log('Config found:', { 
+                    enabled: config.enabled, 
+                    provider: config.provider,
+                    hasAccountSid: !!config.accountSid,
+                    hasAuthToken: !!config.authToken,
+                    hasWhatsAppNumber: !!config.twilioWhatsAppNumber
+                  });
+                  
+                  if (!config.enabled) {
+                    alert('WhatsApp is not enabled for this company');
+                    return;
+                  }
+                  
+                  // 2. Create message in Firestore (like dashboard does)
+                  const messageData = {
+                    companyId,
+                    clientId: 'test-client',
+                    appointmentId: appointmentId || 'test-appointment',
+                    to: formattedPhone,
+                    type: 'appointment_confirmation' as const,
+                    templateName: 'appointment_confirmation',
+                    templateLanguage: 'ar' as const,
+                    parameters: {
+                      clientName: 'عميل تجريبي',
+                      date: new Date().toLocaleDateString('ar-EG'),
+                      time: '10:00',
+                      service: 'خدمة تجريبية',
+                      staffName: 'موظف تجريبي',
+                      businessName: 'صالون تجريبي',
+                      businessAddress: 'عنوان تجريبي',
+                      businessPhone: '+201234567890',
+                      language: 'ar'
+                    },
+                    status: 'pending' as const,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                  };
+                  
+                  console.log('Saving message to Firestore...');
+                  const docRef = await addDoc(
+                    collection(db, 'companies', companyId, 'whatsappMessages'),
+                    messageData
+                  );
+                  console.log('Message saved with ID:', docRef.id);
+                  
+                  // 3. Call Cloud Function with message ID and full config
+                  const sendWhatsApp = httpsCallable(functions, 'sendWhatsAppMessage');
+                  
+                  const functionData = {
+                    messageId: docRef.id,
+                    companyId,
+                    config,
+                    message: {
+                      ...messageData,
+                      id: docRef.id
+                    }
+                  };
+                  
+                  console.log('Calling Cloud Function with:', functionData);
+                  
+                  const result = await sendWhatsApp(functionData);
+                  console.log('Cloud Function result:', result.data);
+                  
+                  alert('WhatsApp message sent successfully! Check your phone.');
+                  
+                } catch (error) {
+                  console.error('WhatsApp test error:', error);
+                  alert('Error: ' + (error as any).message);
+                }
+              }}
+            >
+              Send Test WhatsApp
+            </Button>
+          </Box>
+          
+          {appointmentId && (
+            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #ddd' }}>
+              <Typography variant="caption" color="textSecondary">
+                Appointment ID: {appointmentId} | Company: {bookingData.linkData?.companyId}
+              </Typography>
+              <Button 
+                size="small"
+                sx={{ ml: 2 }}
+                onClick={() => {
+                  console.log('Debug Info:', {
+                    appointmentId,
+                    bookingData,
+                    linkData: bookingData.linkData
+                  });
+                }}
+              >
+                Log Debug Info
+              </Button>
+            </Box>
+          )}
+        </Box>
+      )}
     </Box>
   );
 };

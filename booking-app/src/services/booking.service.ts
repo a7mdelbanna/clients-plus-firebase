@@ -569,7 +569,14 @@ class BookingService {
       
       const linkData = linkDoc.data() as BookingLink;
       const today = new Date().toISOString().split('T')[0];
-      const analytics = linkData.analytics;
+      const analytics = linkData.analytics || {
+        views: 0,
+        uniqueViews: 0,
+        bookings: 0,
+        conversionRate: 0,
+        viewsByDate: {},
+        bookingsByDate: {},
+      };
       
       // Update booking count
       analytics.bookings++;

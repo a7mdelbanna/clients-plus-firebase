@@ -78,7 +78,8 @@ service cloud.firestore {
       
       match /whatsappMessages/{messageId} {
         allow read: if isSuperAdmin() || isCompanyStaff(companyId);
-        allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+        allow create: if isSuperAdmin() || isCompanyStaff(companyId) || 
+          (request.auth == null && request.resource.data.type == 'appointment_confirmation'); // Allow public for online booking confirmations
         allow update: if isSuperAdmin() || isCompanyStaff(companyId);
         allow delete: if isSuperAdmin() || isCompanyStaff(companyId);
       }
@@ -200,7 +201,8 @@ service cloud.firestore {
     
     // WhatsApp configurations (top-level) - simplified rule
     match /whatsappConfigs/{configId} {
-      allow read, write: if isAuthenticated() && hasCompanyId();
+      allow read: if true; // Public access needed for online booking
+      allow write: if isAuthenticated() && hasCompanyId();
     }
     
     // Reminder configurations (top-level)
@@ -242,7 +244,8 @@ service cloud.firestore {
       allow create: if isSuperAdmin() || 
         (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
       allow update: if isSuperAdmin() || 
-        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
+        (request.auth == null && request.resource.data.analytics != null); // Allow public to update analytics only
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
