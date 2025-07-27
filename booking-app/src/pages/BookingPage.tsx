@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Container, Box, Typography, CircularProgress, Paper, Alert } from '@mui/material';
 import { useBooking } from '../contexts/BookingContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -18,7 +18,8 @@ import LanguageToggle from '../components/LanguageToggle';
 
 const BookingPage: React.FC = () => {
   const { companySlug, linkSlug } = useParams<{ companySlug: string; linkSlug: string }>();
-  const { currentStep, bookingData, updateBookingData } = useBooking();
+  const [searchParams] = useSearchParams();
+  const { currentStep, bookingData, updateBookingData, goToStep } = useBooking();
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +27,7 @@ const BookingPage: React.FC = () => {
 
   useEffect(() => {
     loadBookingLink();
-  }, [companySlug, linkSlug]);
+  }, [companySlug, linkSlug, searchParams]);
 
   const loadBookingLink = async () => {
     console.log('Loading booking link:', { companySlug, linkSlug });
@@ -50,6 +51,10 @@ const BookingPage: React.FC = () => {
 
       setLinkData(link);
       
+      // Check for branch query parameter
+      const branchParam = searchParams.get('branch');
+      let preselectedBranchId: string | undefined;
+      
       // For single branch links, automatically set the branch
       if (link.branchSettings?.mode === 'single' && link.branchSettings?.defaultBranch) {
         updateBookingData({ 
@@ -62,8 +67,31 @@ const BookingPage: React.FC = () => {
           linkData: link,
           branchId: link.branchSettings.allowedBranches[0]
         });
+      } else if (branchParam && link.branchSettings?.mode === 'multi') {
+        // Check if the branch parameter is valid
+        const branches = link.branchSettings.allowedBranches || [];
+        if (branches.includes(branchParam)) {
+          preselectedBranchId = branchParam;
+          updateBookingData({ 
+            linkData: link,
+            branchId: branchParam
+          });
+          // Skip branch selection step if valid branch is provided
+          goToStep(1); // Move to service selection
+        } else {
+          updateBookingData({ linkData: link });
+        }
       } else {
-        updateBookingData({ linkData: link });
+        // Check localStorage for saved branch preference
+        const savedBranchId = localStorage.getItem(`booking_branch_${link.companyId}`);
+        if (savedBranchId && link.branchSettings?.allowedBranches?.includes(savedBranchId)) {
+          updateBookingData({ 
+            linkData: link,
+            branchId: savedBranchId
+          });
+        } else {
+          updateBookingData({ linkData: link });
+        }
       }
 
       // Track view

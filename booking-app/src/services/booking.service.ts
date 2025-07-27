@@ -92,18 +92,28 @@ class BookingService {
   // Get branches for booking
   async getBranchesForBooking(companyId: string, branchIds?: string[]): Promise<Branch[]> {
     try {
-      const branchesRef = collection(db, 'companies', companyId, 'branches');
-      let q = query(branchesRef, where('status', '==', 'active'));
       
-      const snapshot = await getDocs(q);
-      let branches = snapshot.docs.map(doc => ({
+      const branchesRef = collection(db, 'companies', companyId, 'branches');
+      
+      // Get all branches first (we'll filter based on whether specific IDs are provided)
+      const allBranchesSnapshot = await getDocs(branchesRef);
+      const allBranches = allBranchesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Branch[];
       
+      let branches: Branch[];
+      
       // Filter by allowed branch IDs if provided
       if (branchIds && branchIds.length > 0) {
-        branches = branches.filter(branch => branchIds.includes(branch.id));
+        // For multi-branch links, we should get the specific branches regardless of status
+        // since they were explicitly selected for this booking link
+        branches = allBranches.filter(branch => branchIds.includes(branch.id));
+        console.log(`Filtered to ${branches.length} branches from ${allBranches.length} total branches`);
+      } else {
+        // If no specific branches requested, return only active branches
+        branches = allBranches.filter(branch => branch.status === 'active');
+        console.log(`Returning ${branches.length} active branches from ${allBranches.length} total branches`);
       }
       
       return branches;

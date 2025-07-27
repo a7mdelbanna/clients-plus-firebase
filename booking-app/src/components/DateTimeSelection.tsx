@@ -240,7 +240,6 @@ const DateTimeSelection: React.FC = () => {
           value={selectedDate}
           onChange={handleDateChange}
           minDate={new Date()}
-          renderInput={(params) => <TextField {...params} fullWidth />}
           slotProps={{
             textField: {
               fullWidth: true,

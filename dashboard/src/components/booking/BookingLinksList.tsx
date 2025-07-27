@@ -28,10 +28,12 @@ import {
   ContentCopy,
   QrCode,
   Analytics,
+  OpenInNew,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import type { BookingLink } from '../../services/bookingLink.service';
 import { useBranch } from '../../contexts/BranchContext';
+import BranchUrlsDialog from './BranchUrlsDialog';
 
 interface BookingLinksListProps {
   links: BookingLink[];
@@ -51,6 +53,7 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedLink, setSelectedLink] = useState<BookingLink | null>(null);
+  const [branchUrlsOpen, setBranchUrlsOpen] = useState(false);
   const isRTL = theme.direction === 'rtl';
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, link: BookingLink) => {
@@ -137,13 +140,22 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
       );
     } else {
       return (
-        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
           <Chip
             label={`${link.branchSettings.allowedBranches.length} ${isRTL ? 'فروع' : 'branches'}`}
             size="small"
             color="primary"
             variant="outlined"
           />
+          <IconButton 
+            size="small" 
+            onClick={() => {
+              setSelectedLink(link);
+              setBranchUrlsOpen(true);
+            }}
+          >
+            <OpenInNew fontSize="small" />
+          </IconButton>
         </Box>
       );
     }
@@ -328,6 +340,12 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
           <Typography color="error">{isRTL ? 'حذف' : 'Delete'}</Typography>
         </MenuItem>
       </Menu>
+
+      <BranchUrlsDialog
+        open={branchUrlsOpen}
+        link={selectedLink}
+        onClose={() => setBranchUrlsOpen(false)}
+      />
     </Box>
   );
 };

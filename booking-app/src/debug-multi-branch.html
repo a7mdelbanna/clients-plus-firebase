@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Branch Booking Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background: #ffe0e0;
+            color: #d00;
+        }
+        .success {
+            background: #e0ffe0;
+            color: #080;
+        }
+        .info {
+            background: #e0e0ff;
+            color: #008;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multi-Branch Booking Link Debugger</h1>
+    <p>This page helps diagnose issues with multi-branch booking links.</p>
+    
+    <div>
+        <button onclick="testMultiBranchLink()">Test Multi-Branch Link</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.textContent = message;
+            logsDiv.appendChild(logDiv);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        async function testMultiBranchLink() {
+            clearLogs();
+            log('Starting multi-branch booking link test...', 'info');
+            
+            // Instructions for the user
+            log('\nInstructions:', 'info');
+            log('1. Open your browser console (F12)', 'info');
+            log('2. Create a new multi-branch booking link in the dashboard', 'info');
+            log('3. Select "Multi-Branch" mode and choose 2 or more branches', 'info');
+            log('4. Save the booking link', 'info');
+            log('5. Open the booking link in a new tab', 'info');
+            log('6. Check the console logs below for debugging information', 'info');
+            
+            log('\nWhat to look for in the console:', 'info');
+            log('- BookingLinkForm - Allowed branches: [array of branch IDs]', 'info');
+            log('- BookingLinkService - Branch settings: {mode: "multi", allowedBranches: [...]}', 'info');
+            log('- BookingPage - Allowed branches: [array of branch IDs]', 'info');
+            log('- BranchSelection - Loading branches with IDs: [array of branch IDs]', 'info');
+            log('- getBranchesForBooking - All active branches: [list of branches]', 'info');
+            log('- getBranchesForBooking - Filtered branches: [should match selected branches]', 'info');
+            
+            log('\nPossible issues to check:', 'error');
+            log('1. If allowedBranches is empty or undefined', 'error');
+            log('2. If branch IDs don\'t match between form and saved data', 'error');
+            log('3. If filtering is removing all branches', 'error');
+            log('4. If branch status is not "active"', 'error');
+        }
+    </script>
+</body>
+</html>

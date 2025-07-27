@@ -60,6 +60,7 @@ import { auth } from './config/firebase';
 import './utils/clientBranchFix'; // Import for global debugging functions
 import './utils/createSuperadminDev'; // Import for superadmin creation in dev
 import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
+import './utils/debugBookingLinks'; // Import for debugging booking links
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
@@ -74,6 +75,11 @@ if (import.meta.env.DEV) {
   import('./utils/fixBookingLinkUrls').then(module => {
     (window as any).fixBookingLinkUrls = module.fixBookingLinkUrls;
     console.log('✅ Booking link URL fix tool loaded. Use fixBookingLinkUrls() in console.');
+  });
+  
+  import('./utils/debugBookingLinks').then(module => {
+    (window as any).debugBookingLinks = module.debugBookingLinks;
+    console.log('✅ Booking link debug tool loaded. Use debugBookingLinks(companyId) in console.');
   });
 }
 

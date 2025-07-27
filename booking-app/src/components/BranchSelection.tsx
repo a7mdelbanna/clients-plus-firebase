@@ -45,12 +45,30 @@ const BranchSelection: React.FC = () => {
         branchIds
       );
       
-      setBranches(branchList);
+      // Filter out branches that don't have minimum required data
+      const validBranches = branchList.filter(branch => {
+        const isValid = branch.id && branch.name;
+        if (!isValid) {
+          console.warn('Branch missing required data:', { 
+            id: branch.id, 
+            name: branch.name,
+            hasAddress: !!branch.address,
+            hasContact: !!branch.contact
+          });
+        }
+        return isValid;
+      });
+      
+      if (validBranches.length < branchList.length) {
+        console.warn(`Filtered out ${branchList.length - validBranches.length} branches due to missing required data`);
+      }
+      
+      setBranches(validBranches);
       
       // If only one branch, auto-select it
-      if (branchList.length === 1) {
-        setSelectedBranch(branchList[0].id);
-        updateBookingData({ branchId: branchList[0].id });
+      if (validBranches.length === 1) {
+        setSelectedBranch(validBranches[0].id);
+        updateBookingData({ branchId: validBranches[0].id });
       }
       
       setLoading(false);
@@ -68,6 +86,10 @@ const BranchSelection: React.FC = () => {
 
   const handleContinue = () => {
     if (selectedBranch) {
+      // Save branch preference to localStorage
+      if (bookingData.linkData?.companyId) {
+        localStorage.setItem(`booking_branch_${bookingData.linkData.companyId}`, selectedBranch);
+      }
       nextStep();
     }
   };
@@ -78,7 +100,7 @@ const BranchSelection: React.FC = () => {
   };
 
   const formatHours = (branch: Branch) => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'lowercase' });
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const hours = branch.operatingHours?.[today];
     
     if (!hours?.isOpen) {
@@ -107,7 +129,14 @@ const BranchSelection: React.FC = () => {
   if (branches.length === 0) {
     return (
       <Box sx={{ py: 4 }}>
-        <Alert severity="warning">{t('no_branches_available')}</Alert>
+        <Alert severity="warning">
+          {t('no_branches_available')}
+          {process.env.NODE_ENV === 'development' && (
+            <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              Debug: Check that branches have required fields (name, address, contact)
+            </Typography>
+          )}
+        </Alert>
       </Box>
     );
   }
@@ -159,15 +188,17 @@ const BranchSelection: React.FC = () => {
 
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {/* Address */}
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                      <LocationOn fontSize="small" color="action" />
-                      <Typography variant="body2" color="textSecondary">
-                        {branch.address.street}, {branch.address.city}
-                      </Typography>
-                    </Box>
+                    {branch.address && (
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <LocationOn fontSize="small" color="action" />
+                        <Typography variant="body2" color="textSecondary">
+                          {branch.address.street || ''}{branch.address.street && branch.address.city ? ', ' : ''}{branch.address.city || ''}
+                        </Typography>
+                      </Box>
+                    )}
 
                     {/* Phone */}
-                    {branch.contact.phones?.length > 0 && (
+                    {branch.contact?.phones?.length > 0 && (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Phone fontSize="small" color="action" />
                         <Typography variant="body2" color="textSecondary">
@@ -177,7 +208,7 @@ const BranchSelection: React.FC = () => {
                     )}
 
                     {/* Email */}
-                    {branch.contact.email && (
+                    {branch.contact?.email && (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Email fontSize="small" color="action" />
                         <Typography variant="body2" color="textSecondary">

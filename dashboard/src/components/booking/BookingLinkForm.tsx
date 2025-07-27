@@ -180,6 +180,44 @@ const BookingLinkForm: React.FC<BookingLinkFormProps> = ({
     loadEmployees();
   }, [currentUser]);
 
+  // Handle branch mode changes
+  useEffect(() => {
+    const currentValues = watch();
+    
+    if (watchedBranchMode === 'multi') {
+      const currentAllowedBranches = currentValues.branchSettings?.allowedBranches;
+      if (!Array.isArray(currentAllowedBranches) || currentAllowedBranches.length === 0) {
+        // If not an array or empty, initialize with current branch or default branch
+        const defaultBranch = currentValues.branchSettings?.defaultBranch;
+        const newAllowedBranches = defaultBranch ? [defaultBranch] : (currentBranch ? [currentBranch.id] : []);
+        
+        reset({
+          ...currentValues,
+          branchSettings: {
+            ...currentValues.branchSettings,
+            mode: 'multi',
+            allowedBranches: newAllowedBranches,
+          },
+        });
+      }
+    } else if (watchedBranchMode === 'single') {
+      // When switching to single mode, ensure defaultBranch is set
+      const currentDefaultBranch = currentValues.branchSettings?.defaultBranch;
+      if (!currentDefaultBranch) {
+        const firstAllowedBranch = currentValues.branchSettings?.allowedBranches?.[0];
+        reset({
+          ...currentValues,
+          branchSettings: {
+            ...currentValues.branchSettings,
+            mode: 'single',
+            defaultBranch: firstAllowedBranch || currentBranch?.id || '',
+            allowedBranches: [], // Clear this for single mode
+          },
+        });
+      }
+    }
+  }, [watchedBranchMode, watch, reset, currentBranch]);
+
   useEffect(() => {
     // Generate URL preview
     if (watchedSlug && currentUser) {
@@ -231,11 +269,9 @@ const BookingLinkForm: React.FC<BookingLinkFormProps> = ({
       const companyId = idTokenResult.claims.companyId as string;
 
       // Map form data to full BookingLink structure
-      const bookingLinkData = {
+      const bookingLinkData: any = {
         ...data,
         createdBy: currentUser.uid,
-        // For single branch mode, set branchId
-        branchId: data.branchSettings.mode === 'single' ? data.branchSettings.defaultBranch : undefined,
         branchSettings: {
           ...data.branchSettings,
           // Ensure allowedBranches is always an array
@@ -259,6 +295,11 @@ const BookingLinkForm: React.FC<BookingLinkFormProps> = ({
           showEveningSlots: true,
         },
       };
+      
+      // Only add branchId for single branch mode
+      if (data.branchSettings.mode === 'single' && data.branchSettings.defaultBranch) {
+        bookingLinkData.branchId = data.branchSettings.defaultBranch;
+      }
 
       if (link) {
         await bookingLinkService.updateBookingLink(link.id!, bookingLinkData);
@@ -454,38 +495,44 @@ const BookingLinkForm: React.FC<BookingLinkFormProps> = ({
                   <Controller
                     name="branchSettings.allowedBranches"
                     control={control}
-                    render={({ field }) => (
-                      <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel>{isRTL ? 'الفروع المسموحة' : 'Allowed Branches'}</InputLabel>
-                        <Select
-                          {...field}
-                          multiple
-                          label={isRTL ? 'الفروع المسموحة' : 'Allowed Branches'}
-                          renderValue={(selected) => (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                              {(Array.isArray(selected) ? selected : []).map((value) => (
-                                <Chip
-                                  key={value}
-                                  label={branches.find(b => b.id === value)?.name || value}
-                                  size="small"
-                                />
-                              ))}
-                            </Box>
+                    render={({ field }) => {
+                      // Ensure value is always an array
+                      const fieldValue = Array.isArray(field.value) ? field.value : [];
+                      
+                      return (
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <InputLabel>{isRTL ? 'الفروع المسموحة' : 'Allowed Branches'}</InputLabel>
+                          <Select
+                            {...field}
+                            value={fieldValue}
+                            multiple
+                            label={isRTL ? 'الفروع المسموحة' : 'Allowed Branches'}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {(Array.isArray(selected) ? selected : []).map((value) => (
+                                  <Chip
+                                    key={value}
+                                    label={branches.find(b => b.id === value)?.name || value}
+                                    size="small"
+                                  />
+                                ))}
+                              </Box>
+                            )}
+                          >
+                            {branches.map((branch) => (
+                              <MenuItem key={branch.id} value={branch.id}>
+                                {branch.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                          {errors.branchSettings?.allowedBranches && (
+                            <FormHelperText error>
+                              {errors.branchSettings.allowedBranches.message}
+                            </FormHelperText>
                           )}
-                        >
-                          {branches.map((branch) => (
-                            <MenuItem key={branch.id} value={branch.id}>
-                              {branch.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        {errors.branchSettings?.allowedBranches && (
-                          <FormHelperText error>
-                            {errors.branchSettings.allowedBranches.message}
-                          </FormHelperText>
-                        )}
-                      </FormControl>
-                    )}
+                        </FormControl>
+                      );
+                    }}
                   />
                 )}
               </Box>
