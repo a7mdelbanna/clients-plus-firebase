@@ -25,6 +25,8 @@ import { useClientAuth } from '../contexts/ClientAuthContext';
 import { useBooking } from '../contexts/BookingContext';
 import { appointmentService, type Appointment } from '../services/appointment.service';
 import { debugAppointments } from '../utils/debugAppointments';
+import { db } from '../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const ClientAppointmentsList: React.FC = () => {
   const { t, language } = useLanguage();
@@ -39,6 +41,31 @@ const ClientAppointmentsList: React.FC = () => {
       loadAppointments();
     }
   }, [session, bookingData?.linkData?.companyId]);
+
+  const enrichAppointmentWithStaffName = async (appointment: Appointment, companyId: string): Promise<Appointment> => {
+    // If we already have a proper staff name, return as is
+    if (appointment.staffName && appointment.staffName !== 'Any Available') {
+      return appointment;
+    }
+    
+    // If we have a staffId, try to fetch the staff name
+    if (appointment.staffId && appointment.staffId !== 'any') {
+      try {
+        const staffDoc = await getDoc(doc(db, 'companies', companyId, 'staff', appointment.staffId));
+        if (staffDoc.exists()) {
+          const staffData = staffDoc.data();
+          return {
+            ...appointment,
+            staffName: staffData.name || appointment.staffName
+          };
+        }
+      } catch (error) {
+        console.log('Error fetching staff name for appointment:', appointment.id, error);
+      }
+    }
+    
+    return appointment;
+  };
 
   const loadAppointments = async () => {
     console.log('=== ClientAppointmentsList: loadAppointments START ===');
@@ -83,8 +110,14 @@ const ClientAppointmentsList: React.FC = () => {
       }
 
       console.log('Appointments loaded:', appointmentsList.length);
-      console.log('Appointments data:', appointmentsList);
-      setAppointments(appointmentsList);
+      
+      // Enrich appointments with staff names if needed
+      const enrichedAppointments = await Promise.all(
+        appointmentsList.map(apt => enrichAppointmentWithStaffName(apt, companyId))
+      );
+      
+      console.log('Appointments enriched:', enrichedAppointments);
+      setAppointments(enrichedAppointments);
     } catch (err) {
       console.error('=== ClientAppointmentsList: ERROR ===');
       console.error('Error type:', err instanceof Error ? err.constructor.name : typeof err);
@@ -198,10 +231,14 @@ const ClientAppointmentsList: React.FC = () => {
                           {serviceNames.join(', ')}
                         </Typography>
                       </Box>
-                      {appointment.staffName && (
+                      {(appointment.staffName || appointment.staffId) && (
                         <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                           <PersonIcon fontSize="small" />
-                          <Typography component="span" variant="body2">{appointment.staffName}</Typography>
+                          <Typography component="span" variant="body2">
+                            {appointment.staffName && appointment.staffName !== 'Any Available' 
+                              ? appointment.staffName 
+                              : t('any_specialist')}
+                          </Typography>
                         </Box>
                       )}
                       {appointment.branchName && (
