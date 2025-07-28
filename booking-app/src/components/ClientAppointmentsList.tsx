@@ -187,20 +187,20 @@ const ClientAppointmentsList: React.FC = () => {
                   }
                   secondary={
                     <Box component="span" sx={{ display: 'block', mt: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <ScheduleIcon fontSize="small" />
-                        <Typography variant="body2">{appointment.startTime}</Typography>
+                        <Typography component="span" variant="body2">{appointment.startTime}</Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <ServiceIcon fontSize="small" />
-                        <Typography variant="body2">
+                        <Typography component="span" variant="body2">
                           {serviceNames.join(', ')}
                         </Typography>
                       </Box>
                       {appointment.staffName && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <PersonIcon fontSize="small" />
-                          <Typography variant="body2">{appointment.staffName}</Typography>
+                          <Typography component="span" variant="body2">{appointment.staffName}</Typography>
                         </Box>
                       )}
                     </Box>
