@@ -11,6 +11,7 @@ import {
   QueryConstraint,
   limit,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 
 export interface Appointment {
@@ -99,6 +100,215 @@ class AppointmentService {
     } catch (error) {
       console.error('Error cancelling appointment:', error);
       throw error;
+    }
+  }
+
+  // Reschedule an appointment
+  async rescheduleAppointment(
+    appointmentId: string,
+    clientId: string,
+    newDate: Date,
+    newStartTime: string,
+    newEndTime: string
+  ): Promise<void> {
+    try {
+      console.log('=== rescheduleAppointment START ===');
+      console.log('AppointmentId:', appointmentId);
+      console.log('ClientId:', clientId);
+      console.log('New Date:', newDate);
+      console.log('New Start Time:', newStartTime);
+      console.log('New End Time:', newEndTime);
+      
+      // First, get the appointment to verify ownership
+      const appointmentDoc = await getDoc(doc(db, 'appointments', appointmentId));
+      
+      if (!appointmentDoc.exists()) {
+        throw new Error('Appointment not found');
+      }
+      
+      const appointment = appointmentDoc.data() as Appointment;
+      
+      // Verify the client owns this appointment
+      if (appointment.clientId !== clientId) {
+        console.error('Client ID mismatch:', {
+          appointmentClientId: appointment.clientId,
+          requestClientId: clientId
+        });
+        throw new Error('Unauthorized: You can only reschedule your own appointments');
+      }
+      
+      // Check if appointment can be rescheduled (only pending or confirmed)
+      if (!['pending', 'confirmed'].includes(appointment.status)) {
+        throw new Error(`Cannot reschedule appointment with status: ${appointment.status}`);
+      }
+      
+      // Check if current appointment is in the future
+      const currentAppointmentDate = appointment.date.toDate ? appointment.date.toDate() : new Date(appointment.date);
+      if (currentAppointmentDate < new Date()) {
+        throw new Error('Cannot reschedule past appointments');
+      }
+      
+      // Check if new date is in the future
+      if (newDate < new Date()) {
+        throw new Error('Cannot reschedule to a past date');
+      }
+      
+      // TODO: Add availability checking here
+      // For now, we'll just update the appointment
+      // In the next step, we'll add proper availability checking
+      
+      // Update the appointment with new date and time
+      const updates: any = {
+        date: Timestamp.fromDate(newDate),
+        startTime: newStartTime,
+        endTime: newEndTime,
+        updatedAt: serverTimestamp(),
+        // Add reschedule tracking
+        lastRescheduledAt: serverTimestamp(),
+        lastRescheduledBy: 'client',
+        // Keep the appointment as pending after reschedule
+        // The business can confirm it again
+        status: 'pending'
+      };
+      
+      await updateDoc(doc(db, 'appointments', appointmentId), updates);
+      
+      console.log('Appointment rescheduled successfully');
+      console.log('=== rescheduleAppointment END ===');
+    } catch (error) {
+      console.error('Error rescheduling appointment:', error);
+      throw error;
+    }
+  }
+
+  // Check if a time slot is available
+  async checkTimeSlotAvailability(
+    companyId: string,
+    staffId: string,
+    date: Date,
+    startTime: string,
+    duration: number
+  ): Promise<boolean> {
+    try {
+      console.log('=== checkTimeSlotAvailability START ===');
+      console.log('Checking availability for:', {
+        companyId,
+        staffId,
+        date,
+        startTime,
+        duration
+      });
+      
+      // Get start and end of the day for the query
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      // Query appointments for the same staff on the same day
+      const appointmentsQuery = query(
+        collection(db, 'appointments'),
+        where('companyId', '==', companyId),
+        where('staffId', '==', staffId),
+        where('date', '>=', Timestamp.fromDate(startOfDay)),
+        where('date', '<=', Timestamp.fromDate(endOfDay)),
+        where('status', 'in', ['pending', 'confirmed', 'in_progress'])
+      );
+      
+      const snapshot = await getDocs(appointmentsQuery);
+      
+      if (snapshot.empty) {
+        console.log('No appointments found for this staff on this day');
+        return true;
+      }
+      
+      // Check for time conflicts
+      const requestedStartMinutes = this.timeToMinutes(startTime);
+      const requestedEndMinutes = requestedStartMinutes + duration;
+      
+      for (const doc of snapshot.docs) {
+        const appointment = doc.data() as Appointment;
+        const appointmentStartMinutes = this.timeToMinutes(appointment.startTime);
+        const appointmentEndMinutes = this.timeToMinutes(appointment.endTime);
+        
+        // Check if there's an overlap
+        if (
+          (requestedStartMinutes >= appointmentStartMinutes && requestedStartMinutes < appointmentEndMinutes) ||
+          (requestedEndMinutes > appointmentStartMinutes && requestedEndMinutes <= appointmentEndMinutes) ||
+          (requestedStartMinutes <= appointmentStartMinutes && requestedEndMinutes >= appointmentEndMinutes)
+        ) {
+          console.log('Time slot conflicts with existing appointment:', appointment.id);
+          return false;
+        }
+      }
+      
+      console.log('Time slot is available');
+      console.log('=== checkTimeSlotAvailability END ===');
+      return true;
+    } catch (error) {
+      console.error('Error checking time slot availability:', error);
+      // In case of error, return false to be safe
+      return false;
+    }
+  }
+  
+  // Helper function to convert time string to minutes
+  private timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  // Get available time slots for a specific date and staff
+  async getAvailableTimeSlots(
+    companyId: string,
+    staffId: string,
+    date: Date,
+    duration: number,
+    workingHours?: { start: string; end: string }
+  ): Promise<{ time: string; available: boolean }[]> {
+    try {
+      console.log('=== getAvailableTimeSlots START ===');
+      
+      // Default working hours if not provided
+      const startTime = workingHours?.start || '09:00';
+      const endTime = workingHours?.end || '18:00';
+      
+      const slots: { time: string; available: boolean }[] = [];
+      const slotInterval = 30; // 30-minute slots
+      
+      // Generate all possible time slots
+      let currentMinutes = this.timeToMinutes(startTime);
+      const endMinutes = this.timeToMinutes(endTime);
+      
+      while (currentMinutes + duration <= endMinutes) {
+        const hours = Math.floor(currentMinutes / 60);
+        const minutes = currentMinutes % 60;
+        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        
+        // Check if this slot is available
+        const isAvailable = await this.checkTimeSlotAvailability(
+          companyId,
+          staffId,
+          date,
+          timeString,
+          duration
+        );
+        
+        slots.push({
+          time: timeString,
+          available: isAvailable
+        });
+        
+        currentMinutes += slotInterval;
+      }
+      
+      console.log(`Generated ${slots.length} time slots`);
+      console.log('=== getAvailableTimeSlots END ===');
+      return slots;
+    } catch (error) {
+      console.error('Error getting available time slots:', error);
+      return [];
     }
   }
 
