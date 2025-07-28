@@ -150,7 +150,10 @@ service cloud.firestore {
       allow update: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
         (isAuthenticated() && resource.data.clientId == request.auth.uid) ||
-        (isValidClient() && resource.data.clientId == request.auth.token.clientId); // Clients can update their appointments
+        (isValidClient() && resource.data.clientId == request.auth.token.clientId) || // Clients can update their appointments
+        (request.auth == null && request.resource.data.status == 'cancelled' && 
+         resource.data.status in ['pending', 'confirmed'] &&
+         request.resource.data.clientId == resource.data.clientId); // Allow public to cancel their own appointments
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
