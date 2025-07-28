@@ -26,7 +26,7 @@ import { useBooking } from '../contexts/BookingContext';
 import { appointmentService, type Appointment } from '../services/appointment.service';
 import { debugAppointments } from '../utils/debugAppointments';
 import { db } from '../config/firebase';
-import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, limit, where } from 'firebase/firestore';
 
 const ClientAppointmentsList: React.FC = () => {
   const { t, language } = useLanguage();
@@ -82,10 +82,11 @@ const ClientAppointmentsList: React.FC = () => {
     // If we have a staffId, try to fetch the staff name
     if (appointment.staffId && appointment.staffId !== 'any' && appointment.staffId.trim() !== '') {
       console.log('Has valid staffId, fetching staff data...');
-      console.log('Fetching from path:', `companies/${companyId}/staff/${appointment.staffId}`);
+      console.log('Fetching from path:', `staff/${appointment.staffId}`);
       
       try {
-        const staffDoc = await getDoc(doc(db, 'companies', companyId, 'staff', appointment.staffId));
+        // Staff is in top-level collection, not nested under companies
+        const staffDoc = await getDoc(doc(db, 'staff', appointment.staffId));
         console.log('Staff doc exists?', staffDoc.exists());
         
         if (staffDoc.exists()) {
@@ -108,9 +109,9 @@ const ClientAppointmentsList: React.FC = () => {
           console.log('Staff document not found for ID:', appointment.staffId);
           console.log('Attempting to check if staff exists in different structure...');
           
-          // Try to check the staff collection structure
-          const staffCollection = collection(db, 'companies', companyId, 'staff');
-          const staffQuery = query(staffCollection, limit(1));
+          // Try to check the staff collection structure (top-level)
+          const staffCollection = collection(db, 'staff');
+          const staffQuery = query(staffCollection, where('companyId', '==', companyId), limit(1));
           const staffSnapshot = await getDocs(staffQuery);
           console.log('Sample staff doc for structure check:', staffSnapshot.empty ? 'No staff docs' : staffSnapshot.docs[0].data());
         }
@@ -144,9 +145,10 @@ const ClientAppointmentsList: React.FC = () => {
   const debugStaffCollection = async (companyId: string) => {
     console.log('=== DEBUG STAFF COLLECTION ===');
     try {
-      const staffQuery = query(collection(db, 'companies', companyId, 'staff'), limit(3));
+      // Staff is in top-level collection
+      const staffQuery = query(collection(db, 'staff'), where('companyId', '==', companyId), limit(3));
       const staffSnapshot = await getDocs(staffQuery);
-      console.log('Staff collection size:', staffSnapshot.size);
+      console.log('Staff collection size for company:', staffSnapshot.size);
       staffSnapshot.forEach((doc) => {
         console.log('Staff doc:', {
           id: doc.id,
