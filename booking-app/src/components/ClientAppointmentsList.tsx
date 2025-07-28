@@ -10,6 +10,8 @@ import {
   CircularProgress,
   Alert,
   Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Event as EventIcon,
@@ -17,6 +19,7 @@ import {
   Person as PersonIcon,
   LocalOffer as ServiceIcon,
   Store as StoreIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -27,6 +30,7 @@ import { appointmentService, type Appointment } from '../services/appointment.se
 import { debugAppointments } from '../utils/debugAppointments';
 import { db } from '../config/firebase';
 import { doc, getDoc, collection, getDocs, query, limit, where } from 'firebase/firestore';
+import CancelAppointmentDialog from './CancelAppointmentDialog';
 
 const ClientAppointmentsList: React.FC = () => {
   const { t, language } = useLanguage();
@@ -35,6 +39,8 @@ const ClientAppointmentsList: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   useEffect(() => {
     if (session?.phoneNumber && bookingData?.linkData?.companyId) {
@@ -236,6 +242,30 @@ const ClientAppointmentsList: React.FC = () => {
     }
   };
 
+  const handleCancelClick = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setCancelDialogOpen(true);
+  };
+
+  const handleCancelSuccess = () => {
+    // Reload appointments after successful cancellation
+    loadAppointments();
+  };
+
+  const canCancelAppointment = (appointment: Appointment): boolean => {
+    // Check if appointment can be cancelled
+    if (!['pending', 'confirmed'].includes(appointment.status)) {
+      return false;
+    }
+    
+    // Check if appointment is in the future
+    const appointmentDate = appointment.date.toDate 
+      ? appointment.date.toDate() 
+      : new Date(appointment.date);
+    
+    return appointmentDate > new Date();
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -342,12 +372,6 @@ const ClientAppointmentsList: React.FC = () => {
                           <PersonIcon fontSize="small" />
                           <Typography component="span" variant="body2">
                             {(() => {
-                              console.log('Displaying staff for appointment:', appointment.id);
-                              console.log('StaffName:', appointment.staffName);
-                              console.log('StaffId:', appointment.staffId);
-                              console.log('BranchId:', appointment.branchId);
-                              console.log('BranchName:', appointment.branchName);
-                              
                               const isAnyStaff = !appointment.staffName || 
                                   appointment.staffName.toLowerCase() === 'any available' ||
                                   appointment.staffName.toLowerCase() === 'any available specialist' ||
@@ -373,15 +397,43 @@ const ClientAppointmentsList: React.FC = () => {
                     </Box>
                   }
                 />
-                <Typography variant="subtitle1" color="primary">
-                  {appointment.totalPrice} {t('egp')}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography variant="subtitle1" color="primary">
+                    {appointment.totalPrice} {t('egp')}
+                  </Typography>
+                  {canCancelAppointment(appointment) && (
+                    <Tooltip title={t('cancel_appointment')}>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleCancelClick(appointment)}
+                        sx={{ mt: 1 }}
+                      >
+                        <CancelIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               </ListItem>
               {index < appointments.length - 1 && <Divider />}
             </React.Fragment>
           );
         })}
       </List>
+      
+      {/* Cancel Appointment Dialog */}
+      {selectedAppointment && session && (
+        <CancelAppointmentDialog
+          open={cancelDialogOpen}
+          onClose={() => {
+            setCancelDialogOpen(false);
+            setSelectedAppointment(null);
+          }}
+          appointment={selectedAppointment}
+          clientId={session.clientId}
+          onSuccess={handleCancelSuccess}
+        />
+      )}
     </Box>
   );
 };

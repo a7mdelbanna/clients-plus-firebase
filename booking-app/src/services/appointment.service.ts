@@ -1,12 +1,16 @@
 import { db } from '../config/firebase';
 import {
   collection,
+  doc,
+  getDoc,
+  updateDoc,
   query,
   where,
   orderBy,
   getDocs,
   QueryConstraint,
   limit,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 export interface Appointment {
@@ -34,6 +38,70 @@ export interface Appointment {
 }
 
 class AppointmentService {
+  // Cancel an appointment
+  async cancelAppointment(
+    appointmentId: string,
+    clientId: string,
+    reason?: string
+  ): Promise<void> {
+    try {
+      console.log('=== cancelAppointment START ===');
+      console.log('AppointmentId:', appointmentId);
+      console.log('ClientId:', clientId);
+      console.log('Reason:', reason);
+      
+      // First, get the appointment to verify ownership
+      const appointmentDoc = await getDoc(doc(db, 'appointments', appointmentId));
+      
+      if (!appointmentDoc.exists()) {
+        throw new Error('Appointment not found');
+      }
+      
+      const appointment = appointmentDoc.data() as Appointment;
+      
+      // Verify the client owns this appointment
+      if (appointment.clientId !== clientId) {
+        console.error('Client ID mismatch:', {
+          appointmentClientId: appointment.clientId,
+          requestClientId: clientId
+        });
+        throw new Error('Unauthorized: You can only cancel your own appointments');
+      }
+      
+      // Check if appointment can be cancelled (only pending or confirmed)
+      if (!['pending', 'confirmed'].includes(appointment.status)) {
+        throw new Error(`Cannot cancel appointment with status: ${appointment.status}`);
+      }
+      
+      // Check if appointment is in the future
+      const appointmentDate = appointment.date.toDate ? appointment.date.toDate() : new Date(appointment.date);
+      if (appointmentDate < new Date()) {
+        throw new Error('Cannot cancel past appointments');
+      }
+      
+      // Update the appointment status
+      const updates: any = {
+        status: 'cancelled',
+        updatedAt: serverTimestamp()
+      };
+      
+      // Add cancellation reason if provided
+      if (reason) {
+        updates.cancellationReason = reason;
+        updates.cancelledBy = 'client';
+        updates.cancelledAt = serverTimestamp();
+      }
+      
+      await updateDoc(doc(db, 'appointments', appointmentId), updates);
+      
+      console.log('Appointment cancelled successfully');
+      console.log('=== cancelAppointment END ===');
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      throw error;
+    }
+  }
+
   // Get appointments by client ID (same as dashboard VisitHistory)
   async getClientAppointments(
     companyId: string,
