@@ -90,6 +90,36 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
     return isRTL ? labels[status]?.ar : labels[status]?.en;
   };
 
+  // Helper function to safely get Date from various date formats
+  const getDateFromAppointment = (dateField: any): Date => {
+    // If it's already a Date object
+    if (dateField instanceof Date) {
+      return dateField;
+    }
+    
+    // If it's a Firestore Timestamp with toDate method
+    if (dateField && typeof dateField.toDate === 'function') {
+      return dateField.toDate();
+    }
+    
+    // If it's a Firestore Timestamp-like object with seconds
+    if (dateField && typeof dateField.seconds === 'number') {
+      return new Date(dateField.seconds * 1000);
+    }
+    
+    // If it's a string or number, try to parse it
+    if (dateField) {
+      const parsed = new Date(dateField);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    
+    // Default to current date if all else fails
+    console.warn('Unknown date format:', dateField);
+    return new Date();
+  };
+
   const filteredAppointments = appointments.filter(appointment => {
     if (filter === 'all') return true;
     return appointment.status === filter;
@@ -171,7 +201,7 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                   <TableCell>
                     <Box>
                       <Typography variant="body2">
-                        {format(appointment.date.toDate(), 'dd MMM yyyy', { locale })}
+                        {format(getDateFromAppointment(appointment.date), 'dd MMM yyyy', { locale })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {appointment.startTime}
