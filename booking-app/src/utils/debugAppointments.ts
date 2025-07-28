@@ -32,6 +32,8 @@ export async function debugAppointments(companyId: string, phoneNumber: string) 
         clientPhone: data.clientPhone,
         clientId: data.clientId,
         clientName: data.clientName,
+        staffId: data.staffId,
+        staffName: data.staffName,
         date: data.date?.toDate?.() || data.date,
         status: data.status
       });
@@ -60,7 +62,15 @@ export async function debugAppointments(companyId: string, phoneNumber: string) 
     console.log('Found with normalized phone:', snapshot3.size);
     snapshot3.forEach(doc => {
       const data = doc.data();
-      console.log('- Date:', data.date?.toDate?.() || data.date, 'Services:', data.services);
+      console.log('Appointment details:', {
+        id: doc.id,
+        date: data.date?.toDate?.() || data.date,
+        staffId: data.staffId,
+        staffName: data.staffName,
+        services: data.services,
+        branchId: data.branchId,
+        branchName: data.branchName
+      });
     });
     
     // Query 4: Get all unique client phones in appointments

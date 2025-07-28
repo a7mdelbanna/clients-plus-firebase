@@ -26,7 +26,7 @@ import { useBooking } from '../contexts/BookingContext';
 import { appointmentService, type Appointment } from '../services/appointment.service';
 import { debugAppointments } from '../utils/debugAppointments';
 import { db } from '../config/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 
 const ClientAppointmentsList: React.FC = () => {
   const { t, language } = useLanguage();
@@ -43,28 +43,63 @@ const ClientAppointmentsList: React.FC = () => {
   }, [session, bookingData?.linkData?.companyId]);
 
   const enrichAppointmentWithStaffName = async (appointment: Appointment, companyId: string): Promise<Appointment> => {
+    console.log('=== enrichAppointmentWithStaffName START ===');
+    console.log('Appointment ID:', appointment.id);
+    console.log('Current staffName:', appointment.staffName);
+    console.log('Current staffId:', appointment.staffId);
+    
     // If we already have a proper staff name, return as is
-    if (appointment.staffName && appointment.staffName !== 'Any Available') {
+    if (appointment.staffName && appointment.staffName !== 'Any Available' && appointment.staffName !== 'أي متخصص متاح') {
+      console.log('Already has proper staff name, returning as is');
       return appointment;
     }
     
     // If we have a staffId, try to fetch the staff name
-    if (appointment.staffId && appointment.staffId !== 'any') {
+    if (appointment.staffId && appointment.staffId !== 'any' && appointment.staffId !== '') {
+      console.log('Has staffId, fetching staff data...');
       try {
         const staffDoc = await getDoc(doc(db, 'companies', companyId, 'staff', appointment.staffId));
+        console.log('Staff doc exists?', staffDoc.exists());
+        
         if (staffDoc.exists()) {
           const staffData = staffDoc.data();
-          return {
+          console.log('Staff data:', staffData);
+          const updatedAppointment = {
             ...appointment,
-            staffName: staffData.name || appointment.staffName
+            staffName: staffData.name || staffData.firstName || appointment.staffName
           };
+          console.log('Updated appointment with staff name:', updatedAppointment.staffName);
+          return updatedAppointment;
+        } else {
+          console.log('Staff document not found for ID:', appointment.staffId);
         }
       } catch (error) {
-        console.log('Error fetching staff name for appointment:', appointment.id, error);
+        console.error('Error fetching staff name for appointment:', appointment.id, error);
       }
+    } else {
+      console.log('No valid staffId or staffId is "any"');
     }
     
+    console.log('=== enrichAppointmentWithStaffName END ===');
     return appointment;
+  };
+
+  const debugStaffCollection = async (companyId: string) => {
+    console.log('=== DEBUG STAFF COLLECTION ===');
+    try {
+      const staffQuery = query(collection(db, 'companies', companyId, 'staff'), limit(3));
+      const staffSnapshot = await getDocs(staffQuery);
+      console.log('Staff collection size:', staffSnapshot.size);
+      staffSnapshot.forEach((doc) => {
+        console.log('Staff doc:', {
+          id: doc.id,
+          data: doc.data()
+        });
+      });
+    } catch (error) {
+      console.error('Error accessing staff collection:', error);
+    }
+    console.log('=== END DEBUG STAFF ===');
   };
 
   const loadAppointments = async () => {
@@ -86,6 +121,9 @@ const ClientAppointmentsList: React.FC = () => {
       console.log('Company ID:', companyId);
       console.log('Client phone:', session.phoneNumber);
       console.log('Client ID:', session.clientId);
+      
+      // Debug staff collection structure
+      await debugStaffCollection(companyId);
       
       let appointmentsList: Appointment[] = [];
       
@@ -235,9 +273,19 @@ const ClientAppointmentsList: React.FC = () => {
                         <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                           <PersonIcon fontSize="small" />
                           <Typography component="span" variant="body2">
-                            {appointment.staffName && appointment.staffName !== 'Any Available' 
-                              ? appointment.staffName 
-                              : t('any_specialist')}
+                            {(() => {
+                              console.log('Displaying staff for appointment:', appointment.id);
+                              console.log('StaffName:', appointment.staffName);
+                              console.log('StaffId:', appointment.staffId);
+                              
+                              if (appointment.staffName && 
+                                  appointment.staffName !== 'Any Available' && 
+                                  appointment.staffName !== 'أي متخصص متاح' &&
+                                  appointment.staffName !== t('any_specialist')) {
+                                return appointment.staffName;
+                              }
+                              return t('any_specialist');
+                            })()}
                           </Typography>
                         </Box>
                       )}
