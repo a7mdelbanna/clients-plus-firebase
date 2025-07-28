@@ -43,23 +43,47 @@ const ClientAppointmentsList: React.FC = () => {
   }, [session, bookingData?.linkData?.companyId]);
 
   const enrichAppointmentWithStaffName = async (appointment: Appointment, companyId: string): Promise<Appointment> => {
-    console.log('=== enrichAppointmentWithStaffName START ===');
-    console.log('Appointment ID:', appointment.id);
-    console.log('Current staffName:', appointment.staffName);
-    console.log('Current staffId:', appointment.staffId);
+    try {
+      console.log('=== enrichAppointmentWithStaffName START ===');
+      console.log('Appointment ID:', appointment.id);
+      console.log('Current staffName:', appointment.staffName);
+      console.log('Current staffId:', appointment.staffId);
+      console.log('CompanyId:', companyId);
+      
+      // Debug the exact staffName value
+      console.log('StaffName type:', typeof appointment.staffName);
+      console.log('StaffName value (quoted):', `"${appointment.staffName}"`);
+      console.log('StaffName length:', appointment.staffName?.length);
+      console.log('StaffName charCodes:', appointment.staffName ? Array.from(appointment.staffName).map(c => c.charCodeAt(0)) : 'null');
+      
+      // If we already have a proper staff name, return as is
+      const isAnyVariant = appointment.staffName && (
+        appointment.staffName.toLowerCase() === 'any available' ||
+        appointment.staffName.toLowerCase() === 'any available specialist' ||
+        appointment.staffName === 'أي متخصص متاح' ||
+        appointment.staffName === 'أي مختص متاح' ||
+        appointment.staffName.trim() === ''
+      );
+      
+      console.log('Is "Any" variant?', isAnyVariant);
+      
+      if (appointment.staffName && !isAnyVariant) {
+        console.log('Already has proper staff name, returning as is');
+        console.log('=== enrichAppointmentWithStaffName END (has name) ===');
+        return appointment;
+      }
     
-    // If we already have a proper staff name, return as is
-    if (appointment.staffName && 
-        appointment.staffName.toLowerCase() !== 'any available' && 
-        appointment.staffName !== 'أي متخصص متاح' &&
-        appointment.staffName !== 'أي مختص متاح') {
-      console.log('Already has proper staff name, returning as is');
-      return appointment;
-    }
+    // Debug staffId value
+    console.log('StaffId type:', typeof appointment.staffId);
+    console.log('StaffId value (quoted):', `"${appointment.staffId}"`);
+    console.log('StaffId === "any"?', appointment.staffId === 'any');
+    console.log('StaffId === ""?', appointment.staffId === '');
     
     // If we have a staffId, try to fetch the staff name
-    if (appointment.staffId && appointment.staffId !== 'any' && appointment.staffId !== '') {
-      console.log('Has staffId, fetching staff data...');
+    if (appointment.staffId && appointment.staffId !== 'any' && appointment.staffId.trim() !== '') {
+      console.log('Has valid staffId, fetching staff data...');
+      console.log('Fetching from path:', `companies/${companyId}/staff/${appointment.staffId}`);
+      
       try {
         const staffDoc = await getDoc(doc(db, 'companies', companyId, 'staff', appointment.staffId));
         console.log('Staff doc exists?', staffDoc.exists());
@@ -67,24 +91,54 @@ const ClientAppointmentsList: React.FC = () => {
         if (staffDoc.exists()) {
           const staffData = staffDoc.data();
           console.log('Staff data:', staffData);
-          const updatedAppointment = {
-            ...appointment,
-            staffName: staffData.name || staffData.firstName || appointment.staffName
-          };
-          console.log('Updated appointment with staff name:', updatedAppointment.staffName);
-          return updatedAppointment;
+          const staffName = staffData.name || staffData.firstName || staffData.fullName || '';
+          console.log('Extracted staff name:', staffName);
+          
+          if (staffName) {
+            const updatedAppointment = {
+              ...appointment,
+              staffName: staffName
+            };
+            console.log('Updated appointment with staff name:', updatedAppointment.staffName);
+            return updatedAppointment;
+          } else {
+            console.log('Staff document exists but no name found');
+          }
         } else {
           console.log('Staff document not found for ID:', appointment.staffId);
+          console.log('Attempting to check if staff exists in different structure...');
+          
+          // Try to check the staff collection structure
+          const staffCollection = collection(db, 'companies', companyId, 'staff');
+          const staffQuery = query(staffCollection, limit(1));
+          const staffSnapshot = await getDocs(staffQuery);
+          console.log('Sample staff doc for structure check:', staffSnapshot.empty ? 'No staff docs' : staffSnapshot.docs[0].data());
         }
       } catch (error) {
         console.error('Error fetching staff name for appointment:', appointment.id, error);
+        console.error('Error details:', error);
       }
     } else {
-      console.log('No valid staffId or staffId is "any"');
+      console.log('No valid staffId:', {
+        staffId: appointment.staffId,
+        isEmptyString: appointment.staffId === '',
+        isTrimmedEmpty: appointment.staffId?.trim() === '',
+        isAny: appointment.staffId === 'any'
+      });
     }
     
     console.log('=== enrichAppointmentWithStaffName END ===');
     return appointment;
+    } catch (error) {
+      console.error('ERROR in enrichAppointmentWithStaffName:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        appointment: appointment.id,
+        staffId: appointment.staffId
+      });
+      console.log('=== enrichAppointmentWithStaffName END (error) ===');
+      return appointment;
+    }
   };
 
   const debugStaffCollection = async (companyId: string) => {
@@ -151,11 +205,11 @@ const ClientAppointmentsList: React.FC = () => {
       }
 
       console.log('Appointments loaded:', appointmentsList.length);
-      console.log('First 3 appointments before enrichment:', appointmentsList.slice(0, 3).map(apt => ({
-        id: apt.id,
-        staffId: apt.staffId,
-        staffName: apt.staffName
-      })));
+      console.log('First 3 appointments before enrichment:');
+      appointmentsList.slice(0, 3).forEach(apt => {
+        console.log('- ID:', apt.id, 'StaffId:', apt.staffId, 'StaffName:', apt.staffName);
+        console.log('  Full appointment:', JSON.stringify(apt, null, 2));
+      });
       
       // Enrich appointments with staff names if needed
       const enrichedAppointments = await Promise.all(
@@ -163,11 +217,10 @@ const ClientAppointmentsList: React.FC = () => {
       );
       
       console.log('Appointments enriched, total:', enrichedAppointments.length);
-      console.log('First 3 appointments after enrichment:', enrichedAppointments.slice(0, 3).map(apt => ({
-        id: apt.id,
-        staffId: apt.staffId,
-        staffName: apt.staffName
-      })));
+      console.log('First 3 appointments after enrichment:');
+      enrichedAppointments.slice(0, 3).forEach(apt => {
+        console.log('- ID:', apt.id, 'StaffId:', apt.staffId, 'StaffName:', apt.staffName);
+      });
       setAppointments(enrichedAppointments);
     } catch (err) {
       console.error('=== ClientAppointmentsList: ERROR ===');
@@ -293,10 +346,15 @@ const ClientAppointmentsList: React.FC = () => {
                               console.log('BranchId:', appointment.branchId);
                               console.log('BranchName:', appointment.branchName);
                               
-                              if (appointment.staffName && 
-                                  appointment.staffName !== 'Any Available' && 
-                                  appointment.staffName !== 'أي متخصص متاح' &&
-                                  appointment.staffName !== t('any_specialist')) {
+                              const isAnyStaff = !appointment.staffName || 
+                                  appointment.staffName.toLowerCase() === 'any available' ||
+                                  appointment.staffName.toLowerCase() === 'any available specialist' ||
+                                  appointment.staffName === 'أي متخصص متاح' ||
+                                  appointment.staffName === 'أي مختص متاح' ||
+                                  appointment.staffName === t('any_specialist') ||
+                                  appointment.staffName.trim() === '';
+                              
+                              if (!isAnyStaff) {
                                 return appointment.staffName;
                               }
                               return t('any_specialist');
