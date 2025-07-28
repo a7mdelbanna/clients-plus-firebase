@@ -26,11 +26,13 @@ import type { Appointment } from '../../services/appointment.service';
 interface VisitHistoryProps {
   clientId: string;
   companyId: string;
+  branchId?: string;
 }
 
 const VisitHistory: React.FC<VisitHistoryProps> = ({
   clientId,
   companyId,
+  branchId,
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
@@ -47,14 +49,16 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
       // If no clientId, set loading to false immediately
       setLoading(false);
     }
-  }, [clientId, companyId]);
+  }, [clientId, companyId, branchId]);
 
   const loadClientAppointments = async () => {
     try {
       setLoading(true);
       const clientAppointments = await appointmentService.getClientAppointments(
         companyId,
-        clientId
+        clientId,
+        undefined, // maxResults
+        branchId
       );
       setAppointments(clientAppointments);
     } catch (error) {

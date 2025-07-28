@@ -858,6 +858,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           <VisitHistory
             clientId={selectedClient?.id || appointment?.clientId || ''}
             companyId={companyId}
+            branchId={currentBranch?.id}
           />
         )}
       </Box>

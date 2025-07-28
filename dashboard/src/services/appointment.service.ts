@@ -1097,14 +1097,21 @@ class AppointmentService {
   async getClientAppointments(
     companyId: string,
     clientId: string,
-    maxResults?: number
+    maxResults?: number,
+    branchId?: string
   ): Promise<Appointment[]> {
     try {
       const constraints: QueryConstraint[] = [
         where('companyId', '==', companyId),
-        where('clientId', '==', clientId),
-        orderBy('date', 'desc')
+        where('clientId', '==', clientId)
       ];
+
+      // Filter by branch if provided
+      if (branchId) {
+        constraints.push(where('branchId', '==', branchId));
+      }
+
+      constraints.push(orderBy('date', 'desc'));
 
       if (maxResults) {
         constraints.push(limit(maxResults));
