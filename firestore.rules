@@ -111,7 +111,10 @@ service cloud.firestore {
         (request.resource.data.source == 'online_booking'); // Allow public creation through online booking
       allow update: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
-        isClientOwner(clientId); // Allow clients to update their own data
+        isClientOwner(clientId) || 
+        (request.auth == null && 
+         request.resource.data.companyId == resource.data.companyId &&
+         request.resource.data.phone == resource.data.phone); // Allow clients to update their own data based on phone match
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }

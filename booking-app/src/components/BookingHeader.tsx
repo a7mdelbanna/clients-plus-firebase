@@ -20,6 +20,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useClientAuth } from '../contexts/ClientAuthContext';
 import ClientLoginModal from './ClientLoginModal';
 import ClientAppointmentsList from './ClientAppointmentsList';
+import ClientProfile from './ClientProfile';
 import LanguageToggle from './LanguageToggle';
 
 interface BookingHeaderProps {
@@ -32,6 +33,7 @@ const BookingHeader: React.FC<BookingHeaderProps> = ({ logoUrl, businessName }) 
   const { session, isAuthenticated, logout } = useClientAuth();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [appointmentsOpen, setAppointmentsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -105,7 +107,10 @@ const BookingHeader: React.FC<BookingHeaderProps> = ({ logoUrl, businessName }) 
                 
                 <Divider />
                 
-                <MenuItem onClick={handleMenuClose}>
+                <MenuItem onClick={() => {
+                  handleMenuClose();
+                  setProfileOpen(true);
+                }}>
                   <PersonIcon sx={{ mr: 1 }} fontSize="small" />
                   {t('my_profile')}
                 </MenuItem>
@@ -154,6 +159,21 @@ const BookingHeader: React.FC<BookingHeaderProps> = ({ logoUrl, businessName }) 
         <ClientAppointmentsList />
         <Box sx={{ p: 2, textAlign: 'right' }}>
           <Button onClick={() => setAppointmentsOpen(false)}>
+            {t('close')}
+          </Button>
+        </Box>
+      </Dialog>
+      
+      {/* Profile Dialog */}
+      <Dialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <ClientProfile />
+        <Box sx={{ p: 2, textAlign: 'right' }}>
+          <Button onClick={() => setProfileOpen(false)}>
             {t('close')}
           </Button>
         </Box>
