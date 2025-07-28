@@ -9,12 +9,15 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Alert,
+  Chip,
 } from '@mui/material';
 import {
   Dashboard,
   Language,
   Phone,
   DirectionsWalk,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import ServiceSelection from './ServiceSelection';
 import type { Appointment, AppointmentSource } from '../../services/appointment.service';
@@ -119,6 +122,72 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
           </Select>
         </FormControl>
       </Box>
+
+      {/* Cancellation Information */}
+      {appointment?.status === 'cancelled' && (
+        <Box sx={{ mb: 2 }}>
+          <Alert 
+            severity="warning" 
+            icon={<CancelIcon />}
+            sx={{ 
+              mb: 2,
+              '& .MuiAlert-message': {
+                width: '100%'
+              }
+            }}
+          >
+            <Box>
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                {isRTL ? 'معلومات الإلغاء' : 'Cancellation Information'}
+              </Typography>
+              
+              {appointment.cancelledBy && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {isRTL ? 'ملغي بواسطة:' : 'Cancelled by:'}
+                  </Typography>
+                  <Chip 
+                    label={
+                      appointment.cancelledBy === 'client' 
+                        ? (isRTL ? 'العميل' : 'Client')
+                        : (isRTL ? 'الموظف' : 'Staff')
+                    }
+                    size="small"
+                    color={appointment.cancelledBy === 'client' ? 'warning' : 'default'}
+                  />
+                </Box>
+              )}
+              
+              {appointment.cancelledAt && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {isRTL ? 'تاريخ الإلغاء:' : 'Cancellation Date:'}{' '}
+                    {new Date(appointment.cancelledAt.toDate ? appointment.cancelledAt.toDate() : appointment.cancelledAt).toLocaleString(
+                      isRTL ? 'ar-EG' : 'en-US'
+                    )}
+                  </Typography>
+                </Box>
+              )}
+              
+              {appointment.cancellationReason && (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {isRTL ? 'سبب الإلغاء:' : 'Cancellation Reason:'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ 
+                    backgroundColor: theme.palette.action.hover,
+                    p: 1.5,
+                    borderRadius: 1,
+                    fontStyle: 'italic'
+                  }}>
+                    "{appointment.cancellationReason}"
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Alert>
+        </Box>
+      )}
 
       {/* Notes Section */}
       <Box>

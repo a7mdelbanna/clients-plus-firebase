@@ -106,6 +106,11 @@ export interface Appointment {
   source: AppointmentSource;
   bookingLinkId?: string; // if booked online
   
+  // Cancellation Info
+  cancelledBy?: 'client' | 'staff' | 'system';
+  cancelledAt?: Timestamp;
+  cancellationReason?: string;
+  
   // Notifications
   notifications?: AppointmentNotification[];
   
