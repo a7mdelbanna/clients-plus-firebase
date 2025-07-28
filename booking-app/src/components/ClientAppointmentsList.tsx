@@ -16,6 +16,7 @@ import {
   Schedule as ScheduleIcon,
   Person as PersonIcon,
   LocalOffer as ServiceIcon,
+  Store as StoreIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -198,9 +199,15 @@ const ClientAppointmentsList: React.FC = () => {
                         </Typography>
                       </Box>
                       {appointment.staffName && (
-                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                           <PersonIcon fontSize="small" />
                           <Typography component="span" variant="body2">{appointment.staffName}</Typography>
+                        </Box>
+                      )}
+                      {appointment.branchName && (
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <StoreIcon fontSize="small" />
+                          <Typography component="span" variant="body2">{appointment.branchName}</Typography>
                         </Box>
                       )}
                     </Box>

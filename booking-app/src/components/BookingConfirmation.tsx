@@ -181,12 +181,13 @@ const BookingConfirmation: React.FC = () => {
       const appointmentData: any = {
         companyId: bookingData.linkData.companyId,
         branchId: bookingData.branchId!,
+        branchName: branch?.name || '',
         clientId: clientId,
         clientPhone: normalizedPhone, // Use normalized phone
         clientName: bookingData.customerName!,
         clientEmail: bookingData.customerEmail || '',
         staffId: bookingData.staffId === 'any' ? '' : bookingData.staffId!,
-        staffName: staff?.name || 'Any Available',
+        staffName: bookingData.staffId === 'any' ? t('any_specialist') : (staff?.name || ''),
         services: appointmentServices,
         date: appointmentDate,
         time: bookingData.time,
