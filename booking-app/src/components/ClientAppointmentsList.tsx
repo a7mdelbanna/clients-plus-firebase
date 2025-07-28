@@ -172,8 +172,8 @@ const ClientAppointmentsList: React.FC = () => {
                 </ListItemIcon>
                 <ListItemText
                   primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle1">
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography component="span" variant="subtitle1">
                         {format(appointmentDate, 'EEEE, d MMMM yyyy', {
                           locale: language === 'ar' ? ar : enUS,
                         })}
@@ -186,7 +186,7 @@ const ClientAppointmentsList: React.FC = () => {
                     </Box>
                   }
                   secondary={
-                    <Box sx={{ mt: 1 }}>
+                    <Box component="span" sx={{ display: 'block', mt: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <ScheduleIcon fontSize="small" />
                         <Typography variant="body2">{appointment.startTime}</Typography>
