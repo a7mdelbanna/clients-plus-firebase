@@ -21,6 +21,38 @@ export interface ClientMarketing {
   acceptsPromotions: boolean;
 }
 
+export interface ClientPreferences {
+  // Service preferences
+  preferredStaff?: string[];
+  preferredDays?: string[];
+  preferredTimes?: string[];
+  roomPreferences?: string;
+  
+  // Communication preferences
+  communicationLanguage?: string;
+  communicationStyle?: 'silent' | 'minimal' | 'chatty' | 'very_social';
+  
+  // Lifestyle preferences
+  favoriteDrinks?: string[];
+  musicPreferences?: {
+    genres?: string[];
+    artists?: string[];
+    volume?: 'quiet' | 'moderate' | 'loud';
+    preference?: 'no_music' | 'background' | 'engaged';
+  };
+  
+  // Comfort preferences
+  temperaturePreference?: 'cold' | 'cool' | 'moderate' | 'warm' | 'hot';
+  aromatherapy?: string[];
+  refreshments?: {
+    beverageTemperature?: 'ice_cold' | 'cold' | 'room_temp' | 'warm' | 'hot';
+    snackPreferences?: string[];
+  };
+  
+  // Special requests
+  specialRequests?: string;
+}
+
 export interface Client {
   id?: string;
   companyId: string;
@@ -39,6 +71,9 @@ export interface Client {
   
   // Marketing
   marketing?: ClientMarketing;
+  
+  // Preferences
+  preferences?: ClientPreferences;
   
   // System fields
   createdAt?: Timestamp;
