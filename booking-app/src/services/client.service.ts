@@ -21,6 +21,13 @@ export interface ClientMarketing {
   acceptsPromotions: boolean;
 }
 
+export interface ClientMedical {
+  allergies?: string[];
+  conditions?: string[];
+  medications?: string[];
+  notes?: string;
+}
+
 export interface ClientPreferences {
   // Service preferences
   preferredStaff?: string[];
@@ -74,6 +81,9 @@ export interface Client {
   
   // Preferences
   preferences?: ClientPreferences;
+  
+  // Medical Information
+  medical?: ClientMedical;
   
   // System fields
   createdAt?: Timestamp;

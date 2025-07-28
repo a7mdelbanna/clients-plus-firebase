@@ -38,6 +38,8 @@ import {
   MusicNote as MusicIcon,
   Thermostat as ThermostatIcon,
   Spa as SpaIcon,
+  LocalHospital as MedicalIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -96,6 +98,12 @@ const ClientProfile: React.FC = () => {
       aromatherapy: [] as string[],
       specialRequests: '',
     },
+    medical: {
+      allergies: [] as string[],
+      conditions: [] as string[],
+      medications: [] as string[],
+      notes: '',
+    },
   });
 
   useEffect(() => {
@@ -152,6 +160,12 @@ const ClientProfile: React.FC = () => {
             aromatherapy: clientData.preferences?.aromatherapy || [],
             specialRequests: clientData.preferences?.specialRequests || '',
           },
+          medical: {
+            allergies: clientData.medical?.allergies || [],
+            conditions: clientData.medical?.conditions || [],
+            medications: clientData.medical?.medications || [],
+            notes: clientData.medical?.notes || '',
+          },
         });
       }
     } catch (err) {
@@ -180,6 +194,7 @@ const ClientProfile: React.FC = () => {
         address: formData.address,
         marketing: formData.marketing,
         preferences: formData.preferences,
+        medical: formData.medical,
       };
       
       await clientService.updateClient(session.clientId, updates);
@@ -246,6 +261,12 @@ const ClientProfile: React.FC = () => {
           temperaturePreference: client.preferences?.temperaturePreference || 'moderate',
           aromatherapy: client.preferences?.aromatherapy || [],
           specialRequests: client.preferences?.specialRequests || '',
+        },
+        medical: {
+          allergies: client.medical?.allergies || [],
+          conditions: client.medical?.conditions || [],
+          medications: client.medical?.medications || [],
+          notes: client.medical?.notes || '',
         },
       });
     }
@@ -340,6 +361,7 @@ const ClientProfile: React.FC = () => {
       >
         <Tab label={t('personal_information')} />
         <Tab label={t('preferences')} />
+        <Tab label={t('medical')} />
       </Tabs>
 
       {/* Tab Panels */}
@@ -882,6 +904,216 @@ const ClientProfile: React.FC = () => {
               multiline
               rows={3}
               placeholder={language === 'ar' ? 'أي طلبات أو ملاحظات خاصة...' : 'Any special requests or notes...'}
+            />
+          </Box>
+        </Box>
+      )}
+
+      {/* Medical Tab */}
+      {activeTab === 2 && (
+        <Box>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+            <MedicalIcon />
+            {t('medical_information')}
+          </Typography>
+
+          {/* Allergies */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <WarningIcon sx={{ color: 'error.main', fontSize: 20 }} />
+              {t('allergies')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+              {formData.medical.allergies.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('no_allergies')}
+                </Typography>
+              ) : (
+                formData.medical.allergies.map((allergy, index) => (
+                  <Chip
+                    key={index}
+                    label={allergy}
+                    onDelete={isEditing ? () => {
+                      const newAllergies = formData.medical.allergies.filter((_, i) => i !== index);
+                      setFormData({
+                        ...formData,
+                        medical: { ...formData.medical, allergies: newAllergies }
+                      });
+                    } : undefined}
+                    sx={{
+                      backgroundColor: '#f44336' + '20',
+                      color: '#f44336',
+                      borderColor: '#f44336',
+                      border: '1px solid',
+                      '& .MuiChip-deleteIcon': {
+                        color: '#f44336',
+                      },
+                    }}
+                  />
+                ))
+              )}
+            </Box>
+            {isEditing && (
+              <TextField
+                fullWidth
+                placeholder={t('add_allergy')}
+                size="small"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.target as any).value.trim()) {
+                    e.preventDefault();
+                    const newAllergy = (e.target as any).value.trim();
+                    if (!formData.medical.allergies.includes(newAllergy)) {
+                      setFormData({
+                        ...formData,
+                        medical: {
+                          ...formData.medical,
+                          allergies: [...formData.medical.allergies, newAllergy]
+                        }
+                      });
+                      (e.target as any).value = '';
+                    }
+                  }
+                }}
+              />
+            )}
+          </Box>
+
+          {/* Chronic Conditions */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500 }}>
+              {t('chronic_conditions')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+              {formData.medical.conditions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('no_conditions')}
+                </Typography>
+              ) : (
+                formData.medical.conditions.map((condition, index) => (
+                  <Chip
+                    key={index}
+                    label={condition}
+                    onDelete={isEditing ? () => {
+                      const newConditions = formData.medical.conditions.filter((_, i) => i !== index);
+                      setFormData({
+                        ...formData,
+                        medical: { ...formData.medical, conditions: newConditions }
+                      });
+                    } : undefined}
+                    sx={{
+                      backgroundColor: '#ff9800' + '20',
+                      color: '#ff9800',
+                      borderColor: '#ff9800',
+                      border: '1px solid',
+                      '& .MuiChip-deleteIcon': {
+                        color: '#ff9800',
+                      },
+                    }}
+                  />
+                ))
+              )}
+            </Box>
+            {isEditing && (
+              <TextField
+                fullWidth
+                placeholder={t('add_condition')}
+                size="small"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.target as any).value.trim()) {
+                    e.preventDefault();
+                    const newCondition = (e.target as any).value.trim();
+                    if (!formData.medical.conditions.includes(newCondition)) {
+                      setFormData({
+                        ...formData,
+                        medical: {
+                          ...formData.medical,
+                          conditions: [...formData.medical.conditions, newCondition]
+                        }
+                      });
+                      (e.target as any).value = '';
+                    }
+                  }
+                }}
+              />
+            )}
+          </Box>
+
+          {/* Current Medications */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500 }}>
+              {t('current_medications')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+              {formData.medical.medications.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('no_medications')}
+                </Typography>
+              ) : (
+                formData.medical.medications.map((medication, index) => (
+                  <Chip
+                    key={index}
+                    label={medication}
+                    onDelete={isEditing ? () => {
+                      const newMedications = formData.medical.medications.filter((_, i) => i !== index);
+                      setFormData({
+                        ...formData,
+                        medical: { ...formData.medical, medications: newMedications }
+                      });
+                    } : undefined}
+                    sx={{
+                      backgroundColor: '#2196f3' + '20',
+                      color: '#2196f3',
+                      borderColor: '#2196f3',
+                      border: '1px solid',
+                      '& .MuiChip-deleteIcon': {
+                        color: '#2196f3',
+                      },
+                    }}
+                  />
+                ))
+              )}
+            </Box>
+            {isEditing && (
+              <TextField
+                fullWidth
+                placeholder={t('add_medication')}
+                size="small"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.target as any).value.trim()) {
+                    e.preventDefault();
+                    const newMedication = (e.target as any).value.trim();
+                    if (!formData.medical.medications.includes(newMedication)) {
+                      setFormData({
+                        ...formData,
+                        medical: {
+                          ...formData.medical,
+                          medications: [...formData.medical.medications, newMedication]
+                        }
+                      });
+                      (e.target as any).value = '';
+                    }
+                  }
+                }}
+              />
+            )}
+          </Box>
+
+          {/* Medical Notes */}
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500 }}>
+              {t('medical_notes')}
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={formData.medical.notes}
+              onChange={(e) => setFormData({
+                ...formData,
+                medical: { ...formData.medical, notes: e.target.value }
+              })}
+              placeholder={t('medical_notes_placeholder')}
+              disabled={!isEditing}
             />
           </Box>
         </Box>
