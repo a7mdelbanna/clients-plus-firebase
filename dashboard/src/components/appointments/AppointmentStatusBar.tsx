@@ -75,7 +75,7 @@ const AppointmentStatusBar: React.FC<AppointmentStatusBarProps> = ({
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
 
-  const statuses: AppointmentStatus[] = ['pending', 'arrived', 'no_show', 'confirmed'];
+  const statuses: AppointmentStatus[] = ['pending', 'arrived', 'no_show', 'confirmed', 'cancelled'];
 
   return (
     <Box
