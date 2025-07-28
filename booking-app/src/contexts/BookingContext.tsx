@@ -19,6 +19,10 @@ interface BookingData {
   customerPhone?: string;
   customerEmail?: string;
   comments?: string;
+  rescheduleInfo?: {
+    isReschedule: boolean;
+    oldAppointmentId: string;
+  };
 }
 
 interface BookingContextType {

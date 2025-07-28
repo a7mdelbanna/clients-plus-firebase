@@ -207,13 +207,12 @@ class AppointmentService {
       endOfDay.setHours(23, 59, 59, 999);
       
       // Query appointments for the same staff on the same day
+      // Using the same approach as booking.service.ts to avoid complex index requirements
       const appointmentsQuery = query(
         collection(db, 'appointments'),
-        where('companyId', '==', companyId),
         where('staffId', '==', staffId),
         where('date', '>=', Timestamp.fromDate(startOfDay)),
-        where('date', '<=', Timestamp.fromDate(endOfDay)),
-        where('status', 'in', ['pending', 'confirmed', 'in_progress'])
+        where('date', '<=', Timestamp.fromDate(endOfDay))
       );
       
       const snapshot = await getDocs(appointmentsQuery);
@@ -223,12 +222,25 @@ class AppointmentService {
         return true;
       }
       
+      // Filter results on client side for company and status
+      const relevantAppointments = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Appointment))
+        .filter(apt => 
+          apt.companyId === companyId && 
+          ['pending', 'confirmed', 'in_progress'].includes(apt.status) &&
+          apt.status !== 'rescheduled' // Exclude rescheduled appointments
+        );
+      
+      if (relevantAppointments.length === 0) {
+        console.log('No relevant appointments found after filtering');
+        return true;
+      }
+      
       // Check for time conflicts
       const requestedStartMinutes = this.timeToMinutes(startTime);
       const requestedEndMinutes = requestedStartMinutes + duration;
       
-      for (const doc of snapshot.docs) {
-        const appointment = doc.data() as Appointment;
+      for (const appointment of relevantAppointments) {
         const appointmentStartMinutes = this.timeToMinutes(appointment.startTime);
         const appointmentEndMinutes = this.timeToMinutes(appointment.endTime);
         
@@ -248,7 +260,59 @@ class AppointmentService {
       return true;
     } catch (error) {
       console.error('Error checking time slot availability:', error);
-      // In case of error, return false to be safe
+      
+      // If it's an index error, try a simpler approach
+      if (error instanceof Error && error.message.includes('index')) {
+        console.log('Index error detected, using fallback approach');
+        try {
+          // Simple query by staffId only
+          const simpleQuery = query(
+            collection(db, 'appointments'),
+            where('staffId', '==', staffId)
+          );
+          
+          const simpleSnapshot = await getDocs(simpleQuery);
+          
+          // Filter on client side
+          const relevantAppointments = simpleSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Appointment))
+            .filter(apt => {
+              const aptDate = apt.date.toDate ? apt.date.toDate() : new Date(apt.date);
+              return apt.companyId === companyId &&
+                     aptDate >= startOfDay &&
+                     aptDate <= endOfDay &&
+                     ['pending', 'confirmed', 'in_progress'].includes(apt.status) &&
+                     apt.status !== 'rescheduled'; // Exclude rescheduled appointments
+            });
+          
+          // Check for time conflicts
+          const requestedStartMinutes = this.timeToMinutes(startTime);
+          const requestedEndMinutes = requestedStartMinutes + duration;
+          
+          for (const appointment of relevantAppointments) {
+            const appointmentStartMinutes = this.timeToMinutes(appointment.startTime);
+            const appointmentEndMinutes = this.timeToMinutes(appointment.endTime);
+            
+            // Check if there's an overlap
+            if (
+              (requestedStartMinutes >= appointmentStartMinutes && requestedStartMinutes < appointmentEndMinutes) ||
+              (requestedEndMinutes > appointmentStartMinutes && requestedEndMinutes <= appointmentEndMinutes) ||
+              (requestedStartMinutes <= appointmentStartMinutes && requestedEndMinutes >= appointmentEndMinutes)
+            ) {
+              console.log('Time slot conflicts with existing appointment:', appointment.id);
+              return false;
+            }
+          }
+          
+          console.log('Time slot is available (fallback)');
+          return true;
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          return false;
+        }
+      }
+      
+      // In case of other errors, return false to be safe
       return false;
     }
   }
@@ -269,10 +333,38 @@ class AppointmentService {
   ): Promise<{ time: string; available: boolean }[]> {
     try {
       console.log('=== getAvailableTimeSlots START ===');
+      console.log('Parameters:', { companyId, staffId, date, duration, workingHours });
+      
+      // Handle "any" staff selection - return all slots as available
+      if (!staffId || staffId === 'any' || staffId.trim() === '') {
+        console.log('Any staff selected - returning default available slots');
+        const startTime = workingHours?.start || '09:00';
+        const endTime = workingHours?.end || '21:00'; // 9 PM like booking service
+        const slots: { time: string; available: boolean }[] = [];
+        const slotInterval = 30; // 30-minute slots
+        
+        let currentMinutes = this.timeToMinutes(startTime);
+        const endMinutes = this.timeToMinutes(endTime);
+        
+        while (currentMinutes + duration <= endMinutes) {
+          const hours = Math.floor(currentMinutes / 60);
+          const minutes = currentMinutes % 60;
+          const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          
+          slots.push({
+            time: timeString,
+            available: true
+          });
+          
+          currentMinutes += slotInterval;
+        }
+        
+        return slots;
+      }
       
       // Default working hours if not provided
       const startTime = workingHours?.start || '09:00';
-      const endTime = workingHours?.end || '18:00';
+      const endTime = workingHours?.end || '21:00'; // 9 PM like booking service
       
       const slots: { time: string; available: boolean }[] = [];
       const slotInterval = 30; // 30-minute slots

@@ -20,6 +20,7 @@ import {
   LocalOffer as ServiceIcon,
   Store as StoreIcon,
   Cancel as CancelIcon,
+  EventRepeat as RescheduleIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -31,6 +32,7 @@ import { debugAppointments } from '../utils/debugAppointments';
 import { db } from '../config/firebase';
 import { doc, getDoc, collection, getDocs, query, limit, where } from 'firebase/firestore';
 import CancelAppointmentDialog from './CancelAppointmentDialog';
+import RescheduleAppointmentDialog from './RescheduleAppointmentDialog';
 
 const ClientAppointmentsList: React.FC = () => {
   const { t, language } = useLanguage();
@@ -40,6 +42,7 @@ const ClientAppointmentsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   useEffect(() => {
@@ -252,6 +255,16 @@ const ClientAppointmentsList: React.FC = () => {
     loadAppointments();
   };
 
+  const handleRescheduleClick = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setRescheduleDialogOpen(true);
+  };
+
+  const handleRescheduleSuccess = () => {
+    // Reload appointments after successful rescheduling
+    loadAppointments();
+  };
+
   const canCancelAppointment = (appointment: Appointment): boolean => {
     // Check if appointment can be cancelled
     if (!['pending', 'confirmed'].includes(appointment.status)) {
@@ -266,6 +279,11 @@ const ClientAppointmentsList: React.FC = () => {
     return appointmentDate > new Date();
   };
 
+  const canRescheduleAppointment = (appointment: Appointment): boolean => {
+    // Same logic as cancellation - can only reschedule pending/confirmed future appointments
+    return canCancelAppointment(appointment);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -274,6 +292,8 @@ const ClientAppointmentsList: React.FC = () => {
         return 'info';
       case 'cancelled':
         return 'error';
+      case 'rescheduled':
+        return 'default';
       default:
         return 'warning';
     }
@@ -287,6 +307,8 @@ const ClientAppointmentsList: React.FC = () => {
         return t('completed');
       case 'cancelled':
         return t('cancelled');
+      case 'rescheduled':
+        return t('rescheduled');
       default:
         return t('pending');
     }
@@ -336,7 +358,11 @@ const ClientAppointmentsList: React.FC = () => {
           
           return (
             <React.Fragment key={appointment.id}>
-              <ListItem sx={{ py: 2 }}>
+              <ListItem sx={{ 
+                py: 2,
+                opacity: appointment.status === 'rescheduled' ? 0.6 : 1,
+                backgroundColor: appointment.status === 'rescheduled' ? 'action.disabledBackground' : 'transparent'
+              }}>
                 <ListItemIcon>
                   <EventIcon color="primary" />
                 </ListItemIcon>
@@ -401,18 +427,32 @@ const ClientAppointmentsList: React.FC = () => {
                   <Typography variant="subtitle1" color="primary">
                     {appointment.totalPrice} {t('egp')}
                   </Typography>
-                  {canCancelAppointment(appointment) && (
-                    <Tooltip title={t('cancel_appointment')}>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleCancelClick(appointment)}
-                        sx={{ mt: 1 }}
-                      >
-                        <CancelIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {canRescheduleAppointment(appointment) && appointment.status !== 'rescheduled' && (
+                      <Tooltip title={t('reschedule_appointment')}>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleRescheduleClick(appointment)}
+                          sx={{ mt: 1 }}
+                        >
+                          <RescheduleIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canCancelAppointment(appointment) && appointment.status !== 'rescheduled' && (
+                      <Tooltip title={t('cancel_appointment')}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleCancelClick(appointment)}
+                          sx={{ mt: 1 }}
+                        >
+                          <CancelIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Box>
               </ListItem>
               {index < appointments.length - 1 && <Divider />}
@@ -432,6 +472,19 @@ const ClientAppointmentsList: React.FC = () => {
           appointment={selectedAppointment}
           clientId={session.clientId}
           onSuccess={handleCancelSuccess}
+        />
+      )}
+      
+      {/* Reschedule Appointment Dialog */}
+      {selectedAppointment && (
+        <RescheduleAppointmentDialog
+          open={rescheduleDialogOpen}
+          onClose={() => {
+            setRescheduleDialogOpen(false);
+            setSelectedAppointment(null);
+          }}
+          appointment={selectedAppointment}
+          onSuccess={handleRescheduleSuccess}
         />
       )}
     </Box>

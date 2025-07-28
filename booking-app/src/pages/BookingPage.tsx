@@ -24,8 +24,24 @@ const BookingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkData, setLinkData] = useState<BookingLink | null>(null);
+  const [isReschedule, setIsReschedule] = useState(false);
+  const [rescheduleData, setRescheduleData] = useState<any>(null);
 
   useEffect(() => {
+    // Check for reschedule data
+    const storedRescheduleData = sessionStorage.getItem('rescheduleData');
+    if (storedRescheduleData) {
+      try {
+        const data = JSON.parse(storedRescheduleData);
+        setIsReschedule(true);
+        setRescheduleData(data);
+        // Clear it so it doesn't persist across page reloads
+        sessionStorage.removeItem('rescheduleData');
+      } catch (err) {
+        console.error('Error parsing reschedule data:', err);
+      }
+    }
+    
     loadBookingLink();
   }, [companySlug, linkSlug, searchParams]);
 
@@ -100,6 +116,25 @@ const BookingPage: React.FC = () => {
       // Set default language
       if (link.settings.defaultLanguage && link.settings.defaultLanguage !== language) {
         // The language context will handle this
+      }
+
+      // If this is a reschedule, pre-fill the booking data
+      if (isReschedule && rescheduleData) {
+        const oldData = rescheduleData.oldAppointmentData;
+        
+        // Pre-fill basic data
+        updateBookingData({
+          customerName: oldData.clientName,
+          customerPhone: oldData.clientPhone,
+          customerEmail: oldData.clientEmail,
+          branchId: oldData.branchId || preselectedBranchId,
+          staffId: oldData.staffId,
+          serviceIds: oldData.services?.map((s: any) => s.serviceId) || [],
+          rescheduleInfo: {
+            isReschedule: true,
+            oldAppointmentId: rescheduleData.oldAppointmentId,
+          }
+        });
       }
 
       setLoading(false);

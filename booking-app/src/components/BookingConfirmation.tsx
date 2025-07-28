@@ -12,7 +12,7 @@ import {
   Chip,
   TextField,
 } from '@mui/material';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   CheckCircle,
   CalendarToday,
@@ -212,7 +212,10 @@ const BookingConfirmation: React.FC = () => {
           type: 'confirmation' as const,
           method: ['whatsapp'],
           sent: false
-        }]
+        }],
+        // Mark as rescheduled if this is a reschedule
+        isRescheduled: bookingData.rescheduleInfo?.isReschedule || false,
+        previousAppointmentId: bookingData.rescheduleInfo?.oldAppointmentId || null,
       };
       
 
@@ -220,6 +223,23 @@ const BookingConfirmation: React.FC = () => {
       const id = await bookingService.createAppointment(appointmentData);
       console.log('Appointment created with ID:', id);
       setAppointmentId(id);
+      
+      // If this is a reschedule, update the old appointment to 'rescheduled' status
+      if (bookingData.rescheduleInfo?.isReschedule && bookingData.rescheduleInfo?.oldAppointmentId) {
+        try {
+          console.log('Updating old appointment to rescheduled status:', bookingData.rescheduleInfo.oldAppointmentId);
+          await updateDoc(doc(db, 'appointments', bookingData.rescheduleInfo.oldAppointmentId), {
+            status: 'rescheduled',
+            rescheduledTo: id, // The new appointment ID
+            rescheduledAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          console.log('Old appointment marked as rescheduled successfully');
+        } catch (updateError) {
+          console.error('Error updating old appointment:', updateError);
+          // Continue anyway - the new appointment is already created
+        }
+      }
       
       // Send WhatsApp notification using the same logic as test button
       try {
@@ -480,11 +500,11 @@ const BookingConfirmation: React.FC = () => {
       </Box>
 
       <Typography variant="h4" align="center" gutterBottom>
-        {t('booking_confirmed')}
+        {bookingData.rescheduleInfo?.isReschedule ? t('reschedule_confirmed') : t('booking_confirmed')}
       </Typography>
       
       <Typography variant="body1" align="center" color="textSecondary" paragraph>
-        {t('booking_success_message')}
+        {bookingData.rescheduleInfo?.isReschedule ? t('reschedule_success_message') : t('booking_success_message')}
       </Typography>
 
       {/* Booking Details */}

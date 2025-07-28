@@ -156,7 +156,11 @@ service cloud.firestore {
         (isValidClient() && resource.data.clientId == request.auth.token.clientId) || // Clients can update their appointments
         (request.auth == null && request.resource.data.status == 'cancelled' && 
          resource.data.status in ['pending', 'confirmed'] &&
-         request.resource.data.clientId == resource.data.clientId); // Allow public to cancel their own appointments
+         request.resource.data.clientId == resource.data.clientId) || // Allow public to cancel their own appointments
+        (request.auth == null && request.resource.data.status == 'rescheduled' && 
+         resource.data.status in ['pending', 'confirmed'] &&
+         request.resource.data.clientId == resource.data.clientId &&
+         request.resource.data.keys().hasAll(['rescheduledTo', 'rescheduledAt'])); // Allow public to mark as rescheduled
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }

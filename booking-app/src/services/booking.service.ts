@@ -361,7 +361,8 @@ class BookingService {
       const appointmentsSnap = await getDocs(appointmentsQuery);
       const appointments = appointmentsSnap.docs
         .map(doc => doc.data() as Appointment)
-        .filter(apt => ['pending', 'confirmed', 'arrived', 'in_progress'].includes(apt.status));
+        .filter(apt => ['pending', 'confirmed', 'arrived', 'in_progress'].includes(apt.status) && 
+                       apt.status !== 'rescheduled'); // Exclude rescheduled appointments
       
       // Generate slots
       let currentTime = startTime;
