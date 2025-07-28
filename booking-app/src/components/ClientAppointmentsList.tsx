@@ -49,7 +49,10 @@ const ClientAppointmentsList: React.FC = () => {
     console.log('Current staffId:', appointment.staffId);
     
     // If we already have a proper staff name, return as is
-    if (appointment.staffName && appointment.staffName !== 'Any Available' && appointment.staffName !== 'أي متخصص متاح') {
+    if (appointment.staffName && 
+        appointment.staffName.toLowerCase() !== 'any available' && 
+        appointment.staffName !== 'أي متخصص متاح' &&
+        appointment.staffName !== 'أي مختص متاح') {
       console.log('Already has proper staff name, returning as is');
       return appointment;
     }
@@ -148,13 +151,23 @@ const ClientAppointmentsList: React.FC = () => {
       }
 
       console.log('Appointments loaded:', appointmentsList.length);
+      console.log('First 3 appointments before enrichment:', appointmentsList.slice(0, 3).map(apt => ({
+        id: apt.id,
+        staffId: apt.staffId,
+        staffName: apt.staffName
+      })));
       
       // Enrich appointments with staff names if needed
       const enrichedAppointments = await Promise.all(
         appointmentsList.map(apt => enrichAppointmentWithStaffName(apt, companyId))
       );
       
-      console.log('Appointments enriched:', enrichedAppointments);
+      console.log('Appointments enriched, total:', enrichedAppointments.length);
+      console.log('First 3 appointments after enrichment:', enrichedAppointments.slice(0, 3).map(apt => ({
+        id: apt.id,
+        staffId: apt.staffId,
+        staffName: apt.staffName
+      })));
       setAppointments(enrichedAppointments);
     } catch (err) {
       console.error('=== ClientAppointmentsList: ERROR ===');
@@ -277,6 +290,8 @@ const ClientAppointmentsList: React.FC = () => {
                               console.log('Displaying staff for appointment:', appointment.id);
                               console.log('StaffName:', appointment.staffName);
                               console.log('StaffId:', appointment.staffId);
+                              console.log('BranchId:', appointment.branchId);
+                              console.log('BranchName:', appointment.branchName);
                               
                               if (appointment.staffName && 
                                   appointment.staffName !== 'Any Available' && 
