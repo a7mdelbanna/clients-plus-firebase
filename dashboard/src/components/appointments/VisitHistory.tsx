@@ -204,7 +204,7 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                         {format(getDateFromAppointment(appointment.date), 'dd MMM yyyy', { locale })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {appointment.startTime}
+                        {appointment.startTime || ''}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -224,14 +224,14 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                           fontWeight: 600,
                         }}
                       >
-                        {appointment.staffName.charAt(0)}
+                        {appointment.staffName?.charAt(0) || '?'}
                       </Box>
                       <Box>
                         <Typography variant="body2">
-                          {appointment.staffName}
+                          {appointment.staffName || 'Unknown Staff'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {appointment.startTime} {isRTL ? 'تعلم المزيد' : 'Learn More'} →
+                          {appointment.branchName || ''}
                         </Typography>
                       </Box>
                     </Box>
@@ -251,7 +251,7 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2">
-                      {appointment.totalPrice} {isRTL ? 'ج.م' : 'EGP'}
+                      {appointment.totalPrice || 0} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
