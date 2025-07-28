@@ -174,12 +174,15 @@ const BookingConfirmation: React.FC = () => {
         bookingData.customerEmail
       );
       
+      // Normalize phone number to match how it's stored in the database
+      const normalizedPhone = bookingData.customerPhone!.replace(/[\s\-\(\)]/g, '').replace(/^\+20/, '');
+      console.log('Creating appointment with normalized phone:', normalizedPhone, 'from original:', bookingData.customerPhone);
       
       const appointmentData: any = {
         companyId: bookingData.linkData.companyId,
         branchId: bookingData.branchId!,
         clientId: clientId,
-        clientPhone: bookingData.customerPhone!,
+        clientPhone: normalizedPhone, // Use normalized phone
         clientName: bookingData.customerName!,
         clientEmail: bookingData.customerEmail || '',
         staffId: bookingData.staffId === 'any' ? '' : bookingData.staffId!,

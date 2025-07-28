@@ -1,6 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // OTP Sessions - Only accessible by Cloud Functions
+    match /otpSessions/{session} {
+      allow read, write: if false; // Only Cloud Functions can access
+    }
+    
+    // Client portal access rules
+    function isValidClient() {
+      return request.auth != null && 
+        request.auth.token.clientPortal == true;
+    }
+    
+    function isClientOwner(clientId) {
+      return isValidClient() && 
+        request.auth.token.clientId == clientId;
+    }
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
@@ -89,12 +104,14 @@ service cloud.firestore {
     
     // Clients collection
     match /clients/{clientId} {
-      allow read: if isSuperAdmin() || hasCompanyId() || true; // Allow public read for client lookup during booking
+      allow read: if isSuperAdmin() || hasCompanyId() || 
+        isClientOwner(clientId) || true; // Allow public read for client lookup during booking
       allow create: if isSuperAdmin() || 
         (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId) ||
         (request.resource.data.source == 'online_booking'); // Allow public creation through online booking
       allow update: if isSuperAdmin() || 
-        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
+        isClientOwner(clientId); // Allow clients to update their own data
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
@@ -124,14 +141,16 @@ service cloud.firestore {
     // Appointments collection
     match /appointments/{appointmentId} {
       // Allow public read for online booking availability checking
-      allow read: if true;
+      allow read: if true ||
+        (isValidClient() && resource.data.clientId == request.auth.token.clientId); // Clients can read their appointments
       allow create: if isSuperAdmin() || 
         (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId) ||
         isAuthenticated() ||
         (request.auth == null && request.resource.data.source == 'online'); // Public can create online bookings
       allow update: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
-        (isAuthenticated() && resource.data.clientId == request.auth.uid);
+        (isAuthenticated() && resource.data.clientId == request.auth.uid) ||
+        (isValidClient() && resource.data.clientId == request.auth.token.clientId); // Clients can update their appointments
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }

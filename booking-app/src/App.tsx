@@ -15,6 +15,7 @@ import NotFoundPage from './pages/NotFoundPage';
 // Contexts
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { BookingProvider } from './contexts/BookingContext';
+import { ClientAuthProvider } from './contexts/ClientAuthContext';
 
 const App: React.FC = () => {
   return (
@@ -57,16 +58,18 @@ const AppContent: React.FC = () => {
       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={dateLocale}>
         <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
           <CssBaseline />
-          <BookingProvider>
-            <Router>
-              <Routes>
-                <Route path="/book/:companySlug/:linkSlug" element={<BookingPage />} />
-                <Route path="/" element={<Navigate to="/404" replace />} />
-                <Route path="/404" element={<NotFoundPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Router>
-          </BookingProvider>
+          <Router>
+            <ClientAuthProvider>
+              <BookingProvider>
+                <Routes>
+                  <Route path="/book/:companySlug/:linkSlug" element={<BookingPage />} />
+                  <Route path="/" element={<Navigate to="/404" replace />} />
+                  <Route path="/404" element={<NotFoundPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </BookingProvider>
+            </ClientAuthProvider>
+          </Router>
         </SnackbarProvider>
       </LocalizationProvider>
     </ThemeProvider>

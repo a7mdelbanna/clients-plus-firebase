@@ -84,7 +84,7 @@ export const onAppointmentCreated = functionsV1.firestore
                           
       const businessAddress = locationSettings?.contact?.address?.formatted ||
                              (locationSettings?.contact?.address ? 
-                               `${locationSettings.contact.address.street || ''}, ${locationSettings.contact.address.city || ''}`.trim() : 
+                               `${locationSettings?.contact?.address?.street || ''}, ${locationSettings?.contact?.address?.city || ''}`.trim() : 
                                '');
                                
       const businessPhone = locationSettings?.contact?.primaryPhone?.number || 
@@ -95,7 +95,7 @@ export const onAppointmentCreated = functionsV1.firestore
       // Create Google Maps link if we have coordinates
       let googleMapsLink = '';
       if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
-        const { lat, lng } = locationSettings.contact.coordinates;
+        const { lat, lng } = locationSettings?.contact?.coordinates || { lat: 0, lng: 0 };
         googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
       }
       

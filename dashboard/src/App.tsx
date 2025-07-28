@@ -38,6 +38,11 @@ import OnlineBooking from './pages/OnlineBooking';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
+import { ClientAuthProvider } from './contexts/ClientAuthContext';
+import ClientProtectedRoute from './components/client/ClientProtectedRoute';
+import ClientLogin from './pages/client/ClientLogin';
+import ClientVerify from './pages/client/ClientVerify';
+import ClientDashboard from './pages/client/ClientDashboard';
 
 // Import debug utilities (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -140,6 +145,32 @@ function App() {
                       <PublicBookingWrapper />
                     </PageTransition>
                   } />
+                  
+                  {/* Client Portal Routes */}
+                  <Route path="/client/login" element={
+                    <ClientAuthProvider>
+                      <PageTransition>
+                        <ClientLogin />
+                      </PageTransition>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client/verify" element={
+                    <ClientAuthProvider>
+                      <PageTransition>
+                        <ClientVerify />
+                      </PageTransition>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client/dashboard" element={
+                    <ClientAuthProvider>
+                      <ClientProtectedRoute>
+                        <PageTransition>
+                          <ClientDashboard />
+                        </PageTransition>
+                      </ClientProtectedRoute>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client" element={<Navigate to="/client/login" replace />} />
                   
                   {/* Regular Routes */}
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />

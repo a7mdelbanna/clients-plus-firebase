@@ -14,7 +14,7 @@ import DateTimeSelection from '../components/DateTimeSelection';
 import CustomerForm from '../components/CustomerForm';
 import BookingConfirmation from '../components/BookingConfirmation';
 import BookingStepper from '../components/BookingStepper';
-import LanguageToggle from '../components/LanguageToggle';
+import BookingHeader from '../components/BookingHeader';
 
 const BookingPage: React.FC = () => {
   const { companySlug, linkSlug } = useParams<{ companySlug: string; linkSlug: string }>();
@@ -184,22 +184,14 @@ const BookingPage: React.FC = () => {
       }}
     >
       <Container maxWidth="md">
-        {/* Header */}
+        {/* Header with Login */}
+        <BookingHeader 
+          logoUrl={linkData?.settings.logoUrl}
+          businessName={linkData?.businessName}
+        />
+        
+        {/* Page Title */}
         <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <LanguageToggle />
-          </Box>
-          
-          {linkData?.settings.logoUrl && (
-            <Box sx={{ mb: 2 }}>
-              <img
-                src={linkData.settings.logoUrl}
-                alt="Logo"
-                style={{ maxHeight: 80, maxWidth: 200 }}
-              />
-            </Box>
-          )}
-          
           <Typography variant="h4" component="h1" gutterBottom>
             {t('book_appointment')}
           </Typography>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -7,18 +7,21 @@ import {
   Grid,
   InputAdornment,
   Alert,
+  Paper,
 } from '@mui/material';
 import {
   Person,
   Phone,
   Email,
   Comment,
+  CheckCircle,
 } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useBooking } from '../contexts/BookingContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useClientAuth } from '../contexts/ClientAuthContext';
 
 interface CustomerFormData {
   name: string;
@@ -40,12 +43,14 @@ const schema = yup.object().shape({
 const CustomerForm: React.FC = () => {
   const { bookingData, updateBookingData, nextStep, previousStep } = useBooking();
   const { t, isRTL } = useLanguage();
+  const { session, isAuthenticated } = useClientAuth();
   const [loading, setLoading] = useState(false);
 
   const {
     control,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<CustomerFormData>({
     resolver: yupResolver(schema),
     defaultValues: {
@@ -55,6 +60,15 @@ const CustomerForm: React.FC = () => {
       comments: bookingData.comments || '',
     },
   });
+
+  // Pre-fill form if client is logged in
+  useEffect(() => {
+    if (isAuthenticated && session) {
+      setValue('name', session.name);
+      setValue('phone', session.phoneNumber);
+      // Email would come from client data if available
+    }
+  }, [isAuthenticated, session, setValue]);
 
   const onSubmit = async (data: CustomerFormData) => {
     try {
@@ -85,6 +99,27 @@ const CustomerForm: React.FC = () => {
       <Typography variant="body2" color="textSecondary" paragraph>
         {t('enter_contact_details')}
       </Typography>
+
+      {/* Show logged in status */}
+      {isAuthenticated && session && (
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 2, 
+            mb: 3, 
+            bgcolor: 'rgba(76, 175, 80, 0.1)',
+            border: '1px solid',
+            borderColor: 'success.main',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CheckCircle color="success" />
+            <Typography variant="body2">
+              {t('logged_in_as')} {session.name}
+            </Typography>
+          </Box>
+        </Paper>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container spacing={3}>
