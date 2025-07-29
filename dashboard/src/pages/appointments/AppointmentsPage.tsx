@@ -61,6 +61,7 @@ const AppointmentsPage: React.FC = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: Date; time: string } | null>(null);
   const [companyId, setCompanyId] = useState<string>('');
+  const [loadSpecificAppointment, setLoadSpecificAppointment] = useState<string | null>(null);
 
   // Load initial data
   useEffect(() => {
@@ -86,10 +87,8 @@ const AppointmentsPage: React.FC = () => {
           const staffList = await staffService.getStaff(userCompanyId, currentBranch?.id);
           setStaff(staffList);
 
-          // Set first staff as default if available
-          if (staffList.length > 0 && selectedStaff === 'all') {
-            setSelectedStaff(staffList[0].id!);
-          }
+          // Don't auto-select staff to prevent infinite loop
+          // Let user choose or keep 'all' selected
         } catch (staffError) {
           console.error('Error loading staff:', staffError);
           // Continue even if staff loading fails
@@ -191,6 +190,28 @@ const AppointmentsPage: React.FC = () => {
     setOpenAppointmentPanel(false);
     setSelectedAppointment(null);
     setSelectedTimeSlot(null);
+  };
+
+  // Function to load a specific appointment
+  const handleLoadSpecificAppointment = async (appointmentId: string) => {
+    try {
+      console.log('Loading specific appointment:', appointmentId);
+      const appointment = await appointmentService.getAppointmentById(appointmentId);
+      if (appointment) {
+        setSelectedAppointment(appointment);
+        setOpenAppointmentPanel(true);
+        
+        // Update the current date to show the appointment's date
+        if (appointment.date) {
+          const appointmentDate = appointment.date.toDate ? appointment.date.toDate() : new Date(appointment.date);
+          setCurrentDate(appointmentDate);
+        }
+      } else {
+        console.error('Appointment not found:', appointmentId);
+      }
+    } catch (error) {
+      console.error('Error loading appointment:', error);
+    }
   };
 
   const handleAppointmentSave = async (appointmentData: Partial<Appointment>) => {
@@ -446,6 +467,7 @@ const AppointmentsPage: React.FC = () => {
           onSave={handleAppointmentSave}
           onDelete={selectedAppointment ? handleAppointmentDelete : undefined}
           onClose={handleAppointmentPanelClose}
+          onLoadAppointment={handleLoadSpecificAppointment}
         />
       </AppointmentPanel>
     </Box>

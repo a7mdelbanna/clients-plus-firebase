@@ -28,25 +28,34 @@ const BookingPage: React.FC = () => {
   const [rescheduleData, setRescheduleData] = useState<any>(null);
 
   useEffect(() => {
-    // Check for reschedule data
-    const storedRescheduleData = sessionStorage.getItem('rescheduleData');
-    if (storedRescheduleData) {
-      try {
-        const data = JSON.parse(storedRescheduleData);
-        setIsReschedule(true);
-        setRescheduleData(data);
-        // Clear it so it doesn't persist across page reloads
-        sessionStorage.removeItem('rescheduleData');
-      } catch (err) {
-        console.error('Error parsing reschedule data:', err);
-      }
-    }
-    
     loadBookingLink();
   }, [companySlug, linkSlug, searchParams]);
 
   const loadBookingLink = async () => {
     console.log('Loading booking link:', { companySlug, linkSlug });
+    
+    // Check for reschedule data first
+    console.log('=== CHECKING FOR RESCHEDULE DATA ===');
+    const storedRescheduleData = sessionStorage.getItem('rescheduleData');
+    console.log('Stored reschedule data:', storedRescheduleData);
+    
+    let localRescheduleData = null;
+    let localIsReschedule = false;
+    
+    if (storedRescheduleData) {
+      try {
+        localRescheduleData = JSON.parse(storedRescheduleData);
+        console.log('Parsed reschedule data:', localRescheduleData);
+        localIsReschedule = true;
+        setIsReschedule(true);
+        setRescheduleData(localRescheduleData);
+        console.log('Reschedule data loaded from storage');
+      } catch (err) {
+        console.error('Error parsing reschedule data:', err);
+      }
+    } else {
+      console.log('No reschedule data found in session storage');
+    }
     
     if (!companySlug || !linkSlug) {
       setError('invalid_link');
@@ -67,46 +76,36 @@ const BookingPage: React.FC = () => {
 
       setLinkData(link);
       
+      // Build initial booking data
+      const initialData: any = { linkData: link };
+      
       // Check for branch query parameter
       const branchParam = searchParams.get('branch');
       let preselectedBranchId: string | undefined;
+      let shouldSkipBranchStep = false;
       
       // For single branch links, automatically set the branch
       if (link.branchSettings?.mode === 'single' && link.branchSettings?.defaultBranch) {
-        updateBookingData({ 
-          linkData: link,
-          branchId: link.branchSettings.defaultBranch
-        });
+        initialData.branchId = link.branchSettings.defaultBranch;
+        preselectedBranchId = link.branchSettings.defaultBranch;
       } else if (link.branchSettings?.allowedBranches?.length === 1) {
         // If only one branch is allowed, auto-select it
-        updateBookingData({ 
-          linkData: link,
-          branchId: link.branchSettings.allowedBranches[0]
-        });
+        initialData.branchId = link.branchSettings.allowedBranches[0];
+        preselectedBranchId = link.branchSettings.allowedBranches[0];
       } else if (branchParam && link.branchSettings?.mode === 'multi') {
         // Check if the branch parameter is valid
         const branches = link.branchSettings.allowedBranches || [];
         if (branches.includes(branchParam)) {
           preselectedBranchId = branchParam;
-          updateBookingData({ 
-            linkData: link,
-            branchId: branchParam
-          });
+          initialData.branchId = branchParam;
           // Skip branch selection step if valid branch is provided
-          goToStep(1); // Move to service selection
-        } else {
-          updateBookingData({ linkData: link });
+          shouldSkipBranchStep = true;
         }
       } else {
         // Check localStorage for saved branch preference
         const savedBranchId = localStorage.getItem(`booking_branch_${link.companyId}`);
         if (savedBranchId && link.branchSettings?.allowedBranches?.includes(savedBranchId)) {
-          updateBookingData({ 
-            linkData: link,
-            branchId: savedBranchId
-          });
-        } else {
-          updateBookingData({ linkData: link });
+          initialData.branchId = savedBranchId;
         }
       }
 
@@ -118,23 +117,41 @@ const BookingPage: React.FC = () => {
         // The language context will handle this
       }
 
-      // If this is a reschedule, pre-fill the booking data
-      if (isReschedule && rescheduleData) {
-        const oldData = rescheduleData.oldAppointmentData;
+      // If this is a reschedule, add reschedule info to initial data
+      if (localIsReschedule && localRescheduleData) {
+        console.log('=== SETTING RESCHEDULE INFO IN INITIAL DATA ===');
+        console.log('localIsReschedule:', localIsReschedule);
+        console.log('localRescheduleData:', localRescheduleData);
         
-        // Pre-fill basic data
-        updateBookingData({
-          customerName: oldData.clientName,
-          customerPhone: oldData.clientPhone,
-          customerEmail: oldData.clientEmail,
-          branchId: oldData.branchId || preselectedBranchId,
-          staffId: oldData.staffId,
-          serviceIds: oldData.services?.map((s: any) => s.serviceId) || [],
-          rescheduleInfo: {
-            isReschedule: true,
-            oldAppointmentId: rescheduleData.oldAppointmentId,
-          }
-        });
+        const oldData = localRescheduleData.oldAppointmentData;
+        
+        // Override/add reschedule data
+        initialData.customerName = oldData.clientName;
+        initialData.customerPhone = oldData.clientPhone;
+        initialData.customerEmail = oldData.clientEmail;
+        initialData.branchId = oldData.branchId || preselectedBranchId;
+        initialData.staffId = oldData.staffId;
+        initialData.serviceIds = oldData.services?.map((s: any) => s.serviceId) || [];
+        initialData.rescheduleInfo = {
+          isReschedule: true,
+          oldAppointmentId: localRescheduleData.oldAppointmentId,
+        };
+        
+        console.log('Initial data with reschedule info:', initialData);
+        
+        // Clear reschedule data from storage after we've used it
+        sessionStorage.removeItem('rescheduleData');
+        console.log('Cleared reschedule data from session storage');
+      }
+      
+      // Update booking data once with all initial data
+      console.log('=== UPDATING BOOKING DATA WITH ALL INITIAL DATA ===');
+      updateBookingData(initialData);
+      console.log('Booking data updated');
+      
+      // Skip branch step if needed
+      if (shouldSkipBranchStep) {
+        goToStep(1); // Move to service selection
       }
 
       setLoading(false);

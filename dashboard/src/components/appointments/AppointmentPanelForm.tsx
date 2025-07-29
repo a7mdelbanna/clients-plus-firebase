@@ -74,6 +74,7 @@ interface AppointmentPanelFormProps {
   onSave: (appointment: Partial<Appointment>) => Promise<void>;
   onDelete?: (appointmentId: string) => Promise<void>;
   onClose: () => void;
+  onLoadAppointment?: (appointmentId: string) => Promise<void>;
 }
 
 const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
@@ -85,6 +86,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   onSave,
   onDelete,
   onClose,
+  onLoadAppointment,
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
@@ -712,6 +714,35 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
                   {advancedFields.repeat.type === 'weekly' && (isRTL ? 'أسبوعيًا' : 'Weekly')}
                   {advancedFields.repeat.type === 'monthly' && (isRTL ? 'شهريًا' : 'Monthly')}
                   {advancedFields.repeat.interval > 1 && ` (${isRTL ? 'كل' : 'every'} ${advancedFields.repeat.interval})`}
+                </>
+              )}
+            </Typography>
+          </Alert>
+        )}
+
+        {/* Rescheduled Appointment Indicator */}
+        {appointment?.status === 'rescheduled' && (
+          <Alert 
+            severity="info" 
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="body2">
+              {isRTL ? 'تمت إعادة جدولة هذا الموعد' : 'This appointment has been rescheduled'}
+              {appointment.rescheduledTo && (
+                <>
+                  {' '}
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      if (appointment.rescheduledTo && onLoadAppointment) {
+                        onClose(); // Close current panel
+                        await onLoadAppointment(appointment.rescheduledTo);
+                      }
+                    }}
+                    sx={{ ml: 1 }}
+                  >
+                    {isRTL ? 'عرض الموعد الجديد' : 'View New Appointment'}
+                  </Button>
                 </>
               )}
             </Typography>

@@ -52,6 +52,8 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({ appointment, compact 
         return { color: '#EF5350', icon: <Cancel fontSize="small" /> };
       case 'no_show':
         return { color: '#BDBDBD', icon: <Cancel fontSize="small" /> };
+      case 'rescheduled':
+        return { color: '#9E9E9E', icon: <Schedule fontSize="small" /> };
       default:
         return { color: '#9E9E9E', icon: null };
     }

@@ -138,6 +138,7 @@ const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
       completed: theme.palette.success.dark,
       cancelled: theme.palette.error.main,
       no_show: theme.palette.error.dark,
+      rescheduled: theme.palette.grey[600],
     };
     return colors[appointment.status as keyof typeof colors] || theme.palette.grey[500];
   };

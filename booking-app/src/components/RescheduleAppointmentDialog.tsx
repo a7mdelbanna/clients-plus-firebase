@@ -118,6 +118,9 @@ const RescheduleAppointmentDialog: React.FC<RescheduleAppointmentDialogProps> = 
         isReschedule: true,
       };
       
+      console.log('=== STORING RESCHEDULE DATA ===');
+      console.log('Appointment to reschedule:', appointment);
+      console.log('Reschedule data:', rescheduleData);
       sessionStorage.setItem('rescheduleData', JSON.stringify(rescheduleData));
 
       // Redirect to booking page

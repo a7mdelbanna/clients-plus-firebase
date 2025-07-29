@@ -66,6 +66,12 @@ const statusConfig: Record<AppointmentStatus, {
     color: 'error',
     icon: <PersonOff fontSize="small" />,
   },
+  rescheduled: {
+    label: 'Rescheduled',
+    labelAr: 'تمت إعادة الجدولة',
+    color: 'default',
+    icon: <Schedule fontSize="small" />,
+  },
 };
 
 const AppointmentStatusBar: React.FC<AppointmentStatusBarProps> = ({
@@ -75,7 +81,7 @@ const AppointmentStatusBar: React.FC<AppointmentStatusBarProps> = ({
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
 
-  const statuses: AppointmentStatus[] = ['pending', 'arrived', 'no_show', 'confirmed', 'cancelled'];
+  const statuses: AppointmentStatus[] = ['pending', 'arrived', 'no_show', 'confirmed', 'cancelled', 'rescheduled'];
 
   return (
     <Box

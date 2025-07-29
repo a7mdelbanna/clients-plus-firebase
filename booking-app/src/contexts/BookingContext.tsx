@@ -79,7 +79,20 @@ export const BookingProvider: React.FC<BookingProviderProps> = ({ children }) =>
   const steps = getSteps();
 
   const updateBookingData = (data: Partial<BookingData>) => {
-    setBookingData(prev => ({ ...prev, ...data }));
+    console.log('=== updateBookingData called ===');
+    console.log('Current bookingData:', bookingData);
+    console.log('Update data:', data);
+    
+    setBookingData(prev => {
+      // Preserve rescheduleInfo if it exists and not explicitly being updated
+      const preservedRescheduleInfo = prev.rescheduleInfo && !data.rescheduleInfo 
+        ? { rescheduleInfo: prev.rescheduleInfo } 
+        : {};
+      
+      const newData = { ...prev, ...preservedRescheduleInfo, ...data };
+      console.log('New bookingData will be:', newData);
+      return newData;
+    });
   };
 
   const nextStep = () => {

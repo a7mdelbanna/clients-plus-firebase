@@ -31,7 +31,7 @@ import { serviceService } from './service.service';
 import { companyService } from './company.service';
 
 // Appointment Types
-export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
 export type AppointmentSource = 'dashboard' | 'online' | 'phone' | 'walk_in';
 export type PaymentStatus = 'none' | 'partial' | 'full' | 'refunded';
 export type RepeatType = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -110,6 +110,10 @@ export interface Appointment {
   cancelledBy?: 'client' | 'staff' | 'system';
   cancelledAt?: Timestamp;
   cancellationReason?: string;
+  
+  // Reschedule Info
+  rescheduledTo?: string; // ID of the new appointment
+  rescheduledAt?: Timestamp;
   
   // Notifications
   notifications?: AppointmentNotification[];
@@ -403,6 +407,11 @@ class AppointmentService {
       console.error('Error getting appointment:', error);
       throw error;
     }
+  }
+
+  // Alias for getAppointment for clarity
+  async getAppointmentById(appointmentId: string): Promise<Appointment | null> {
+    return this.getAppointment(appointmentId);
   }
 
   // Update appointment

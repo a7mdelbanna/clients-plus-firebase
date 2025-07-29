@@ -28,6 +28,7 @@ import { ar, enUS } from 'date-fns/locale';
 import { useBooking } from '../contexts/BookingContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { bookingService } from '../services/booking.service';
+import { db } from '../config/firebase';
 import type { Branch, Service, Staff } from '../types/booking';
 
 const BookingConfirmation: React.FC = () => {
@@ -47,6 +48,9 @@ const BookingConfirmation: React.FC = () => {
   const dateLocale = language === 'ar' ? ar : enUS;
 
   useEffect(() => {
+    console.log('=== BookingConfirmation mounted ===');
+    console.log('Full bookingData:', bookingData);
+    console.log('RescheduleInfo:', bookingData.rescheduleInfo);
     // Only create appointment if not already creating
     if (!creatingRef.current && !isCreating && !appointmentId) {
       createAppointment();
@@ -220,6 +224,7 @@ const BookingConfirmation: React.FC = () => {
       
 
       console.log('Creating appointment with data:', JSON.stringify(appointmentData, null, 2));
+      console.log('BookingData rescheduleInfo:', bookingData.rescheduleInfo);
       const id = await bookingService.createAppointment(appointmentData);
       console.log('Appointment created with ID:', id);
       setAppointmentId(id);
@@ -227,6 +232,8 @@ const BookingConfirmation: React.FC = () => {
       // If this is a reschedule, update the old appointment to 'rescheduled' status
       if (bookingData.rescheduleInfo?.isReschedule && bookingData.rescheduleInfo?.oldAppointmentId) {
         try {
+          console.log('=== RESCHEDULE UPDATE START ===');
+          console.log('Reschedule info:', bookingData.rescheduleInfo);
           console.log('Updating old appointment to rescheduled status:', bookingData.rescheduleInfo.oldAppointmentId);
           await updateDoc(doc(db, 'appointments', bookingData.rescheduleInfo.oldAppointmentId), {
             status: 'rescheduled',
@@ -235,10 +242,23 @@ const BookingConfirmation: React.FC = () => {
             updatedAt: serverTimestamp()
           });
           console.log('Old appointment marked as rescheduled successfully');
+          console.log('=== RESCHEDULE UPDATE END ===');
         } catch (updateError) {
+          console.error('=== RESCHEDULE UPDATE ERROR ===');
           console.error('Error updating old appointment:', updateError);
+          console.error('Error details:', {
+            code: (updateError as any)?.code,
+            message: (updateError as any)?.message,
+            details: updateError
+          });
           // Continue anyway - the new appointment is already created
         }
+      } else {
+        console.log('Not a reschedule or missing info:', {
+          isReschedule: bookingData.rescheduleInfo?.isReschedule,
+          hasOldAppointmentId: !!bookingData.rescheduleInfo?.oldAppointmentId,
+          rescheduleInfo: bookingData.rescheduleInfo
+        });
       }
       
       // Send WhatsApp notification using the same logic as test button
