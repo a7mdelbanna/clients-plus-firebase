@@ -121,6 +121,59 @@ class FinanceService {
     }
   }
 
+  // Disable/Enable a financial account
+  async toggleAccountStatus(
+    companyId: string,
+    accountId: string,
+    status: 'active' | 'inactive'
+  ): Promise<void> {
+    try {
+      await this.updateAccount(companyId, accountId, { status });
+    } catch (error) {
+      console.error('Error toggling account status:', error);
+      throw error;
+    }
+  }
+
+  // Close/Delete a financial account (soft delete)
+  async closeAccount(
+    companyId: string,
+    accountId: string,
+    closedBy: string
+  ): Promise<void> {
+    try {
+      // First check if account has zero balance
+      const account = await this.getAccount(companyId, accountId);
+      if (!account) {
+        throw new Error('Account not found');
+      }
+
+      if (account.currentBalance !== 0) {
+        throw new Error('Cannot close account with non-zero balance');
+      }
+
+      // Check if it's the only account of its type
+      const accounts = await this.getAccounts(companyId, { 
+        type: account.type,
+        status: 'active' 
+      });
+      
+      if (accounts.length === 1 && accounts[0].id === accountId) {
+        throw new Error('Cannot close the only active account of this type');
+      }
+
+      // Update account status to closed
+      await this.updateAccount(companyId, accountId, {
+        status: 'closed',
+        closedAt: serverTimestamp() as any,
+        closedBy,
+      });
+    } catch (error) {
+      console.error('Error closing financial account:', error);
+      throw error;
+    }
+  }
+
   // Get a single account
   async getAccount(companyId: string, accountId: string): Promise<FinancialAccount | null> {
     try {
@@ -345,24 +398,12 @@ class FinanceService {
           });
         }
 
-        // Handle transfer transactions
+        // Handle transfer transactions - but only update balances once
+        // Skip the transfer account balance update here since we handle both accounts
+        // in the createTransfer method to avoid double updating
         if (transaction.isTransfer && transaction.transferAccountId) {
-          const transferAccountRef = doc(
-            db,
-            'companies',
-            transaction.companyId,
-            this.accountsCollection,
-            transaction.transferAccountId
-          );
-          
-          const transferBalanceChange = transaction.transferDirection === 'from' 
-            ? transaction.totalAmount 
-            : -transaction.totalAmount;
-          
-          firestoreTransaction.update(transferAccountRef, {
-            currentBalance: increment(transferBalanceChange),
-            updatedAt: serverTimestamp(),
-          });
+          // We don't update the transfer account balance here anymore
+          // The createTransfer method will handle both accounts properly
         }
 
         // Check for low balance alert
@@ -388,37 +429,39 @@ class FinanceService {
   ): Promise<{ transactions: FinancialTransaction[]; lastDoc: DocumentSnapshot | null }> {
     try {
       const constraints: QueryConstraint[] = [];
-      let needsClientSideSort = false;
+      let filterCount = 0;
+      let hasBranchFilter = false;
       let hasDateFilter = false;
 
-      // Apply filters
+      // Apply filters and count them
       if (filters?.branchId) {
         constraints.push(where('branchId', '==', filters.branchId));
-        needsClientSideSort = true;
+        hasBranchFilter = true;
+        filterCount++;
       }
       if (filters?.type) {
         constraints.push(where('type', '==', filters.type));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.status) {
         constraints.push(where('status', '==', filters.status));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.accountId) {
         constraints.push(where('accountId', '==', filters.accountId));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.category) {
         constraints.push(where('category', '==', filters.category));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.paymentMethod) {
         constraints.push(where('paymentMethod', '==', filters.paymentMethod));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.digitalWalletType) {
         constraints.push(where('digitalWalletPayment.walletType', '==', filters.digitalWalletType));
-        needsClientSideSort = true;
+        filterCount++;
       }
       if (filters?.startDate) {
         constraints.push(where('date', '>=', Timestamp.fromDate(filters.startDate)));
@@ -429,8 +472,15 @@ class FinanceService {
         hasDateFilter = true;
       }
 
-      // Only add orderBy if we don't have conflicting filters or if we have date filters
-      if (!needsClientSideSort || hasDateFilter) {
+      // Use server-side sorting only when we have no filters OR only date filters
+      // Any non-date filters require client-side sorting to avoid index requirements
+      const hasNonDateFilters = !!(filters?.branchId || filters?.type || filters?.status || 
+                                   filters?.accountId || filters?.category || filters?.paymentMethod || 
+                                   filters?.digitalWalletType);
+      const needsClientSideSort = hasNonDateFilters;
+      
+      // Only add orderBy if we can use server-side sorting (no non-date filters)
+      if (!needsClientSideSort) {
         constraints.push(orderBy('date', 'desc'));
       }
       
@@ -476,7 +526,7 @@ class FinanceService {
       });
 
       // Sort client-side if needed
-      if (needsClientSideSort && !hasDateFilter) {
+      if (needsClientSideSort) {
         transactions.sort((a, b) => {
           const dateA = a.date?.toDate?.() || new Date(0);
           const dateB = b.date?.toDate?.() || new Date(0);
@@ -527,49 +577,101 @@ class FinanceService {
     branchId: string
   ): Promise<{ fromTransactionId: string; toTransactionId: string }> {
     try {
-      // Create "from" transaction
-      const fromTransactionId = await this.createTransaction({
-        companyId,
-        branchId,
-        date: Timestamp.now(),
-        type: 'expense',
-        category: 'transfer',
-        amount,
-        vatAmount: 0,
-        totalAmount: amount,
-        accountId: fromAccountId,
-        paymentMethod: 'other',
-        isTransfer: true,
-        transferAccountId: toAccountId,
-        transferDirection: 'from',
-        description: `Transfer to account: ${description}`,
-        descriptionAr: `تحويل إلى حساب: ${description}`,
-        status: 'completed',
-        createdBy,
-      });
+      return await runTransaction(db, async (firestoreTransaction) => {
+        // Get both accounts
+        const fromAccountRef = doc(db, 'companies', companyId, this.accountsCollection, fromAccountId);
+        const toAccountRef = doc(db, 'companies', companyId, this.accountsCollection, toAccountId);
+        
+        const [fromAccountDoc, toAccountDoc] = await Promise.all([
+          firestoreTransaction.get(fromAccountRef),
+          firestoreTransaction.get(toAccountRef)
+        ]);
 
-      // Create "to" transaction
-      const toTransactionId = await this.createTransaction({
-        companyId,
-        branchId,
-        date: Timestamp.now(),
-        type: 'income',
-        category: 'transfer',
-        amount,
-        vatAmount: 0,
-        totalAmount: amount,
-        accountId: toAccountId,
-        paymentMethod: 'other',
-        isTransfer: true,
-        transferAccountId: fromAccountId,
-        transferDirection: 'to',
-        description: `Transfer from account: ${description}`,
-        descriptionAr: `تحويل من حساب: ${description}`,
-        status: 'completed',
-        createdBy,
-      });
+        if (!fromAccountDoc.exists()) {
+          throw new Error('From account not found');
+        }
+        if (!toAccountDoc.exists()) {
+          throw new Error('To account not found');
+        }
 
-      return { fromTransactionId, toTransactionId };
+        const fromAccount = fromAccountDoc.data() as FinancialAccount;
+        const toAccount = toAccountDoc.data() as FinancialAccount;
+
+        // Check if from account has sufficient balance
+        if (!fromAccount.allowNegativeBalance && fromAccount.currentBalance < amount) {
+          throw new Error('Insufficient balance');
+        }
+
+        const descriptionAr = `${toAccount?.nameAr || toAccount?.name} ← ${fromAccount?.nameAr || fromAccount?.name}`;
+
+        // Create "from" transaction (expense)
+        const fromTransactionRef = doc(collection(db, 'companies', companyId, this.transactionsCollection));
+        const fromTransaction = {
+          companyId,
+          branchId,
+          date: Timestamp.now(),
+          type: 'expense' as const,
+          category: 'transfer',
+          amount,
+          vatAmount: 0,
+          totalAmount: amount,
+          accountId: fromAccountId,
+          accountName: fromAccount.name,
+          paymentMethod: 'other' as const,
+          isTransfer: true,
+          transferAccountId: toAccountId,
+          transferDirection: 'from' as const,
+          description: `Transfer to account: ${description}`,
+          descriptionAr: `تحويل إلى حساب: ${descriptionAr}`,
+          status: 'completed' as const,
+          createdBy,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        firestoreTransaction.set(fromTransactionRef, fromTransaction);
+
+        // Create "to" transaction (income)
+        const toTransactionRef = doc(collection(db, 'companies', companyId, this.transactionsCollection));
+        const toTransaction = {
+          companyId,
+          branchId,
+          date: Timestamp.now(),
+          type: 'income' as const,
+          category: 'transfer',
+          amount,
+          vatAmount: 0,
+          totalAmount: amount,
+          accountId: toAccountId,
+          accountName: toAccount.name,
+          paymentMethod: 'other' as const,
+          isTransfer: true,
+          transferAccountId: fromAccountId,
+          transferDirection: 'to' as const,
+          description: `Transfer from account: ${description}`,
+          descriptionAr: `تحويل من حساب: ${descriptionAr}`,
+          status: 'completed' as const,
+          createdBy,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        firestoreTransaction.set(toTransactionRef, toTransaction);
+
+        // Update account balances
+        firestoreTransaction.update(fromAccountRef, {
+          currentBalance: increment(-amount), // Subtract from source account
+          updatedAt: serverTimestamp(),
+        });
+
+        firestoreTransaction.update(toAccountRef, {
+          currentBalance: increment(amount), // Add to destination account
+          updatedAt: serverTimestamp(),
+        });
+
+        return { 
+          fromTransactionId: fromTransactionRef.id, 
+          toTransactionId: toTransactionRef.id 
+        };
+      });
     } catch (error) {
       console.error('Error creating transfer:', error);
       throw error;

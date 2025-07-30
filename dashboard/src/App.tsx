@@ -49,6 +49,7 @@ import ProductCategoriesPage from './pages/products/ProductCategoriesPage';
 import BarcodePrintPage from './pages/products/BarcodePrintPage';
 import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
 import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
+import TransfersPage from './pages/finance/TransfersPage';
 import CashRegisterPage from './pages/finance/CashRegisterPage';
 import FinanceReportsPage from './pages/finance/FinanceReportsPage';
 import InvoicesPage from './pages/finance/InvoicesPage';
@@ -361,6 +362,11 @@ function App() {
                 <Route path="/finance/transactions" element={
                   <PageTransition>
                     <FinanceTransactionsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/transfers" element={
+                  <PageTransition>
+                    <TransfersPage />
                   </PageTransition>
                 } />
                 <Route path="/finance/cash-register" element={

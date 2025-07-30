@@ -198,7 +198,7 @@ const FinanceTransactionsPage: React.FC = () => {
       setAccounts(accountsData);
 
       // Load transactions
-      const transactionsData = await financeService.getTransactions(
+      const { transactions: transactionsData } = await financeService.getTransactions(
         currentUser.companyId,
         {
           branchId: currentBranch?.id,
@@ -682,24 +682,28 @@ const FinanceTransactionsPage: React.FC = () => {
                         </Stack>
                       }
                       secondary={
-                        <Stack spacing={0.5}>
-                          <Stack direction="row" spacing={2} alignItems="center">
-                            <Typography variant="body2" color="text.secondary">
-                              {account && (isRTL ? account.nameAr : account.name)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {transaction.date.toDate().toLocaleDateString()}
-                            </Typography>
-                          </Stack>
-                          {transaction.tags && transaction.tags.length > 0 && (
-                            <Stack direction="row" spacing={0.5}>
-                              {transaction.tags.map((tag, index) => (
-                                <Chip key={index} label={tag} size="small" variant="outlined" />
-                              ))}
+                        <Box component="div">
+                          <Stack spacing={0.5}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                              <Typography component="span" variant="body2" color="text.secondary">
+                                {account && (isRTL ? account.nameAr : account.name)}
+                              </Typography>
+                              <Typography component="span" variant="caption" color="text.secondary">
+                                {transaction.date.toDate().toLocaleDateString()}
+                              </Typography>
                             </Stack>
-                          )}
-                        </Stack>
+                            {transaction.tags && transaction.tags.length > 0 && (
+                              <Stack direction="row" spacing={0.5}>
+                                {transaction.tags.map((tag, index) => (
+                                  <Chip key={index} label={tag} size="small" variant="outlined" />
+                                ))}
+                              </Stack>
+                            )}
+                          </Stack>
+                        </Box>
                       }
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                     <ListItemSecondaryAction>
                       <Stack alignItems="flex-end" spacing={1}>

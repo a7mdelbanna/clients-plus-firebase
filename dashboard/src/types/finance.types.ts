@@ -69,6 +69,8 @@ export interface FinancialAccount {
   updatedAt?: Timestamp;
   createdBy?: string;
   updatedBy?: string;
+  closedAt?: Timestamp;
+  closedBy?: string;
 }
 
 // Digital wallet details

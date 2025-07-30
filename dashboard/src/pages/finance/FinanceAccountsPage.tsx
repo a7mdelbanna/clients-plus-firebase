@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -34,6 +35,9 @@ import {
   Menu,
   ListItemIcon,
   Alert,
+  Switch,
+  DialogContentText,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Add,
@@ -52,6 +56,8 @@ import {
   QrCode2,
   Warning,
   Check,
+  Block,
+  CheckCircle,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
@@ -89,6 +95,7 @@ const digitalWalletConfigs: Record<DigitalWalletType, {
 
 const FinanceAccountsPage: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { currentBranch } = useBranch();
   const isRTL = theme.direction === 'rtl';
@@ -100,9 +107,12 @@ const FinanceAccountsPage: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedAccount, setSelectedAccount] = useState<FinancialAccount | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    type: 'disable' | 'enable' | 'close';
+    account: FinancialAccount | null;
+  }>({ open: false, type: 'disable', account: null });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -286,6 +296,68 @@ const FinanceAccountsPage: React.FC = () => {
     }
   };
 
+  // Handle account status toggle
+  const handleToggleAccountStatus = async () => {
+    if (!currentUser?.companyId || !confirmDialog.account) return;
+
+    try {
+      const newStatus = confirmDialog.type === 'disable' ? 'inactive' : 'active';
+      await financeService.toggleAccountStatus(
+        currentUser.companyId,
+        confirmDialog.account.id!,
+        newStatus
+      );
+      
+      toast.success(
+        confirmDialog.type === 'disable'
+          ? (isRTL ? 'تم تعطيل الحساب' : 'Account disabled')
+          : (isRTL ? 'تم تفعيل الحساب' : 'Account enabled')
+      );
+      
+      setConfirmDialog({ open: false, type: 'disable', account: null });
+      loadAccounts();
+    } catch (error) {
+      console.error('Error toggling account status:', error);
+      toast.error(isRTL ? 'خطأ في تحديث حالة الحساب' : 'Error updating account status');
+    }
+  };
+
+  // Handle account close
+  const handleCloseAccount = async () => {
+    if (!currentUser?.companyId || !confirmDialog.account) return;
+
+    try {
+      await financeService.closeAccount(
+        currentUser.companyId,
+        confirmDialog.account.id!,
+        currentUser.uid
+      );
+      
+      toast.success(isRTL ? 'تم إغلاق الحساب' : 'Account closed');
+      setConfirmDialog({ open: false, type: 'close', account: null });
+      loadAccounts();
+    } catch (error: any) {
+      console.error('Error closing account:', error);
+      
+      // Show specific error messages
+      if (error.message?.includes('non-zero balance')) {
+        toast.error(
+          isRTL 
+            ? 'لا يمكن إغلاق حساب برصيد غير صفري' 
+            : 'Cannot close account with non-zero balance'
+        );
+      } else if (error.message?.includes('only active account')) {
+        toast.error(
+          isRTL 
+            ? 'لا يمكن إغلاق الحساب النشط الوحيد من هذا النوع' 
+            : 'Cannot close the only active account of this type'
+        );
+      } else {
+        toast.error(isRTL ? 'خطأ في إغلاق الحساب' : 'Error closing account');
+      }
+    }
+  };
+
   // Account icon helper
   const getAccountIcon = (account: FinancialAccount) => {
     switch (account.type) {
@@ -310,6 +382,19 @@ const FinanceAccountsPage: React.FC = () => {
     const walletConfig = isDigitalWallet && account.digitalWalletType
       ? digitalWalletConfigs[account.digitalWalletType]
       : null;
+    
+    // Local menu state for this card
+    const [cardAnchorEl, setCardAnchorEl] = useState<null | HTMLElement>(null);
+    const openMenu = Boolean(cardAnchorEl);
+
+    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+      event.stopPropagation();
+      setCardAnchorEl(event.currentTarget);
+    };
+
+    const handleMenuClose = () => {
+      setCardAnchorEl(null);
+    };
 
     return (
       <motion.div
@@ -351,22 +436,39 @@ const FinanceAccountsPage: React.FC = () => {
                       {isRTL ? walletConfig.nameAr : walletConfig.name}
                     </Typography>
                   )}
-                  {account.isDefault && (
-                    <Chip
-                      label={isRTL ? 'افتراضي' : 'Default'}
-                      size="small"
-                      color="primary"
-                      sx={{ mt: 0.5 }}
-                    />
-                  )}
+                  <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                    {account.isDefault && (
+                      <Chip
+                        label={isRTL ? 'افتراضي' : 'Default'}
+                        size="small"
+                        color="primary"
+                      />
+                    )}
+                    {account.status === 'inactive' && (
+                      <Chip
+                        label={isRTL ? 'معطل' : 'Disabled'}
+                        size="small"
+                        color="warning"
+                        icon={<Block />}
+                      />
+                    )}
+                    {account.status === 'closed' && (
+                      <Chip
+                        label={isRTL ? 'مغلق' : 'Closed'}
+                        size="small"
+                        color="error"
+                      />
+                    )}
+                  </Stack>
                 </Box>
               </Stack>
               <IconButton
                 size="small"
-                onClick={(e) => {
-                  setAnchorEl(e.currentTarget);
-                  setSelectedAccount(account);
-                }}
+                id={`account-menu-button-${account.id}`}
+                aria-controls={openMenu ? `account-menu-${account.id}` : undefined}
+                aria-haspopup="true"
+                aria-expanded={openMenu ? 'true' : undefined}
+                onClick={handleMenuOpen}
               >
                 <MoreVert />
               </IconButton>
@@ -457,6 +559,108 @@ const FinanceAccountsPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+        
+        {/* Account Menu */}
+        <Menu
+          id={`account-menu-${account.id}`}
+          anchorEl={cardAnchorEl}
+          open={openMenu}
+          onClose={handleMenuClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: isRTL ? 'left' : 'right',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: isRTL ? 'left' : 'right',
+          }}
+          PaperProps={{
+            elevation: 3,
+            sx: {
+              overflow: 'visible',
+              filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+              mt: 1.5,
+              '&:before': {
+                content: '""',
+                display: 'block',
+                position: 'absolute',
+                top: 0,
+                right: isRTL ? 'auto' : 14,
+                left: isRTL ? 14 : 'auto',
+                width: 10,
+                height: 10,
+                bgcolor: 'background.paper',
+                transform: 'translateY(-50%) rotate(45deg)',
+                zIndex: 0,
+              },
+            },
+          }}
+        >
+          <MenuItem
+            onClick={() => {
+              handleOpenDialog(account);
+              handleMenuClose();
+            }}
+            disabled={account.status === 'closed'}
+          >
+            <ListItemIcon>
+              <Edit fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{isRTL ? 'تعديل' : 'Edit'}</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              navigate('/finance/transactions', { 
+                state: { accountId: account.id } 
+              });
+              handleMenuClose();
+            }}
+          >
+            <ListItemIcon>
+              <Payment fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{isRTL ? 'المعاملات' : 'Transactions'}</ListItemText>
+          </MenuItem>
+          <Divider />
+          {account.status !== 'closed' && (
+            <MenuItem
+              onClick={() => {
+                setConfirmDialog({
+                  open: true,
+                  type: account.status === 'active' ? 'disable' : 'enable',
+                  account
+                });
+                handleMenuClose();
+              }}
+            >
+              <ListItemIcon>
+                {account.status === 'active' ? <Block fontSize="small" /> : <CheckCircle fontSize="small" />}
+              </ListItemIcon>
+              <ListItemText>
+                {account.status === 'active' 
+                  ? (isRTL ? 'تعطيل الحساب' : 'Disable Account')
+                  : (isRTL ? 'تفعيل الحساب' : 'Enable Account')
+                }
+              </ListItemText>
+            </MenuItem>
+          )}
+          <MenuItem
+            onClick={() => {
+              setConfirmDialog({
+                open: true,
+                type: 'close',
+                account
+              });
+              handleMenuClose();
+            }}
+            disabled={account.status === 'closed' || account.currentBalance !== 0}
+          >
+            <ListItemIcon>
+              <Delete fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{isRTL ? 'إغلاق الحساب' : 'Close Account'}</ListItemText>
+          </MenuItem>
+        </Menu>
       </motion.div>
     );
   };
@@ -473,9 +677,7 @@ const FinanceAccountsPage: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<SwapHoriz />}
-              onClick={() => {
-                // TODO: Navigate to transfers page
-              }}
+              onClick={() => navigate('/finance/transfers')}
             >
               {isRTL ? 'التحويلات' : 'Transfers'}
             </Button>
@@ -719,53 +921,71 @@ const FinanceAccountsPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Context Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => {
-          setAnchorEl(null);
-          setSelectedAccount(null);
-        }}
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog({ open: false, type: 'disable', account: null })}
+        maxWidth="sm"
+        fullWidth
       >
-        <MenuItem
-          onClick={() => {
-            if (selectedAccount) {
-              handleOpenDialog(selectedAccount);
+        <DialogTitle>
+          {confirmDialog.type === 'close'
+            ? (isRTL ? 'إغلاق الحساب' : 'Close Account')
+            : confirmDialog.type === 'disable'
+              ? (isRTL ? 'تعطيل الحساب' : 'Disable Account')
+              : (isRTL ? 'تفعيل الحساب' : 'Enable Account')
+          }
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {confirmDialog.type === 'close' ? (
+              <>
+                {isRTL 
+                  ? `هل أنت متأكد من إغلاق حساب "${confirmDialog.account?.nameAr || confirmDialog.account?.name}"؟ لا يمكن التراجع عن هذا الإجراء.`
+                  : `Are you sure you want to close the account "${confirmDialog.account?.name}"? This action cannot be undone.`
+                }
+                {confirmDialog.account?.currentBalance !== 0 && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {isRTL 
+                      ? 'لا يمكن إغلاق الحساب لأن الرصيد غير صفري'
+                      : 'Account cannot be closed because it has a non-zero balance'
+                    }
+                  </Alert>
+                )}
+              </>
+            ) : confirmDialog.type === 'disable' ? (
+              isRTL 
+                ? `هل أنت متأكد من تعطيل حساب "${confirmDialog.account?.nameAr || confirmDialog.account?.name}"؟ يمكنك تفعيله مرة أخرى لاحقاً.`
+                : `Are you sure you want to disable the account "${confirmDialog.account?.name}"? You can enable it again later.`
+            ) : (
+              isRTL 
+                ? `هل أنت متأكد من تفعيل حساب "${confirmDialog.account?.nameAr || confirmDialog.account?.name}"؟`
+                : `Are you sure you want to enable the account "${confirmDialog.account?.name}"?`
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setConfirmDialog({ open: false, type: 'disable', account: null })}
+          >
+            {isRTL ? 'إلغاء' : 'Cancel'}
+          </Button>
+          <Button
+            onClick={confirmDialog.type === 'close' ? handleCloseAccount : handleToggleAccountStatus}
+            variant="contained"
+            color={confirmDialog.type === 'close' ? 'error' : 'primary'}
+            disabled={confirmDialog.type === 'close' && confirmDialog.account?.currentBalance !== 0}
+          >
+            {confirmDialog.type === 'close'
+              ? (isRTL ? 'إغلاق' : 'Close')
+              : confirmDialog.type === 'disable'
+                ? (isRTL ? 'تعطيل' : 'Disable')
+                : (isRTL ? 'تفعيل' : 'Enable')
             }
-            setAnchorEl(null);
-          }}
-        >
-          <ListItemIcon>
-            <Edit fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{isRTL ? 'تعديل' : 'Edit'}</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            // TODO: Navigate to account transactions
-            setAnchorEl(null);
-          }}
-        >
-          <ListItemIcon>
-            <Payment fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{isRTL ? 'المعاملات' : 'Transactions'}</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem
-          onClick={() => {
-            // TODO: Implement account deletion/closing
-            setAnchorEl(null);
-          }}
-          disabled
-        >
-          <ListItemIcon>
-            <Delete fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{isRTL ? 'إغلاق الحساب' : 'Close Account'}</ListItemText>
-        </MenuItem>
-      </Menu>
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Container>
   );
 };

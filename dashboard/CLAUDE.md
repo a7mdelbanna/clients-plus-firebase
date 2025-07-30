@@ -1030,6 +1030,41 @@ firebase deploy                          # Deploy everything
       ```
     - **Prevention**: Always add all related routes when creating new pages (list, create, edit)
 
+30. **MUI Menu anchorEl Invalid Warning**:
+    - **Error**: "The `anchorEl` prop provided to the component is invalid. The anchor element should be part of the document layout."
+    - **Root Cause**: Single shared Menu component trying to handle anchor elements from multiple components, causing stale references
+    - **Solution**: Move Menu component inside each component that needs it:
+      ```typescript
+      // Before (causes error - shared menu in parent):
+      const ParentComponent = () => {
+        const [anchorEl, setAnchorEl] = useState(null);
+        return (
+          <>
+            {items.map(item => <Card onClick={(e) => setAnchorEl(e.currentTarget)} />)}
+            <Menu anchorEl={anchorEl} /> {/* Single menu for all cards */}
+          </>
+        );
+      };
+      
+      // After (works - each card has its own menu):
+      const CardComponent = ({ item }) => {
+        const [anchorEl, setAnchorEl] = useState(null);
+        return (
+          <>
+            <Card>
+              <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} />
+            </Card>
+            <Menu anchorEl={anchorEl} /> {/* Menu scoped to this card */}
+          </>
+        );
+      };
+      ```
+    - **Key Points**:
+      - Each component should manage its own menu state
+      - Menu should be rendered in the same component as its anchor
+      - Avoids stale references when components re-render
+    - **Prevention**: Always render Menu components close to their anchor elements
+
 ### Superadmin Dashboard (2025-07-22 - Evening & 2025-07-23 - Early Morning)
    - ✅ **Secure Access Architecture**:
      - Random 32-character URL hash (e.g., `/sa-7f8e3b2a9c1d4e5f6789abcdef012345/dashboard`)
