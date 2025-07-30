@@ -41,6 +41,7 @@ import {
   Settings,
   ArrowBack,
   Upload,
+  Visibility,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,6 +50,8 @@ import { productService } from '../../services/product.service';
 import { branchService } from '../../services/branch.service';
 import type { Product, ProductCategory, ProductType } from '../../types/product.types';
 import type { Branch } from '../../services/branch.service';
+import ProductBarcode from '../../components/products/ProductBarcode';
+import { generateBarcode, validateBarcode } from '../../utils/barcodeGenerator';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -106,6 +109,9 @@ const ProductFormPage: React.FC = () => {
 
   // Branch stock state
   const [branchStock, setBranchStock] = useState<{ [branchId: string]: { quantity: number; location: string } }>({});
+  
+  // Barcode preview dialog
+  const [showBarcodePreview, setShowBarcodePreview] = useState(false);
 
   // Load data
   useEffect(() => {
@@ -248,13 +254,10 @@ const ProductFormPage: React.FC = () => {
   };
 
   const handleGenerateBarcode = () => {
-    // Generate a random EAN-13 barcode
-    const prefix = '200'; // Egypt country code
-    const manufacturer = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const product = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-    const checksum = '0'; // Would need proper calculation
-    const barcode = `${prefix}${manufacturer}${product}${checksum}`;
+    // Generate a proper barcode with Egypt country code prefix
+    const barcode = generateBarcode('200'); // 200 is Egypt's country code
     setFormData(prev => ({ ...prev, barcode }));
+    toast.success(isRTL ? 'تم توليد الباركود بنجاح' : 'Barcode generated successfully');
   };
 
   const handleGenerateSKU = () => {
@@ -358,9 +361,20 @@ const ProductFormPage: React.FC = () => {
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Button size="small" onClick={handleGenerateBarcode}>
-                        {isRTL ? 'توليد' : 'Generate'}
-                      </Button>
+                      <Stack direction="row" spacing={1}>
+                        {formData.barcode && (
+                          <IconButton
+                            size="small"
+                            onClick={() => setShowBarcodePreview(true)}
+                            title={isRTL ? 'معاينة' : 'Preview'}
+                          >
+                            <Visibility />
+                          </IconButton>
+                        )}
+                        <Button size="small" onClick={handleGenerateBarcode}>
+                          {isRTL ? 'توليد' : 'Generate'}
+                        </Button>
+                      </Stack>
                     </InputAdornment>
                   ),
                 }}
@@ -704,6 +718,18 @@ const ProductFormPage: React.FC = () => {
           </Button>
         </Box>
       </form>
+
+      {/* Barcode Preview Dialog */}
+      {showBarcodePreview && formData.barcode && (
+        <ProductBarcode
+          barcode={formData.barcode}
+          productName={formData.name || 'Product'}
+          price={formData.sellingPrice}
+          currency="EGP"
+          showDialog={true}
+          onClose={() => setShowBarcodePreview(false)}
+        />
+      )}
     </Container>
   );
 };

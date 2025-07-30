@@ -25,6 +25,8 @@ import {
   Tooltip,
   Badge,
   Menu,
+  Popover,
+  MenuList,
   ListItemIcon,
   ListItemText,
   Divider,
@@ -60,6 +62,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { productService } from '../../services/product.service';
 import type { Product, ProductCategory, ProductType, ProductStatistics } from '../../types/product.types';
+import ProductBarcode from '../../components/products/ProductBarcode';
 
 const ProductsPage: React.FC = () => {
   const theme = useTheme();
@@ -85,8 +88,12 @@ const ProductsPage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<ProductType | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState(0);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [menuState, setMenuState] = useState<{
+    mouseX: number | null;
+    mouseY: number | null;
+    product: Product | null;
+  }>({ mouseX: null, mouseY: null, product: null });
+  const [barcodePreviewProduct, setBarcodePreviewProduct] = useState<Product | null>(null);
 
   // Fetch data
   useEffect(() => {
@@ -220,13 +227,18 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, product: Product) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedProduct(product);
+    event.preventDefault();
+    event.stopPropagation();
+    
+    setMenuState({
+      mouseX: event.clientX + 2,
+      mouseY: event.clientY - 6,
+      product,
+    });
   };
 
   const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedProduct(null);
+    setMenuState({ mouseX: null, mouseY: null, product: null });
   };
 
   // Filter products by tab
@@ -354,12 +366,14 @@ const ProductsPage: React.FC = () => {
                 />
               )}
               {product.barcode && (
-                <Tooltip title={isRTL ? 'مسح الباركود' : 'Scan Barcode'}>
+                <Tooltip title={isRTL ? 'عرض الباركود' : 'View Barcode'}>
                   <Chip
                     icon={<QrCode />}
                     label={product.barcode}
                     size="small"
                     variant="outlined"
+                    onClick={() => setBarcodePreviewProduct(product)}
+                    sx={{ cursor: 'pointer' }}
                   />
                 </Tooltip>
               )}
@@ -415,6 +429,8 @@ const ProductsPage: React.FC = () => {
               </Button>
               <IconButton
                 onClick={(e) => handleMenuOpen(e, product)}
+                size="small"
+                aria-label="product actions"
               >
                 <MoreVert />
               </IconButton>
@@ -445,6 +461,13 @@ const ProductsPage: React.FC = () => {
               startIcon={<FileDownload />}
             >
               {isRTL ? 'تصدير' : 'Export'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Print />}
+              onClick={() => navigate('/products/barcode-printing')}
+            >
+              {isRTL ? 'طباعة باركود' : 'Print Barcodes'}
             </Button>
             <Button
               variant="contained"
@@ -660,13 +683,29 @@ const ProductsPage: React.FC = () => {
       )}
 
       {/* Context Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
+      <Popover
+        open={menuState.mouseX !== null && menuState.mouseY !== null && Boolean(menuState.product)}
         onClose={handleMenuClose}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          menuState.mouseY !== null && menuState.mouseX !== null
+            ? { top: menuState.mouseY, left: menuState.mouseX }
+            : undefined
+        }
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 160,
+            },
+          },
+        }}
+        disableAutoFocus
+        disableEnforceFocus
+        disableRestoreFocus
       >
+        <MenuList>
         <MenuItem onClick={() => {
-          if (selectedProduct) handleEditProduct(selectedProduct.id!);
+          if (menuState.product) handleEditProduct(menuState.product.id!);
           handleMenuClose();
         }}>
           <ListItemIcon>
@@ -676,7 +715,7 @@ const ProductsPage: React.FC = () => {
         </MenuItem>
         
         <MenuItem onClick={() => {
-          if (selectedProduct) handleDuplicateProduct(selectedProduct);
+          if (menuState.product) handleDuplicateProduct(menuState.product);
           handleMenuClose();
         }}>
           <ListItemIcon>
@@ -686,8 +725,8 @@ const ProductsPage: React.FC = () => {
         </MenuItem>
         
         <MenuItem onClick={() => {
-          // TODO: Navigate to barcode print
           handleMenuClose();
+          navigate('/products/barcode-printing');
         }}>
           <ListItemIcon>
             <Print fontSize="small" />
@@ -698,7 +737,7 @@ const ProductsPage: React.FC = () => {
         <Divider />
         
         <MenuItem onClick={() => {
-          if (selectedProduct) handleArchiveProduct(selectedProduct.id!);
+          if (menuState.product) handleArchiveProduct(menuState.product.id!);
           handleMenuClose();
         }}>
           <ListItemIcon>
@@ -706,7 +745,8 @@ const ProductsPage: React.FC = () => {
           </ListItemIcon>
           <ListItemText>{isRTL ? 'أرشفة' : 'Archive'}</ListItemText>
         </MenuItem>
-      </Menu>
+        </MenuList>
+      </Popover>
 
       {/* FAB for adding categories */}
       <Fab
@@ -721,6 +761,18 @@ const ProductsPage: React.FC = () => {
       >
         <Category />
       </Fab>
+
+      {/* Barcode Preview Dialog */}
+      {barcodePreviewProduct && (
+        <ProductBarcode
+          barcode={barcodePreviewProduct.barcode || ''}
+          productName={barcodePreviewProduct.name}
+          price={barcodePreviewProduct.sellingPrice}
+          currency="EGP"
+          showDialog={true}
+          onClose={() => setBarcodePreviewProduct(null)}
+        />
+      )}
     </Container>
   );
 };

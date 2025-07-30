@@ -46,6 +46,7 @@ import ClientDashboard from './pages/client/ClientDashboard';
 import ProductsPage from './pages/products/ProductsPage';
 import ProductFormPage from './pages/products/ProductFormPage';
 import ProductCategoriesPage from './pages/products/ProductCategoriesPage';
+import BarcodePrintPage from './pages/products/BarcodePrintPage';
 import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
 import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
 import CashRegisterPage from './pages/finance/CashRegisterPage';
@@ -336,6 +337,11 @@ function App() {
                 <Route path="/products/categories" element={
                   <PageTransition>
                     <ProductCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/barcode-printing" element={
+                  <PageTransition>
+                    <BarcodePrintPage />
                   </PageTransition>
                 } />
                 <Route path="/finance" element={
