@@ -32,6 +32,10 @@ service cloud.firestore {
         request.auth.token.get('role', 'USER') == 'ADMIN';
     }
     
+    function hasRole(roles) {
+      return request.auth.token.get('role', 'employee') in roles;
+    }
+    
     // Global users collection - for user lookup and company assignment
     match /users/{userId} {
       // Users can read their own document
@@ -124,6 +128,35 @@ service cloud.firestore {
         allow read, write: if belongsToCompany(companyId);
       }
       
+      // Invoice Management
+      match /invoices/{invoiceId} {
+        allow read: if belongsToCompany(companyId);
+        allow create: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin', 'manager', 'employee']);
+        allow update: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin', 'manager', 'employee']);
+        allow delete: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin']);
+      }
+      
+      // Invoice Templates
+      match /invoiceTemplates/{templateId} {
+        allow read: if belongsToCompany(companyId);
+        allow create: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin', 'manager']);
+        allow update: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin', 'manager']);
+        allow delete: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin']);
+      }
+      
+      // Invoice Settings (singleton document)
+      match /invoiceSettings/{document=**} {
+        allow read: if belongsToCompany(companyId);
+        allow write: if belongsToCompany(companyId) && 
+          hasRole(['owner', 'admin']);
+      }
+      
       // Other company subcollections
       match /{subcollection}/{document} {
         // Default: users in company can read
@@ -187,7 +220,7 @@ service cloud.firestore {
         isCompanyAdmin(resource.data.companyId);
     }
     
-    // Invoices collection - company-wide resource  
+    // Invoices collection - DEPRECATED: Use companies/{companyId}/invoices instead
     match /invoices/{invoiceId} {
       allow read: if isAuthenticated() && 
         belongsToCompany(resource.data.companyId);

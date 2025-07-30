@@ -21,7 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { productService } from '../../services/product.service';
-import type { Product } from '../../types/product.types';
+import type { Product, ProductCategory } from '../../types/product.types';
 import type {
   LabelTemplate,
   PrintableProduct,
@@ -51,6 +51,7 @@ const BarcodePrintPage: React.FC = () => {
   // State
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<PrintableProduct[]>([]);
   const [activeTemplate, setActiveTemplate] = useState<LabelTemplate>(() => {
     const firstTemplate = PRESET_TEMPLATES[0];
@@ -93,11 +94,39 @@ const BarcodePrintPage: React.FC = () => {
 
     try {
       setLoading(true);
-      const result = await productService.getProducts(currentUser.companyId);
-      setProducts(result.products || []);
+      
+      // Load both products and categories in parallel
+      const [productsResult, loadedCategories] = await Promise.all([
+        productService.getProducts(currentUser.companyId),
+        productService.getCategories(currentUser.companyId)
+      ]);
+
+      const loadedProducts = productsResult.products || [];
+      
+      // Create a map of category IDs to names for quick lookup
+      const categoryMap = new Map<string, string>();
+      loadedCategories.forEach(category => {
+        if (category.id) {
+          categoryMap.set(category.id, category.name);
+        }
+      });
+
+      // Add categoryName to products based on categoryId
+      const productsWithCategoryNames = loadedProducts.map(product => ({
+        ...product,
+        categoryName: product.categoryId ? categoryMap.get(product.categoryId) || undefined : undefined
+      }));
+
+      setProducts(productsWithCategoryNames);
+      setCategories(loadedCategories);
+      
+      // Debug logging
+      console.log('Loaded categories:', loadedCategories.length);
+      console.log('Products with category names:', productsWithCategoryNames.filter(p => p.categoryName).length);
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('Error loading products and categories:', error);
       setProducts([]); // Set empty array on error
+      setCategories([]);
     } finally {
       setLoading(false);
     }

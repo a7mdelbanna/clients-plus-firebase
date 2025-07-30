@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  Grid,
   IconButton,
   InputAdornment,
   InputLabel,
@@ -65,6 +64,7 @@ import type {
   AccountSummary 
 } from '../../types/finance.types';
 import { Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 
 // Digital wallet configurations
 const digitalWalletConfigs: Record<DigitalWalletType, {
@@ -102,6 +102,7 @@ const FinanceAccountsPage: React.FC = () => {
   const [editingAccount, setEditingAccount] = useState<FinancialAccount | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinancialAccount | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -227,9 +228,10 @@ const FinanceAccountsPage: React.FC = () => {
   };
 
   const handleSaveAccount = async () => {
-    if (!currentUser?.companyId) return;
+    if (!currentUser?.companyId || saving) return;
 
     try {
+      setSaving(true);
       const accountData: Omit<FinancialAccount, 'id' | 'createdAt' | 'updatedAt'> = {
         companyId: currentUser.companyId,
         branchId: currentBranch?.id,
@@ -268,14 +270,19 @@ const FinanceAccountsPage: React.FC = () => {
           editingAccount.id,
           accountData
         );
+        toast.success(isRTL ? 'تم تحديث الحساب بنجاح' : 'Account updated successfully');
       } else {
         await financeService.createAccount(accountData);
+        toast.success(isRTL ? 'تم إنشاء الحساب بنجاح' : 'Account created successfully');
       }
 
       handleCloseDialog();
       loadAccounts();
     } catch (error) {
       console.error('Error saving account:', error);
+      toast.error(isRTL ? 'خطأ في حفظ الحساب' : 'Error saving account');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -513,17 +520,32 @@ const FinanceAccountsPage: React.FC = () => {
           </Button>
         </Box>
       ) : (
-        <Grid container spacing={3}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(3, 1fr)',
+            },
+            gap: 3,
+          }}
+        >
           {getFilteredAccounts().map((account) => (
-            <Grid item xs={12} sm={6} md={4} key={account.id}>
-              <AccountCard account={account} />
-            </Grid>
+            <AccountCard key={account.id} account={account} />
           ))}
-        </Grid>
+        </Box>
       )}
 
       {/* Add/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        disableEnforceFocus
+        disableAutoFocus={false}
+      >
         <DialogTitle>
           {editingAccount
             ? (isRTL ? 'تعديل الحساب' : 'Edit Account')
@@ -678,9 +700,21 @@ const FinanceAccountsPage: React.FC = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
-          <Button onClick={handleSaveAccount} variant="contained">
-            {editingAccount ? (isRTL ? 'حفظ' : 'Save') : (isRTL ? 'إضافة' : 'Add')}
+          <Button onClick={handleCloseDialog} disabled={saving}>
+            {isRTL ? 'إلغاء' : 'Cancel'}
+          </Button>
+          <Button 
+            onClick={handleSaveAccount} 
+            variant="contained"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={20} /> : null}
+          >
+            {saving 
+              ? (isRTL ? 'جاري الحفظ...' : 'Saving...') 
+              : editingAccount 
+                ? (isRTL ? 'حفظ' : 'Save') 
+                : (isRTL ? 'إضافة' : 'Add')
+            }
           </Button>
         </DialogActions>
       </Dialog>

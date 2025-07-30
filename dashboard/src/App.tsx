@@ -50,6 +50,10 @@ import BarcodePrintPage from './pages/products/BarcodePrintPage';
 import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
 import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
 import CashRegisterPage from './pages/finance/CashRegisterPage';
+import FinanceReportsPage from './pages/finance/FinanceReportsPage';
+import InvoicesPage from './pages/finance/InvoicesPage';
+import InvoiceFormPage from './pages/finance/InvoiceFormPage';
+import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 
 // Import debug utilities (development only)
@@ -362,6 +366,31 @@ function App() {
                 <Route path="/finance/cash-register" element={
                   <PageTransition>
                     <CashRegisterPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/reports" element={
+                  <PageTransition>
+                    <FinanceReportsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices" element={
+                  <PageTransition>
+                    <InvoicesPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/new" element={
+                  <PageTransition>
+                    <InvoiceFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/:invoiceId/edit" element={
+                  <PageTransition>
+                    <InvoiceFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/:invoiceId" element={
+                  <PageTransition>
+                    <InvoiceDetailPage />
                   </PageTransition>
                 } />
                 <Route path="/settings" element={

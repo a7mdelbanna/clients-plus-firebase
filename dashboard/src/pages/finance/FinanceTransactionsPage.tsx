@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  Grid,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -439,8 +438,8 @@ const FinanceTransactionsPage: React.FC = () => {
           </Stack>
 
           {/* Stats Cards */}
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
+            <Box>
               <Card>
                 <CardContent>
                   <Stack spacing={1}>
@@ -456,9 +455,9 @@ const FinanceTransactionsPage: React.FC = () => {
                   </Stack>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Box>
               <Card>
                 <CardContent>
                   <Stack spacing={1}>
@@ -474,9 +473,9 @@ const FinanceTransactionsPage: React.FC = () => {
                   </Stack>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Box>
               <Card>
                 <CardContent>
                   <Stack spacing={1}>
@@ -492,9 +491,9 @@ const FinanceTransactionsPage: React.FC = () => {
                   </Stack>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Box>
               <Card sx={{ bgcolor: totals.net >= 0 ? 'success.main' : 'error.main', color: 'white' }}>
                 <CardContent>
                   <Stack spacing={1}>
@@ -510,13 +509,13 @@ const FinanceTransactionsPage: React.FC = () => {
                   </Stack>
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
 
           {/* Filters */}
           <Paper sx={{ p: 2, mb: 3 }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1.5fr 1fr 1fr 2fr' }, gap: 2, alignItems: 'center' }}>
+              <Box>
                 <Stack direction="row" spacing={1}>
                   <DatePicker
                     label={isRTL ? 'من' : 'From'}
@@ -537,9 +536,9 @@ const FinanceTransactionsPage: React.FC = () => {
                     slotProps={{ textField: { size: 'small', fullWidth: true } }}
                   />
                 </Stack>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={2}>
+              <Box>
                 <ToggleButtonGroup
                   value={filters.type}
                   exclusive
@@ -557,9 +556,9 @@ const FinanceTransactionsPage: React.FC = () => {
                     {isRTL ? 'مصروفات' : 'Expenses'}
                   </ToggleButton>
                 </ToggleButtonGroup>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={2}>
+              <Box>
                 <FormControl fullWidth size="small">
                   <InputLabel>{isRTL ? 'الحساب' : 'Account'}</InputLabel>
                   <Select
@@ -575,9 +574,9 @@ const FinanceTransactionsPage: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={2}>
+              <Box>
                 <FormControl fullWidth size="small">
                   <InputLabel>{isRTL ? 'الحالة' : 'Status'}</InputLabel>
                   <Select
@@ -591,9 +590,9 @@ const FinanceTransactionsPage: React.FC = () => {
                     <MenuItem value="cancelled">{isRTL ? 'ملغية' : 'Cancelled'}</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={3}>
+              <Box>
                 <TextField
                   fullWidth
                   size="small"
@@ -608,8 +607,8 @@ const FinanceTransactionsPage: React.FC = () => {
                     ),
                   }}
                 />
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Paper>
         </Box>
 
@@ -768,9 +767,9 @@ const FinanceTransactionsPage: React.FC = () => {
                 </ToggleButton>
               </ToggleButtonGroup>
 
-              <Grid container spacing={2}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
                 {/* Amount */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <TextField
                     fullWidth
                     required
@@ -782,20 +781,20 @@ const FinanceTransactionsPage: React.FC = () => {
                       endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
                     }}
                   />
-                </Grid>
+                </Box>
 
                 {/* Date */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <DatePicker
                     label={isRTL ? 'التاريخ' : 'Date'}
                     value={formData.date}
                     onChange={(newValue) => setFormData({ ...formData, date: newValue || new Date() })}
                     slotProps={{ textField: { fullWidth: true, required: true } }}
                   />
-                </Grid>
+                </Box>
 
                 {/* Account */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <FormControl fullWidth required>
                     <InputLabel>{isRTL ? 'الحساب' : 'Account'}</InputLabel>
                     <Select
@@ -810,10 +809,10 @@ const FinanceTransactionsPage: React.FC = () => {
                       ))}
                     </Select>
                   </FormControl>
-                </Grid>
+                </Box>
 
                 {/* Category */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <FormControl fullWidth>
                     <InputLabel>{isRTL ? 'الفئة' : 'Category'}</InputLabel>
                     <Select
@@ -834,10 +833,10 @@ const FinanceTransactionsPage: React.FC = () => {
                       ))}
                     </Select>
                   </FormControl>
-                </Grid>
+                </Box>
 
                 {/* Client */}
-                <Grid item xs={12}>
+                <Box sx={{ gridColumn: '1 / -1' }}>
                   <Autocomplete
                     options={clients}
                     getOptionLabel={(option) => option.name}
@@ -851,10 +850,10 @@ const FinanceTransactionsPage: React.FC = () => {
                       />
                     )}
                   />
-                </Grid>
+                </Box>
 
                 {/* Description */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <TextField
                     fullWidth
                     label={isRTL ? 'الوصف' : 'Description'}
@@ -863,8 +862,8 @@ const FinanceTransactionsPage: React.FC = () => {
                     multiline
                     rows={2}
                   />
-                </Grid>
-                <Grid item xs={12} md={6}>
+                </Box>
+                <Box>
                   <TextField
                     fullWidth
                     label={isRTL ? 'الوصف (عربي)' : 'Description (Arabic)'}
@@ -873,10 +872,10 @@ const FinanceTransactionsPage: React.FC = () => {
                     multiline
                     rows={2}
                   />
-                </Grid>
+                </Box>
 
                 {/* Payment Method */}
-                <Grid item xs={12} md={6}>
+                <Box>
                   <FormControl fullWidth>
                     <InputLabel>{isRTL ? 'طريقة الدفع' : 'Payment Method'}</InputLabel>
                     <Select
@@ -891,11 +890,11 @@ const FinanceTransactionsPage: React.FC = () => {
                       <MenuItem value="check">{isRTL ? 'شيك' : 'Check'}</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
+                </Box>
 
                 {/* Digital Wallet Fee */}
                 {formData.paymentMethod === 'digital_wallet' && (
-                  <Grid item xs={12} md={6}>
+                  <Box>
                     <TextField
                       fullWidth
                       type="number"
@@ -907,11 +906,11 @@ const FinanceTransactionsPage: React.FC = () => {
                       }}
                       helperText={isRTL ? 'رسوم المعاملة للمحفظة الرقمية' : 'Transaction fee for digital wallet'}
                     />
-                  </Grid>
+                  </Box>
                 )}
 
                 {/* Recurring */}
-                <Grid item xs={12}>
+                <Box sx={{ gridColumn: '1 / -1' }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -921,11 +920,11 @@ const FinanceTransactionsPage: React.FC = () => {
                     }
                     label={isRTL ? 'معاملة متكررة' : 'Recurring Transaction'}
                   />
-                </Grid>
+                </Box>
 
                 {formData.isRecurring && (
                   <>
-                    <Grid item xs={12} md={6}>
+                    <Box>
                       <FormControl fullWidth>
                         <InputLabel>{isRTL ? 'التكرار' : 'Interval'}</InputLabel>
                         <Select
@@ -939,18 +938,18 @@ const FinanceTransactionsPage: React.FC = () => {
                           <MenuItem value="yearly">{isRTL ? 'سنوي' : 'Yearly'}</MenuItem>
                         </Select>
                       </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
+                    </Box>
+                    <Box>
                       <DatePicker
                         label={isRTL ? 'تاريخ الانتهاء' : 'End Date'}
                         value={formData.recurringEndDate}
                         onChange={(newValue) => setFormData({ ...formData, recurringEndDate: newValue })}
                         slotProps={{ textField: { fullWidth: true } }}
                       />
-                    </Grid>
+                    </Box>
                   </>
                 )}
-              </Grid>
+              </Box>
             </Stack>
           </DialogContent>
           <DialogActions>

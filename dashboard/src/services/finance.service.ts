@@ -153,18 +153,25 @@ class FinanceService {
   ): Promise<FinancialAccount[]> {
     try {
       const constraints: QueryConstraint[] = [];
+      let needsClientSideSort = false;
 
       if (filters?.branchId) {
         constraints.push(where('branchId', '==', filters.branchId));
+        needsClientSideSort = true;
       }
       if (filters?.type) {
         constraints.push(where('type', '==', filters.type));
+        needsClientSideSort = true;
       }
       if (filters?.status) {
         constraints.push(where('status', '==', filters.status));
+        needsClientSideSort = true;
       }
 
-      constraints.push(orderBy('name'));
+      // Only add orderBy if we don't have filters (to avoid index requirement)
+      if (!needsClientSideSort) {
+        constraints.push(orderBy('name'));
+      }
 
       const q = query(
         collection(db, 'companies', companyId, this.accountsCollection),
@@ -181,6 +188,15 @@ class FinanceService {
         } as FinancialAccount);
       });
 
+      // Sort client-side if we have filters
+      if (needsClientSideSort) {
+        accounts.sort((a, b) => {
+          const nameA = a.name.toLowerCase();
+          const nameB = b.name.toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+      }
+
       return accounts;
     } catch (error) {
       console.error('Error getting financial accounts:', error);
@@ -193,21 +209,35 @@ class FinanceService {
     companyId: string,
     callback: (accounts: FinancialAccount[]) => void
   ): Unsubscribe {
+    // Simple query without complex ordering to avoid index requirements
     const q = query(
-      collection(db, 'companies', companyId, this.accountsCollection),
-      where('status', '!=', 'closed'),
-      orderBy('status'),
-      orderBy('name')
+      collection(db, 'companies', companyId, this.accountsCollection)
     );
 
     return onSnapshot(q, (snapshot) => {
       const accounts: FinancialAccount[] = [];
       
       snapshot.forEach((doc) => {
-        accounts.push({
+        const account = {
           id: doc.id,
           ...doc.data(),
-        } as FinancialAccount);
+        } as FinancialAccount;
+        
+        // Filter out closed accounts client-side
+        if (account.status !== 'closed') {
+          accounts.push(account);
+        }
+      });
+
+      // Sort client-side
+      accounts.sort((a, b) => {
+        // First sort by status
+        if (a.status !== b.status) {
+          const statusOrder = { 'active': 0, 'inactive': 1, 'closed': 2 };
+          return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
+        }
+        // Then by name
+        return a.name.localeCompare(b.name);
       });
 
       callback(accounts);
@@ -229,7 +259,7 @@ class FinanceService {
         constraints.push(where('digitalWalletType', '==', walletType));
       }
 
-      constraints.push(orderBy('name'));
+      // Remove orderBy to avoid index requirement
 
       const q = query(
         collection(db, 'companies', companyId, this.accountsCollection),
@@ -245,6 +275,9 @@ class FinanceService {
           ...doc.data(),
         } as FinancialAccount);
       });
+
+      // Sort client-side
+      accounts.sort((a, b) => a.name.localeCompare(b.name));
 
       return accounts;
     } catch (error) {
@@ -355,43 +388,59 @@ class FinanceService {
   ): Promise<{ transactions: FinancialTransaction[]; lastDoc: DocumentSnapshot | null }> {
     try {
       const constraints: QueryConstraint[] = [];
+      let needsClientSideSort = false;
+      let hasDateFilter = false;
 
       // Apply filters
       if (filters?.branchId) {
         constraints.push(where('branchId', '==', filters.branchId));
+        needsClientSideSort = true;
       }
       if (filters?.type) {
         constraints.push(where('type', '==', filters.type));
+        needsClientSideSort = true;
       }
       if (filters?.status) {
         constraints.push(where('status', '==', filters.status));
+        needsClientSideSort = true;
       }
       if (filters?.accountId) {
         constraints.push(where('accountId', '==', filters.accountId));
+        needsClientSideSort = true;
       }
       if (filters?.category) {
         constraints.push(where('category', '==', filters.category));
+        needsClientSideSort = true;
       }
       if (filters?.paymentMethod) {
         constraints.push(where('paymentMethod', '==', filters.paymentMethod));
+        needsClientSideSort = true;
       }
       if (filters?.digitalWalletType) {
         constraints.push(where('digitalWalletPayment.walletType', '==', filters.digitalWalletType));
+        needsClientSideSort = true;
       }
       if (filters?.startDate) {
         constraints.push(where('date', '>=', Timestamp.fromDate(filters.startDate)));
+        hasDateFilter = true;
       }
       if (filters?.endDate) {
         constraints.push(where('date', '<=', Timestamp.fromDate(filters.endDate)));
+        hasDateFilter = true;
       }
 
-      // Default ordering
-      constraints.push(orderBy('date', 'desc'));
-      constraints.push(limit(pageSize));
-
-      // Pagination
-      if (lastDoc) {
-        constraints.push(startAfter(lastDoc));
+      // Only add orderBy if we don't have conflicting filters or if we have date filters
+      if (!needsClientSideSort || hasDateFilter) {
+        constraints.push(orderBy('date', 'desc'));
+      }
+      
+      // Don't use limit when we need client-side operations
+      if (!needsClientSideSort) {
+        constraints.push(limit(pageSize));
+        // Pagination
+        if (lastDoc) {
+          constraints.push(startAfter(lastDoc));
+        }
       }
 
       const q = query(
@@ -400,7 +449,7 @@ class FinanceService {
       );
 
       const snapshot = await getDocs(q);
-      const transactions: FinancialTransaction[] = [];
+      let transactions: FinancialTransaction[] = [];
 
       snapshot.forEach((doc) => {
         const transaction = {
@@ -426,9 +475,40 @@ class FinanceService {
         transactions.push(transaction);
       });
 
+      // Sort client-side if needed
+      if (needsClientSideSort && !hasDateFilter) {
+        transactions.sort((a, b) => {
+          const dateA = a.date?.toDate?.() || new Date(0);
+          const dateB = b.date?.toDate?.() || new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
+      }
+
+      // Apply pagination client-side if needed
+      let lastDocResult = null;
+      if (needsClientSideSort) {
+        // Find the start index if lastDoc is provided
+        let startIndex = 0;
+        if (lastDoc) {
+          const lastDocId = lastDoc.id;
+          startIndex = transactions.findIndex(t => t.id === lastDocId) + 1;
+        }
+        
+        // Slice for pagination
+        transactions = transactions.slice(startIndex, startIndex + pageSize);
+        
+        // Set lastDoc for next page
+        if (transactions.length === pageSize && startIndex + pageSize < snapshot.docs.length) {
+          const lastTransactionId = transactions[transactions.length - 1].id;
+          lastDocResult = snapshot.docs.find(doc => doc.id === lastTransactionId) || null;
+        }
+      } else {
+        lastDocResult = snapshot.docs[snapshot.docs.length - 1] || null;
+      }
+
       return {
         transactions,
-        lastDoc: snapshot.docs[snapshot.docs.length - 1] || null,
+        lastDoc: lastDocResult,
       };
     } catch (error) {
       console.error('Error getting transactions:', error);
@@ -609,7 +689,7 @@ class FinanceService {
         constraints.push(where('registerId', '==', registerId));
       }
 
-      constraints.push(orderBy('openedAt', 'desc'));
+      // Remove orderBy to avoid index requirement when using filters
 
       const q = query(
         collection(db, 'companies', companyId, this.cashRegistersCollection),
@@ -624,6 +704,13 @@ class FinanceService {
           id: doc.id,
           ...doc.data(),
         } as CashRegisterSession);
+      });
+
+      // Sort client-side by openedAt desc
+      sessions.sort((a, b) => {
+        const dateA = a.openedAt?.toDate?.() || new Date(0);
+        const dateB = b.openedAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
       });
 
       return sessions;
@@ -730,9 +817,7 @@ class FinanceService {
     try {
       const q = query(
         collection(db, 'companies', companyId, this.expenseCategoriesCollection),
-        where('isActive', '==', true),
-        orderBy('sortOrder', 'asc'),
-        orderBy('name', 'asc')
+        where('isActive', '==', true)
       );
 
       const snapshot = await getDocs(q);
@@ -743,6 +828,15 @@ class FinanceService {
           id: doc.id,
           ...doc.data(),
         } as ExpenseCategory);
+      });
+
+      // Sort client-side by sortOrder then name
+      categories.sort((a, b) => {
+        // First by sortOrder
+        const orderDiff = (a.sortOrder || 999) - (b.sortOrder || 999);
+        if (orderDiff !== 0) return orderDiff;
+        // Then by name
+        return a.name.localeCompare(b.name);
       });
 
       return categories;
@@ -765,14 +859,33 @@ class FinanceService {
       const account = await this.getAccount(companyId, accountId);
       if (!account) return null;
 
-      const filters: TransactionFilters = {
-        accountId,
-        startDate,
-        endDate,
-        status: 'completed',
-      };
+      // Use a more targeted query to avoid index requirements
+      const constraints: QueryConstraint[] = [
+        where('accountId', '==', accountId),
+        where('status', '==', 'completed')
+      ];
 
-      const { transactions } = await this.getTransactions(companyId, filters, 1000);
+      if (startDate) {
+        constraints.push(where('date', '>=', Timestamp.fromDate(startDate)));
+      }
+      if (endDate) {
+        constraints.push(where('date', '<=', Timestamp.fromDate(endDate)));
+      }
+
+      const q = query(
+        collection(db, 'companies', companyId, this.transactionsCollection),
+        ...constraints
+      );
+
+      const snapshot = await getDocs(q);
+      const transactions: FinancialTransaction[] = [];
+
+      snapshot.forEach((doc) => {
+        transactions.push({
+          id: doc.id,
+          ...doc.data(),
+        } as FinancialTransaction);
+      });
 
       let periodIncome = 0;
       let periodExpenses = 0;

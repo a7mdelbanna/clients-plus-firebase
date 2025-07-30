@@ -116,6 +116,43 @@ const menuItems: MenuItem[] = [
     titleAr: 'المالية',
     icon: <AccountBalance />,
     path: '/finance',
+    subItems: [
+      {
+        id: 'accounts',
+        title: 'Accounts',
+        titleAr: 'الحسابات',
+        icon: <AccountBalance />,
+        path: '/finance/accounts',
+      },
+      {
+        id: 'transactions',
+        title: 'Transactions',
+        titleAr: 'المعاملات',
+        icon: <Payment />,
+        path: '/finance/transactions',
+      },
+      {
+        id: 'cash-register',
+        title: 'Cash Register',
+        titleAr: 'الصندوق',
+        icon: <Paid />,
+        path: '/finance/cash-register',
+      },
+      {
+        id: 'invoices',
+        title: 'Invoices',
+        titleAr: 'الفواتير',
+        icon: <Receipt />,
+        path: '/finance/invoices',
+      },
+      {
+        id: 'reports',
+        title: 'Reports',
+        titleAr: 'التقارير',
+        icon: <Assessment />,
+        path: '/finance/reports',
+      },
+    ],
   },
   {
     id: 'payroll',

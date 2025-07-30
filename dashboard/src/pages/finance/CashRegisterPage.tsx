@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  Grid,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -403,8 +402,8 @@ const CashRegisterPage: React.FC = () => {
           {/* Current Session Status */}
           {currentSession ? (
             <Paper sx={{ p: 3, mb: 3 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={3}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3 }}>
+                <Box>
                   <Stack spacing={1}>
                     <Typography variant="body2" color="text.secondary">
                       {isRTL ? 'الحالة' : 'Status'}
@@ -419,9 +418,9 @@ const CashRegisterPage: React.FC = () => {
                       icon={currentSession.status === 'open' ? <LockOpen /> : <Lock />}
                     />
                   </Stack>
-                </Grid>
+                </Box>
 
-                <Grid item xs={12} md={3}>
+                <Box>
                   <Stack spacing={1}>
                     <Typography variant="body2" color="text.secondary">
                       {isRTL ? 'وقت الفتح' : 'Opening Time'}
@@ -433,9 +432,9 @@ const CashRegisterPage: React.FC = () => {
                       </Typography>
                     </Stack>
                   </Stack>
-                </Grid>
+                </Box>
 
-                <Grid item xs={12} md={3}>
+                <Box>
                   <Stack spacing={1}>
                     <Typography variant="body2" color="text.secondary">
                       {isRTL ? 'الرصيد الافتتاحي' : 'Opening Balance'}
@@ -444,9 +443,9 @@ const CashRegisterPage: React.FC = () => {
                       {currentSession.openingBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </Stack>
-                </Grid>
+                </Box>
 
-                <Grid item xs={12} md={3}>
+                <Box>
                   <Stack spacing={1}>
                     <Typography variant="body2" color="text.secondary">
                       {isRTL ? 'الرصيد المتوقع' : 'Expected Balance'}
@@ -455,14 +454,14 @@ const CashRegisterPage: React.FC = () => {
                       {currentSession.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </Stack>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
 
               {currentSession.status === 'closed' && (
                 <Box sx={{ mt: 3 }}>
                   <Divider sx={{ mb: 2 }} />
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={3}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3 }}>
+                    <Box>
                       <Stack spacing={1}>
                         <Typography variant="body2" color="text.secondary">
                           {isRTL ? 'الرصيد الفعلي' : 'Actual Balance'}
@@ -471,9 +470,9 @@ const CashRegisterPage: React.FC = () => {
                           {currentSession.actualCashCount?.toLocaleString() || 0} {isRTL ? 'ج.م' : 'EGP'}
                         </Typography>
                       </Stack>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={12} md={3}>
+                    <Box>
                       <Stack spacing={1}>
                         <Typography variant="body2" color="text.secondary">
                           {isRTL ? 'الفرق' : 'Difference'}
@@ -485,9 +484,9 @@ const CashRegisterPage: React.FC = () => {
                           {currentSession.difference > 0 ? '+' : ''}{currentSession.difference.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                         </Typography>
                       </Stack>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={12} md={3}>
+                    <Box>
                       <Stack spacing={1}>
                         <Typography variant="body2" color="text.secondary">
                           {isRTL ? 'وقت الإغلاق' : 'Closing Time'}
@@ -499,9 +498,9 @@ const CashRegisterPage: React.FC = () => {
                           </Typography>
                         </Stack>
                       </Stack>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={12} md={3}>
+                    <Box>
                       <Stack spacing={1}>
                         <Typography variant="body2" color="text.secondary">
                           {isRTL ? 'أغلق بواسطة' : 'Closed By'}
@@ -513,8 +512,8 @@ const CashRegisterPage: React.FC = () => {
                           </Typography>
                         </Stack>
                       </Stack>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
                 </Box>
               )}
             </Paper>
@@ -528,8 +527,8 @@ const CashRegisterPage: React.FC = () => {
 
           {/* Transaction Summary */}
           {currentSession?.status === 'open' && currentSession.transactionSummary && (
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={3}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3 }}>
+              <Box>
                 <Card>
                   <CardContent>
                     <Stack spacing={1}>
@@ -548,9 +547,9 @@ const CashRegisterPage: React.FC = () => {
                     </Stack>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={3}>
+              <Box>
                 <Card>
                   <CardContent>
                     <Stack spacing={1}>
@@ -569,9 +568,9 @@ const CashRegisterPage: React.FC = () => {
                     </Stack>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={3}>
+              <Box>
                 <Card>
                   <CardContent>
                     <Stack spacing={1}>
@@ -590,9 +589,9 @@ const CashRegisterPage: React.FC = () => {
                     </Stack>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} md={3}>
+              <Box>
                 <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
                   <CardContent>
                     <Stack spacing={1}>
@@ -608,8 +607,8 @@ const CashRegisterPage: React.FC = () => {
                     </Stack>
                   </CardContent>
                 </Card>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           )}
 
           {/* Payment Method Breakdown */}
@@ -618,9 +617,9 @@ const CashRegisterPage: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 {isRTL ? 'تفاصيل طرق الدفع' : 'Payment Method Breakdown'}
               </Typography>
-              <Grid container spacing={2}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                 {Object.entries(currentSession.paymentBreakdown).map(([method, breakdown]) => (
-                  <Grid item xs={12} sm={6} md={3} key={method}>
+                  <Box key={method}>
                     <Stack direction="row" spacing={2} alignItems="center">
                       {getPaymentMethodIcon(method)}
                       <Box sx={{ flexGrow: 1 }}>
@@ -635,9 +634,9 @@ const CashRegisterPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Stack>
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             </Paper>
           )}
         </Box>
@@ -753,9 +752,9 @@ const CashRegisterPage: React.FC = () => {
 
               <Typography variant="h6">{isRTL ? 'عد النقدية' : 'Cash Count'}</Typography>
               
-              <Grid container spacing={2}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                 {Object.entries(closingForm.denominations).map(([denomination, count]) => (
-                  <Grid item xs={6} sm={4} md={3} key={denomination}>
+                  <Box key={denomination}>
                     <TextField
                       fullWidth
                       type="number"
@@ -772,9 +771,9 @@ const CashRegisterPage: React.FC = () => {
                         startAdornment: <InputAdornment position="start">×</InputAdornment>,
                       }}
                     />
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
 
               <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
