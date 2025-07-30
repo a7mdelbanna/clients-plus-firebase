@@ -211,7 +211,7 @@ export const PRESET_TEMPLATES: Partial<LabelTemplate>[] = [
           fontSize: 16,
           fontFamily: 'Arial',
           fontWeight: 'bold',
-          color: '#ff0000',
+          color: '#000000',
           alignment: 'center',
           marginTop: 5,
         },

@@ -70,6 +70,7 @@ const BarcodePrintPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [previewScale, setPreviewScale] = useState(1);
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [selectedLanguage, setSelectedLanguage] = useState<'arabic' | 'english'>('arabic');
 
   // Load products and saved templates
   useEffect(() => {
@@ -283,7 +284,7 @@ const BarcodePrintPage: React.FC = () => {
             ` : ''}
             
             ${labelDesign.elements.productName.visible ? `
-              <div class="product-name">${isRTL ? (product.nameAr || product.name) : product.name}</div>
+              <div class="product-name">${selectedLanguage === 'arabic' && product.nameAr ? product.nameAr : product.name}</div>
             ` : ''}
             
             ${labelDesign.elements.price.visible ? `
@@ -567,7 +568,7 @@ const BarcodePrintPage: React.FC = () => {
           </Paper>
         </Box>
 
-        {/* Right Panel - Template Selection */}
+        {/* Right Panel - Template Selection and Font Settings */}
         <Box sx={{ 
           flex: 1,
           minWidth: 0
@@ -579,15 +580,17 @@ const BarcodePrintPage: React.FC = () => {
             flexDirection: 'column'
           }}>
             <Typography variant="h6" gutterBottom>
-              {isRTL ? 'قوالب الملصقات' : 'Label Templates'}
+              {isRTL ? 'قوالب الملصقات والخط' : 'Label Templates & Font'}
             </Typography>
             <Divider sx={{ mb: 2 }} />
             
+            {/* Template Selection */}
             <Box sx={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: 2,
-              flex: 1,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+              gap: 1.5,
+              mb: 2,
+              maxHeight: '140px',
               overflow: 'auto'
             }}>
               {PRESET_TEMPLATES.map((template, index) => {
@@ -611,7 +614,7 @@ const BarcodePrintPage: React.FC = () => {
                       }
                     }}
                     sx={{
-                      p: 2,
+                      p: 1.5,
                       border: '2px solid',
                       borderColor: isActive ? 'primary.main' : 'divider',
                       borderRadius: 2,
@@ -620,35 +623,299 @@ const BarcodePrintPage: React.FC = () => {
                       '&:hover': {
                         borderColor: 'primary.main',
                         bgcolor: isActive ? 'primary.100' : 'primary.25',
-                        transform: 'translateY(-2px)',
-                        boxShadow: 2,
+                        transform: 'translateY(-1px)',
+                        boxShadow: 1,
                       },
                       transition: 'all 0.2s ease-in-out',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       textAlign: 'center',
-                      minHeight: '100px',
+                      minHeight: '60px',
                       justifyContent: 'center'
                     }}
                   >
                     <Typography 
-                      variant="body2" 
+                      variant="caption" 
                       fontWeight={isActive ? 'bold' : 'medium'}
                       gutterBottom
-                      sx={{ color: isActive ? 'primary.main' : 'text.primary' }}
+                      sx={{ color: isActive ? 'primary.main' : 'text.primary', fontSize: '0.7rem' }}
                     >
                       {template.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
                       {template.layout ? `${template.layout.labelsPerRow} × ${template.layout.labelsPerColumn}` : 'Layout'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {template.layout ? `${template.layout.labelsPerRow * template.layout.labelsPerColumn} labels` : 'N/A'}
                     </Typography>
                   </Box>
                 );
               })}
+            </Box>
+
+            {/* Font Size Controls */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {isRTL ? 'حجم الخط' : 'Font Sizes'}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {/* Product Name Font Size */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" sx={{ minWidth: '60px', fontSize: '0.7rem' }}>
+                    {isRTL ? 'الاسم' : 'Name'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              productName: {
+                                ...prev.labelDesign.elements.productName,
+                                fontSize: Math.max(6, prev.labelDesign.elements.productName.fontSize - 1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      -
+                    </Button>
+                    <Typography variant="caption" sx={{ minWidth: '30px', textAlign: 'center', fontSize: '0.7rem' }}>
+                      {activeTemplate.labelDesign.elements.productName.fontSize}px
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              productName: {
+                                ...prev.labelDesign.elements.productName,
+                                fontSize: Math.min(24, prev.labelDesign.elements.productName.fontSize + 1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      +
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Price Font Size */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" sx={{ minWidth: '60px', fontSize: '0.7rem' }}>
+                    {isRTL ? 'السعر' : 'Price'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              price: {
+                                ...prev.labelDesign.elements.price,
+                                fontSize: Math.max(6, prev.labelDesign.elements.price.fontSize - 1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      -
+                    </Button>
+                    <Typography variant="caption" sx={{ minWidth: '30px', textAlign: 'center', fontSize: '0.7rem' }}>
+                      {activeTemplate.labelDesign.elements.price.fontSize}px
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              price: {
+                                ...prev.labelDesign.elements.price,
+                                fontSize: Math.min(24, prev.labelDesign.elements.price.fontSize + 1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      +
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Barcode Width */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" sx={{ minWidth: '60px', fontSize: '0.7rem' }}>
+                    {isRTL ? 'عرض الباركود' : 'Barcode W'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              barcode: {
+                                ...prev.labelDesign.elements.barcode,
+                                width: Math.max(0.5, prev.labelDesign.elements.barcode.width - 0.1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      -
+                    </Button>
+                    <Typography variant="caption" sx={{ minWidth: '30px', textAlign: 'center', fontSize: '0.7rem' }}>
+                      {activeTemplate.labelDesign.elements.barcode.width.toFixed(1)}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              barcode: {
+                                ...prev.labelDesign.elements.barcode,
+                                width: Math.min(5.0, prev.labelDesign.elements.barcode.width + 0.1)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      +
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Barcode Height */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" sx={{ minWidth: '60px', fontSize: '0.7rem' }}>
+                    {isRTL ? 'ارتفاع الباركود' : 'Barcode H'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              barcode: {
+                                ...prev.labelDesign.elements.barcode,
+                                height: Math.max(15, prev.labelDesign.elements.barcode.height - 5)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      -
+                    </Button>
+                    <Typography variant="caption" sx={{ minWidth: '30px', textAlign: 'center', fontSize: '0.7rem' }}>
+                      {activeTemplate.labelDesign.elements.barcode.height}px
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setActiveTemplate(prev => ({
+                          ...prev,
+                          labelDesign: {
+                            ...prev.labelDesign,
+                            elements: {
+                              ...prev.labelDesign.elements,
+                              barcode: {
+                                ...prev.labelDesign.elements.barcode,
+                                height: Math.min(80, prev.labelDesign.elements.barcode.height + 5)
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      sx={{ minWidth: '24px', height: '24px', p: 0 }}
+                    >
+                      +
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Product Name Language */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" sx={{ minWidth: '60px', fontSize: '0.7rem' }}>
+                    {isRTL ? 'لغة الاسم' : 'Name Lang'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1 }}>
+                    <Button
+                      size="small"
+                      variant={selectedLanguage === 'arabic' ? 'contained' : 'outlined'}
+                      onClick={() => setSelectedLanguage('arabic')}
+                      sx={{ 
+                        minWidth: '40px', 
+                        height: '24px', 
+                        fontSize: '0.6rem',
+                        px: 1
+                      }}
+                    >
+                      عربي
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={selectedLanguage === 'english' ? 'contained' : 'outlined'}
+                      onClick={() => setSelectedLanguage('english')}
+                      sx={{ 
+                        minWidth: '40px', 
+                        height: '24px', 
+                        fontSize: '0.6rem',
+                        px: 1
+                      }}
+                    >
+                      EN
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
             </Box>
           </Paper>
         </Box>
@@ -815,7 +1082,7 @@ const BarcodePrintPage: React.FC = () => {
                             mb: '0.5mm'
                           }}
                         >
-                          {isRTL && product.nameAr ? product.nameAr : product.name}
+                          {selectedLanguage === 'arabic' && product.nameAr ? product.nameAr : product.name}
                         </Typography>
                       )}
                       
@@ -840,52 +1107,60 @@ const BarcodePrintPage: React.FC = () => {
                               } 
                             }}
                           >
-                            <div 
-                              dangerouslySetInnerHTML={{
-                                __html: `<svg width="150" height="40" xmlns="http://www.w3.org/2000/svg">
-                                  <!-- Barcode bars -->
-                                  <rect x="5" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="9" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="12" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="17" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="20" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="24" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="27" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="31" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="34" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="39" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="42" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="46" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="49" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="53" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="58" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="61" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="65" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="68" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="72" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="75" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="80" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="83" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="87" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="90" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="94" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="97" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="101" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="106" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="109" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="113" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="116" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="120" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="123" y="5" width="3" height="25" fill="#000"/>
-                                  <rect x="128" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="131" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="135" y="5" width="1" height="25" fill="#000"/>
-                                  <rect x="138" y="5" width="2" height="25" fill="#000"/>
-                                  <rect x="142" y="5" width="2" height="25" fill="#000"/>
-                                  <text x="75" y="38" text-anchor="middle" font-family="monospace" font-size="6" fill="#000">${product.barcode}</text>
-                                </svg>`
-                              }}
-                            />
+{(() => {
+                              const barcodeWidth = Math.max(100, activeTemplate.labelDesign.elements.barcode.width * 100);
+                              const barcodeHeight = Math.max(20, activeTemplate.labelDesign.elements.barcode.height * 0.6);
+                              const barWidth = Math.max(1, activeTemplate.labelDesign.elements.barcode.width);
+                              
+                              return (
+                                <div 
+                                  dangerouslySetInnerHTML={{
+                                    __html: `<svg width="${barcodeWidth}" height="${barcodeHeight + 15}" xmlns="http://www.w3.org/2000/svg">
+                                      <!-- Dynamic Barcode bars based on width setting -->
+                                      <rect x="5" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 3}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 5}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 8}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 10}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 13}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 15}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 18}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 21}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 25}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 28}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 31}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 34}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 37}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 41}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 44}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 47}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 50}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 53}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 56}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 60}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 63}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 66}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 69}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 72}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 75}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 78}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 82}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 85}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 88}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 91}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 94}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 97}" y="5" width="${barWidth * 1.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 101}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 104}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 107}" y="5" width="${barWidth * 0.5}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 110}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <rect x="${5 + barWidth * 113}" y="5" width="${barWidth}" height="${barcodeHeight}" fill="#000"/>
+                                      <text x="${barcodeWidth/2}" y="${barcodeHeight + 12}" text-anchor="middle" font-family="monospace" font-size="6" fill="#000">${product.barcode}</text>
+                                    </svg>`
+                                  }}
+                                />
+                              );
+                            })()}
                           </Box>
                         </Box>
                       )}
