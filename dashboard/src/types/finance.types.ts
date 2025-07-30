@@ -192,6 +192,30 @@ export interface DigitalWalletPayment {
   confirmedAt?: Timestamp;
 }
 
+// Account mappings for cash register session
+export interface CashRegisterAccountMappings {
+  cashAccountId: string;        // Main cash drawer account
+  cardAccountId?: string;       // Card processing account  
+  bankAccountId?: string;       // Bank deposit account
+  digitalWalletAccountId?: string; // Digital wallet account
+  pettyAccountId?: string;      // Petty cash account
+  overShortAccountId?: string;  // Cash over/short account for discrepancies
+}
+
+// Account movement tracking during session
+export interface AccountMovement {
+  accountId: string;
+  accountName: string;
+  accountType: AccountType;
+  openingBalance: number;       // Balance when session opened
+  transactionTotal: number;     // Net change from transactions during session
+  adjustments: number;          // Manual adjustments (deposits, withdrawals)
+  expectedBalance: number;      // What should be there (opening + transactions + adjustments)
+  actualBalance?: number;       // What was counted (only set when session closed)
+  discrepancy?: number;         // Difference (actual - expected)
+  discrepancyTransactionId?: string; // ID of adjustment transaction created for discrepancy
+}
+
 // Cash register session interface
 export interface CashRegisterSession {
   id?: string;
@@ -207,6 +231,12 @@ export interface CashRegisterSession {
   closedBy?: string;
   closedByName?: string;
   closedAt?: Timestamp;
+  
+  // Account Integration (NEW)
+  accountMappings: CashRegisterAccountMappings;
+  accountMovements: {
+    [accountId: string]: AccountMovement;
+  };
   
   // Opening amounts by payment method
   openingAmounts: PaymentMethodAmounts;
@@ -228,6 +258,8 @@ export interface CashRegisterSession {
   // Transactions
   transactionCount?: number;
   transactions?: string[]; // Transaction IDs
+  openingTransactionIds?: string[]; // IDs of transactions created when opening session
+  closingTransactionIds?: string[]; // IDs of transactions created when closing session
   
   // Notes
   notes?: string;
@@ -282,6 +314,55 @@ export interface TransactionSummary {
   
   // By payment method
   byPaymentMethod: PaymentMethodAmounts;
+}
+
+// Cash register closing summary
+export interface CashRegisterClosingSummary {
+  sessionId: string;
+  closedAt: Timestamp;
+  closedBy: string;
+  
+  // Account-by-account summary
+  accountSummaries: {
+    [accountId: string]: {
+      accountName: string;
+      accountType: AccountType;
+      openingBalance: number;
+      expectedBalance: number;
+      actualBalance: number;
+      discrepancy: number;
+      discrepancyTransactionId?: string;
+    };
+  };
+  
+  // Overall totals
+  totalExpected: number;
+  totalActual: number;
+  totalDiscrepancy: number;
+  
+  // Money movements during session
+  moneyMovements: CashMovement[];
+  
+  // Status
+  hasDiscrepancies: boolean;
+  reconciled: boolean;
+}
+
+// Cash movement tracking
+export interface CashMovement {
+  id?: string;
+  sessionId: string;
+  type: 'opening_count' | 'sale' | 'expense' | 'deposit' | 'withdrawal' | 'adjustment' | 'closing_count';
+  amount: number;
+  fromAccountId?: string;
+  toAccountId?: string;
+  paymentMethod: PaymentMethod;
+  description: string;
+  descriptionAr?: string;
+  timestamp: Timestamp;
+  performedBy: string;
+  transactionId?: string; // Link to financial transaction
+  notes?: string;
 }
 
 // Expense categories

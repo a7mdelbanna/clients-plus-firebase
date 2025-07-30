@@ -42,6 +42,8 @@ import {
   StepLabel,
   Avatar,
   Badge,
+  Grid,
+  AlertTitle,
 } from '@mui/material';
 import {
   PointOfSale,
@@ -70,6 +72,7 @@ import {
   Calculate,
   Inventory,
   Payment,
+  AccountBalance,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -80,9 +83,11 @@ import { useBranch } from '../../contexts/BranchContext';
 import { financeService } from '../../services/finance.service';
 import type {
   CashRegisterSession,
+  CashRegisterAccountMappings,
+  CashRegisterClosingSummary,
   FinancialAccount,
   TransactionSummary,
-  PaymentBreakdown,
+  PaymentMethodAmounts,
 } from '../../types/finance.types';
 import { Timestamp } from 'firebase/firestore';
 
@@ -102,21 +107,36 @@ const CashRegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<CashRegisterSession | null>(null);
   const [sessions, setSessions] = useState<CashRegisterSession[]>([]);
-  const [cashAccount, setCashAccount] = useState<FinancialAccount | null>(null);
+  const [availableAccounts, setAvailableAccounts] = useState<FinancialAccount[]>([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [closeDialog, setCloseDialog] = useState(false);
+  const [closingSummary, setClosingSummary] = useState<CashRegisterClosingSummary | null>(null);
   const [countDialog, setCountDialog] = useState(false);
   const [adjustmentDialog, setAdjustmentDialog] = useState(false);
   const [historyDialog, setHistoryDialog] = useState(false);
 
-  // Form states
+  // Enhanced form states
   const [openingForm, setOpeningForm] = useState({
-    openingBalance: 0,
+    accountMappings: {
+      cashAccountId: '',
+      cardAccountId: '',
+      bankAccountId: '',
+      digitalWalletAccountId: '',
+      pettyAccountId: '',
+    } as CashRegisterAccountMappings,
+    openingAmounts: {
+      cash: 0,
+      card: 0,
+      bankTransfer: 0,
+      digitalWallet: 0,
+      check: 0,
+      total: 0,
+    } as PaymentMethodAmounts,
     notes: '',
   });
 
   const [closingForm, setClosingForm] = useState({
-    actualCashCount: 0,
+    actualAccountBalances: {} as { [accountId: string]: number },
     notes: '',
     denominations: {
       200: 0,
@@ -156,29 +176,53 @@ const CashRegisterPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Get cash account
-      const accounts = await financeService.getAccounts(
+      // Get all available accounts for this branch
+      const allAccounts = await financeService.getAccounts(
         currentUser.companyId,
-        { branchId: currentBranch.id, type: 'cash' }
+        { branchId: currentBranch.id, status: 'active' }
       );
-      const cashAcc = accounts.find(a => a.type === 'cash');
-      setCashAccount(cashAcc || null);
+      setAvailableAccounts(allAccounts);
 
-      if (cashAcc?.id) {
-        // Get current session
+      // Set default cash account in opening form
+      const cashAccount = allAccounts.find(a => a.type === 'cash');
+      if (cashAccount?.id && !openingForm.accountMappings.cashAccountId) {
+        setOpeningForm(prev => ({
+          ...prev,
+          accountMappings: {
+            ...prev.accountMappings,
+            cashAccountId: cashAccount.id!,
+          },
+        }));
+      }
+
+      // Get current session (use first cash account as register ID for backward compatibility)
+      if (cashAccount?.id) {
         const session = await financeService.getCurrentCashRegisterSession(
           currentUser.companyId,
           currentBranch.id,
-          cashAcc.id
+          cashAccount.id
         );
         setCurrentSession(session);
+
+        // Initialize closing form with current session's accounts
+        if (session?.accountMovements) {
+          const actualBalances: { [accountId: string]: number } = {};
+          Object.keys(session.accountMovements).forEach(accountId => {
+            actualBalances[accountId] = session.accountMovements[accountId].expectedBalance;
+          });
+          
+          setClosingForm(prev => ({
+            ...prev,
+            actualAccountBalances: actualBalances,
+          }));
+        }
 
         // Get recent sessions
         const recentSessions = await financeService.getCashRegisterSessions(
           currentUser.companyId,
           {
             branchId: currentBranch.id,
-            accountId: cashAcc.id,
+            accountId: cashAccount.id,
             startDate: filters.dateRange.start,
             endDate: filters.dateRange.end,
           }
@@ -194,23 +238,53 @@ const CashRegisterPage: React.FC = () => {
 
   // Handlers
   const handleOpenRegister = async () => {
-    if (!currentUser?.companyId || !currentBranch?.id || !cashAccount?.id) return;
+    if (!currentUser?.companyId || !currentBranch?.id) return;
+
+    // Validate required cash account
+    if (!openingForm.accountMappings.cashAccountId) {
+      alert(isRTL ? 'يرجى اختيار حساب نقدي' : 'Please select a cash account');
+      return;
+    }
 
     try {
-      await financeService.openCashRegister(
+      // Calculate total opening amount
+      const updatedOpeningAmounts = {
+        ...openingForm.openingAmounts,
+        total: openingForm.openingAmounts.cash + 
+               openingForm.openingAmounts.card + 
+               openingForm.openingAmounts.bankTransfer + 
+               openingForm.openingAmounts.digitalWallet + 
+               openingForm.openingAmounts.check,
+      };
+
+      await financeService.openCashRegisterWithAccounts(
         currentUser.companyId,
         currentBranch.id,
-        cashAccount.id,
-        openingForm.openingBalance,
+        openingForm.accountMappings.cashAccountId, // Use cash account as register ID
+        openingForm.accountMappings,
+        updatedOpeningAmounts,
         currentUser.uid,
         openingForm.notes
       );
 
       setOpenDialog(false);
-      setOpeningForm({ openingBalance: 0, notes: '' });
+      // Reset form
+      setOpeningForm({
+        accountMappings: openingForm.accountMappings, // Keep account mappings
+        openingAmounts: {
+          cash: 0,
+          card: 0,
+          bankTransfer: 0,
+          digitalWallet: 0,
+          check: 0,
+          total: 0,
+        },
+        notes: '',
+      });
       loadData();
     } catch (error) {
       console.error('Error opening cash register:', error);
+      alert(isRTL ? 'خطأ في فتح الصندوق' : 'Error opening cash register');
     }
   };
 
@@ -218,17 +292,37 @@ const CashRegisterPage: React.FC = () => {
     if (!currentUser?.companyId || !currentSession?.id) return;
 
     try {
-      await financeService.closeCashRegister(
-        currentUser.companyId,
-        currentSession.id,
-        closingForm.actualCashCount,
-        closingForm.notes,
-        closingForm.denominations
+      // Calculate actual cash count from denominations
+      const actualCashCount = Object.entries(closingForm.denominations).reduce(
+        (total, [denomination, count]) => total + (parseFloat(denomination) * count),
+        0
       );
 
+      // Update cash account balance in the form
+      const updatedActualBalances = {
+        ...closingForm.actualAccountBalances,
+      };
+
+      // Set the cash account balance from denomination count
+      if (currentSession.accountMappings?.cashAccountId) {
+        updatedActualBalances[currentSession.accountMappings.cashAccountId] = actualCashCount;
+      }
+
+      // Use enhanced closing method
+      const summary = await financeService.closeCashRegisterWithAccountUpdates(
+        currentUser.companyId,
+        currentSession.id,
+        updatedActualBalances,
+        closingForm.notes,
+        currentUser.uid
+      );
+
+      setClosingSummary(summary);
       setCloseDialog(false);
+      
+      // Reset form
       setClosingForm({
-        actualCashCount: 0,
+        actualAccountBalances: {},
         notes: '',
         denominations: {
           200: 0,
@@ -242,9 +336,22 @@ const CashRegisterPage: React.FC = () => {
           0.25: 0,
         },
       });
+      
       loadData();
+
+      // Show success message with summary
+      if (summary.hasDiscrepancies) {
+        alert(
+          isRTL 
+            ? `تم إغلاق الصندوق مع فروقات. إجمالي الفرق: ${summary.totalDiscrepancy.toLocaleString()} ج.م`
+            : `Register closed with discrepancies. Total difference: ${summary.totalDiscrepancy.toLocaleString()} EGP`
+        );
+      } else {
+        alert(isRTL ? 'تم إغلاق الصندوق بنجاح بدون فروقات' : 'Register closed successfully with no discrepancies');
+      }
     } catch (error) {
       console.error('Error closing cash register:', error);
+      alert(isRTL ? 'خطأ في إغلاق الصندوق' : 'Error closing cash register');
     }
   };
 
@@ -282,13 +389,6 @@ const CashRegisterPage: React.FC = () => {
     );
   };
 
-  // Update actual cash count when denominations change
-  useEffect(() => {
-    setClosingForm(prev => ({
-      ...prev,
-      actualCashCount: calculateDenominationsTotal(),
-    }));
-  }, [closingForm.denominations]);
 
   // Get session status color
   const getSessionStatusColor = (status: CashRegisterSession['status']) => {
@@ -318,7 +418,10 @@ const CashRegisterPage: React.FC = () => {
     );
   }
 
-  if (!cashAccount) {
+  // Check if we have at least one cash account
+  const hasCashAccount = availableAccounts.some(account => account.type === 'cash');
+  
+  if (!loading && !hasCashAccount) {
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
         <Alert severity="warning">
@@ -349,7 +452,7 @@ const CashRegisterPage: React.FC = () => {
         <Box sx={{ mb: 4 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h4" component="h1">
-              {isRTL ? 'الصندوق النقدي' : 'Cash Register'}
+              {isRTL ? 'الورديه' : 'Cash Register'}
             </Typography>
             <Stack direction="row" spacing={2}>
               {currentSession?.status === 'open' ? (
@@ -428,7 +531,7 @@ const CashRegisterPage: React.FC = () => {
                     <Stack direction="row" spacing={1} alignItems="center">
                       <AccessTime fontSize="small" color="action" />
                       <Typography variant="body1">
-                        {currentSession.openingTime.toDate().toLocaleString()}
+                        {currentSession?.openedAt?.toDate?.()?.toLocaleString() || (isRTL ? 'غير محدد' : 'Not specified')}
                       </Typography>
                     </Stack>
                   </Stack>
@@ -440,7 +543,7 @@ const CashRegisterPage: React.FC = () => {
                       {isRTL ? 'الرصيد الافتتاحي' : 'Opening Balance'}
                     </Typography>
                     <Typography variant="h6">
-                      {currentSession.openingBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                      {(currentSession?.openingAmounts?.cash || 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </Stack>
                 </Box>
@@ -451,7 +554,7 @@ const CashRegisterPage: React.FC = () => {
                       {isRTL ? 'الرصيد المتوقع' : 'Expected Balance'}
                     </Typography>
                     <Typography variant="h6" color="primary">
-                      {currentSession.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                      {(currentSession?.expectedAmounts?.total || 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </Stack>
                 </Box>
@@ -467,7 +570,7 @@ const CashRegisterPage: React.FC = () => {
                           {isRTL ? 'الرصيد الفعلي' : 'Actual Balance'}
                         </Typography>
                         <Typography variant="h6">
-                          {currentSession.actualCashCount?.toLocaleString() || 0} {isRTL ? 'ج.م' : 'EGP'}
+                          {(currentSession?.actualAmounts?.cash || 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                         </Typography>
                       </Stack>
                     </Box>
@@ -479,9 +582,9 @@ const CashRegisterPage: React.FC = () => {
                         </Typography>
                         <Typography
                           variant="h6"
-                          color={currentSession.difference === 0 ? 'success.main' : 'error.main'}
+                          color={(currentSession?.discrepancies?.cash || 0) === 0 ? 'success.main' : 'error.main'}
                         >
-                          {currentSession.difference > 0 ? '+' : ''}{currentSession.difference.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          {(currentSession?.discrepancies?.cash || 0) > 0 ? '+' : ''}{(currentSession?.discrepancies?.cash || 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                         </Typography>
                       </Stack>
                     </Box>
@@ -494,7 +597,7 @@ const CashRegisterPage: React.FC = () => {
                         <Stack direction="row" spacing={1} alignItems="center">
                           <AccessTime fontSize="small" color="action" />
                           <Typography variant="body1">
-                            {currentSession.closingTime?.toDate().toLocaleString()}
+                            {currentSession?.closedAt?.toDate?.()?.toLocaleString() || (isRTL ? 'غير محدد' : 'Not specified')}
                           </Typography>
                         </Stack>
                       </Stack>
@@ -525,6 +628,109 @@ const CashRegisterPage: React.FC = () => {
             </Alert>
           )}
 
+          {/* Money Movement Summary - Show where money went */}
+          {currentSession && currentSession.accountMovements && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                {isRTL ? 'حركة الأموال بين الحسابات' : 'Money Movement Between Accounts'}
+              </Typography>
+              
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2 }}>
+                {Object.entries(currentSession.accountMovements).map(([accountId, movement]) => (
+                  <Card key={accountId} variant="outlined">
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          <Typography variant="subtitle1" fontWeight="medium">
+                            {movement.accountName}
+                          </Typography>
+                          {movement.accountType === 'cash' && <LocalAtm color="primary" />}
+                          {movement.accountType === 'bank' && <AccountBalance color="primary" />}
+                          {movement.accountType === 'credit_card' && <CreditCard color="primary" />}
+                          {movement.accountType === 'digital_wallet' && <AccountBalanceWallet color="primary" />}
+                        </Stack>
+                        
+                        <Divider />
+                        
+                        <Box>
+                          <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {isRTL ? 'الرصيد الافتتاحي' : 'Opening'}
+                            </Typography>
+                            <Typography variant="body2">
+                              {movement.openingBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                            </Typography>
+                          </Stack>
+                          
+                          {movement.transactionTotal !== 0 && (
+                            <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {isRTL ? 'المعاملات' : 'Transactions'}
+                              </Typography>
+                              <Typography 
+                                variant="body2" 
+                                color={movement.transactionTotal > 0 ? 'success.main' : 'error.main'}
+                              >
+                                {movement.transactionTotal > 0 ? '+' : ''}{movement.transactionTotal.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                              </Typography>
+                            </Stack>
+                          )}
+                          
+                          {movement.adjustments !== 0 && (
+                            <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {isRTL ? 'التعديلات' : 'Adjustments'}
+                              </Typography>
+                              <Typography variant="body2" color="warning.main">
+                                {movement.adjustments > 0 ? '+' : ''}{movement.adjustments.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                              </Typography>
+                            </Stack>
+                          )}
+                          
+                          <Divider sx={{ my: 1 }} />
+                          
+                          <Stack direction="row" justifyContent="space-between">
+                            <Typography variant="body2" fontWeight="medium">
+                              {isRTL ? 'الرصيد المتوقع' : 'Expected'}
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium" color="primary">
+                              {movement.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                            </Typography>
+                          </Stack>
+                          
+                          {currentSession.status === 'closed' && movement.actualBalance !== undefined && (
+                            <>
+                              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {isRTL ? 'الرصيد الفعلي' : 'Actual'}
+                                </Typography>
+                                <Typography variant="body1" fontWeight="medium">
+                                  {movement.actualBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                                </Typography>
+                              </Stack>
+                              
+                              {movement.discrepancy !== undefined && movement.discrepancy !== 0 && (
+                                <Alert 
+                                  severity={movement.discrepancy > 0 ? 'info' : 'warning'} 
+                                  sx={{ mt: 1, py: 0.5 }}
+                                >
+                                  <Typography variant="caption">
+                                    {isRTL ? 'الفرق: ' : 'Difference: '}
+                                    {movement.discrepancy > 0 ? '+' : ''}{movement.discrepancy.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                                  </Typography>
+                                </Alert>
+                              )}
+                            </>
+                          )}
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            </Paper>
+          )}
+
           {/* Transaction Summary */}
           {currentSession?.status === 'open' && currentSession.transactionSummary && (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3 }}>
@@ -535,7 +741,7 @@ const CashRegisterPage: React.FC = () => {
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <TrendingUp color="success" />
                         <Typography variant="h5" color="success.main">
-                          +{currentSession.transactionSummary.totalIncome.toLocaleString()}
+                          +{(currentSession?.transactionSummary?.totalIncome || 0).toLocaleString()}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -556,7 +762,7 @@ const CashRegisterPage: React.FC = () => {
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <TrendingDown color="error" />
                         <Typography variant="h5" color="error.main">
-                          -{currentSession.transactionSummary.totalExpenses.toLocaleString()}
+                          -{(currentSession?.transactionSummary?.totalExpenses || 0).toLocaleString()}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -577,7 +783,7 @@ const CashRegisterPage: React.FC = () => {
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <AttachMoney color="primary" />
                         <Typography variant="h5" color="primary.main">
-                          {currentSession.transactionSummary.netAmount.toLocaleString()}
+                          {(currentSession?.transactionSummary?.netTotal || 0).toLocaleString()}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" color="text.secondary">
@@ -598,7 +804,7 @@ const CashRegisterPage: React.FC = () => {
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <PointOfSale sx={{ color: 'white' }} />
                         <Typography variant="h5" sx={{ color: 'white' }}>
-                          {currentSession.expectedBalance.toLocaleString()}
+                          {(currentSession?.expectedAmounts?.total || 0).toLocaleString()}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
@@ -664,10 +870,10 @@ const CashRegisterPage: React.FC = () => {
               {sessions.map((session) => (
                 <TableRow key={session.id}>
                   <TableCell>
-                    {session.openingTime.toDate().toLocaleDateString()}
+                    {session?.openedAt?.toDate?.()?.toLocaleDateString() || (isRTL ? 'غير محدد' : 'Not specified')}
                   </TableCell>
                   <TableCell>{session.openedBy}</TableCell>
-                  <TableCell>{session.openingBalance.toLocaleString()}</TableCell>
+                  <TableCell>{session?.openingAmounts?.cash?.toLocaleString() || '0'}</TableCell>
                   <TableCell>
                     <Typography color="success.main">
                       +{session.transactionSummary?.totalIncome.toLocaleString() || 0}
@@ -678,12 +884,12 @@ const CashRegisterPage: React.FC = () => {
                       -{session.transactionSummary?.totalExpenses.toLocaleString() || 0}
                     </Typography>
                   </TableCell>
-                  <TableCell>{session.expectedBalance.toLocaleString()}</TableCell>
-                  <TableCell>{session.actualCashCount?.toLocaleString() || '-'}</TableCell>
+                  <TableCell>{(session?.expectedAmounts?.total || 0).toLocaleString()}</TableCell>
+                  <TableCell>{(session?.actualAmounts?.cash || 0).toLocaleString()}</TableCell>
                   <TableCell>
-                    {session.difference !== undefined ? (
-                      <Typography color={session.difference === 0 ? 'success.main' : 'error.main'}>
-                        {session.difference > 0 ? '+' : ''}{session.difference.toLocaleString()}
+                    {session?.discrepancies?.cash !== undefined ? (
+                      <Typography color={(session?.discrepancies?.cash || 0) === 0 ? 'success.main' : 'error.main'}>
+                        {(session?.discrepancies?.cash || 0) > 0 ? '+' : ''}{(session?.discrepancies?.cash || 0).toLocaleString()}
                       </Typography>
                     ) : '-'}
                   </TableCell>
@@ -704,22 +910,244 @@ const CashRegisterPage: React.FC = () => {
           </Table>
         </TableContainer>
 
-        {/* Open Register Dialog */}
-        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>{isRTL ? 'فتح الصندوق النقدي' : 'Open Cash Register'}</DialogTitle>
+        {/* Enhanced Open Register Dialog */}
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{isRTL ? 'فتح ورديه' : 'Open Cash Register'}</DialogTitle>
           <DialogContent>
             <Stack spacing={3} sx={{ mt: 1 }}>
+              {/* Account Selection Section */}
+              <Typography variant="h6">{isRTL ? 'اختيار الحسابات' : 'Select Accounts'}</Typography>
+              
+              {/* Cash Account (Required) */}
+              <FormControl fullWidth required>
+                <InputLabel>{isRTL ? 'الحساب النقدي' : 'Cash Account'}</InputLabel>
+                <Select
+                  value={openingForm.accountMappings.cashAccountId}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    accountMappings: {
+                      ...prev.accountMappings,
+                      cashAccountId: e.target.value,
+                    },
+                  }))}
+                  label={isRTL ? 'الحساب النقدي' : 'Cash Account'}
+                >
+                  {availableAccounts
+                    .filter(acc => acc.type === 'cash')
+                    .map(account => (
+                      <MenuItem key={account.id} value={account.id}>
+                        <Stack direction="row" justifyContent="space-between" width="100%">
+                          <span>{isRTL ? account.nameAr : account.name}</span>
+                          <Typography variant="body2" color="text.secondary">
+                            {account.currentBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              {/* Card Account (Optional) */}
+              <FormControl fullWidth>
+                <InputLabel>{isRTL ? 'حساب البطاقات' : 'Card Account'}</InputLabel>
+                <Select
+                  value={openingForm.accountMappings.cardAccountId || ''}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    accountMappings: {
+                      ...prev.accountMappings,
+                      cardAccountId: e.target.value,
+                    },
+                  }))}
+                  label={isRTL ? 'حساب البطاقات' : 'Card Account'}
+                >
+                  <MenuItem value="">
+                    <em>{isRTL ? 'لا يوجد' : 'None'}</em>
+                  </MenuItem>
+                  {availableAccounts
+                    .filter(acc => acc.type === 'bank' || acc.type === 'credit_card')
+                    .map(account => (
+                      <MenuItem key={account.id} value={account.id}>
+                        <Stack direction="row" justifyContent="space-between" width="100%">
+                          <span>{isRTL ? account.nameAr : account.name}</span>
+                          <Typography variant="body2" color="text.secondary">
+                            {account.currentBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              {/* Bank Account (Optional) */}
+              <FormControl fullWidth>
+                <InputLabel>{isRTL ? 'الحساب البنكي' : 'Bank Account'}</InputLabel>
+                <Select
+                  value={openingForm.accountMappings.bankAccountId || ''}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    accountMappings: {
+                      ...prev.accountMappings,
+                      bankAccountId: e.target.value,
+                    },
+                  }))}
+                  label={isRTL ? 'الحساب البنكي' : 'Bank Account'}
+                >
+                  <MenuItem value="">
+                    <em>{isRTL ? 'لا يوجد' : 'None'}</em>
+                  </MenuItem>
+                  {availableAccounts
+                    .filter(acc => acc.type === 'bank')
+                    .map(account => (
+                      <MenuItem key={account.id} value={account.id}>
+                        <Stack direction="row" justifyContent="space-between" width="100%">
+                          <span>{isRTL ? account.nameAr : account.name}</span>
+                          <Typography variant="body2" color="text.secondary">
+                            {account.currentBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              {/* Digital Wallet Account (Optional) */}
+              <FormControl fullWidth>
+                <InputLabel>{isRTL ? 'حساب المحفظة الإلكترونية' : 'Digital Wallet Account'}</InputLabel>
+                <Select
+                  value={openingForm.accountMappings.digitalWalletAccountId || ''}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    accountMappings: {
+                      ...prev.accountMappings,
+                      digitalWalletAccountId: e.target.value,
+                    },
+                  }))}
+                  label={isRTL ? 'حساب المحفظة الإلكترونية' : 'Digital Wallet Account'}
+                >
+                  <MenuItem value="">
+                    <em>{isRTL ? 'لا يوجد' : 'None'}</em>
+                  </MenuItem>
+                  {availableAccounts
+                    .filter(acc => acc.type === 'digital_wallet')
+                    .map(account => (
+                      <MenuItem key={account.id} value={account.id}>
+                        <Stack direction="row" justifyContent="space-between" width="100%">
+                          <span>{isRTL ? account.nameAr : account.name}</span>
+                          <Typography variant="body2" color="text.secondary">
+                            {account.currentBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              <Divider />
+
+              {/* Opening Amounts Section */}
+              <Typography variant="h6">{isRTL ? 'المبالغ الافتتاحية' : 'Opening Amounts'}</Typography>
+              
+              {/* Cash Amount */}
               <TextField
                 fullWidth
                 type="number"
-                label={isRTL ? 'الرصيد الافتتاحي' : 'Opening Balance'}
-                value={openingForm.openingBalance}
-                onChange={(e) => setOpeningForm({ ...openingForm, openingBalance: parseFloat(e.target.value) || 0 })}
+                label={isRTL ? 'النقد في الصندوق' : 'Cash in Register'}
+                value={openingForm.openingAmounts.cash}
+                onChange={(e) => setOpeningForm(prev => ({
+                  ...prev,
+                  openingAmounts: {
+                    ...prev.openingAmounts,
+                    cash: parseFloat(e.target.value) || 0,
+                  },
+                }))}
                 InputProps={{
                   endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
+                  startAdornment: <InputAdornment position="start"><LocalAtm /></InputAdornment>,
                 }}
-                helperText={isRTL ? 'المبلغ النقدي الموجود في الصندوق حالياً' : 'The cash amount currently in the register'}
+                helperText={isRTL ? 'المبلغ النقدي الموجود في الصندوق' : 'Physical cash amount in the register'}
               />
+
+              {/* Card Vouchers/Receipts */}
+              {openingForm.accountMappings.cardAccountId && (
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={isRTL ? 'إيصالات البطاقات' : 'Card Receipts'}
+                  value={openingForm.openingAmounts.card}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    openingAmounts: {
+                      ...prev.openingAmounts,
+                      card: parseFloat(e.target.value) || 0,
+                    },
+                  }))}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
+                    startAdornment: <InputAdornment position="start"><CreditCard /></InputAdornment>,
+                  }}
+                  helperText={isRTL ? 'إيصالات بطاقات من اليوم السابق' : 'Card receipts from previous day'}
+                />
+              )}
+
+              {/* Bank Deposits */}
+              {openingForm.accountMappings.bankAccountId && (
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={isRTL ? 'الإيداعات البنكية' : 'Bank Deposits'}
+                  value={openingForm.openingAmounts.bankTransfer}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    openingAmounts: {
+                      ...prev.openingAmounts,
+                      bankTransfer: parseFloat(e.target.value) || 0,
+                    },
+                  }))}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
+                    startAdornment: <InputAdornment position="start"><AccountBalance /></InputAdornment>,
+                  }}
+                  helperText={isRTL ? 'إيداعات بنكية معلقة' : 'Pending bank deposits'}
+                />
+              )}
+
+              {/* Digital Wallet Balance */}
+              {openingForm.accountMappings.digitalWalletAccountId && (
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={isRTL ? 'رصيد المحفظة الإلكترونية' : 'Digital Wallet Balance'}
+                  value={openingForm.openingAmounts.digitalWallet}
+                  onChange={(e) => setOpeningForm(prev => ({
+                    ...prev,
+                    openingAmounts: {
+                      ...prev.openingAmounts,
+                      digitalWallet: parseFloat(e.target.value) || 0,
+                    },
+                  }))}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
+                    startAdornment: <InputAdornment position="start"><AccountBalanceWallet /></InputAdornment>,
+                  }}
+                  helperText={isRTL ? 'رصيد المحفظة من اليوم السابق' : 'Digital wallet balance from previous day'}
+                />
+              )}
+
+              {/* Total Opening Amount */}
+              <Alert severity="info">
+                <Typography>
+                  {isRTL ? 'إجمالي المبلغ الافتتاحي: ' : 'Total Opening Amount: '}
+                  <strong>
+                    {(openingForm.openingAmounts.cash + 
+                     openingForm.openingAmounts.card + 
+                     openingForm.openingAmounts.bankTransfer +
+                     openingForm.openingAmounts.digitalWallet).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                  </strong>
+                </Typography>
+              </Alert>
+
+              {/* Notes */}
               <TextField
                 fullWidth
                 multiline
@@ -732,71 +1160,214 @@ const CashRegisterPage: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenDialog(false)}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
-            <Button onClick={handleOpenRegister} variant="contained" color="success">
+            <Button 
+              onClick={handleOpenRegister} 
+              variant="contained" 
+              color="success"
+              disabled={!openingForm.accountMappings.cashAccountId}
+            >
               {isRTL ? 'فتح الصندوق' : 'Open Register'}
             </Button>
           </DialogActions>
         </Dialog>
 
-        {/* Close Register Dialog */}
-        <Dialog open={closeDialog} onClose={() => setCloseDialog(false)} maxWidth="md" fullWidth>
-          <DialogTitle>{isRTL ? 'إغلاق الصندوق النقدي' : 'Close Cash Register'}</DialogTitle>
+        {/* Enhanced Close Register Dialog with Account Reconciliation */}
+        <Dialog open={closeDialog} onClose={() => setCloseDialog(false)} maxWidth="lg" fullWidth>
+          <DialogTitle>{isRTL ? 'إغلاق الورديه - تسوية الحسابات' : 'Close Cash Register - Account Reconciliation'}</DialogTitle>
           <DialogContent>
             <Stack spacing={3} sx={{ mt: 1 }}>
-              <Alert severity="info">
-                <Typography variant="body2">
-                  {isRTL ? 'الرصيد المتوقع: ' : 'Expected Balance: '}
-                  <strong>{currentSession?.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}</strong>
-                </Typography>
-              </Alert>
-
-              <Typography variant="h6">{isRTL ? 'عد النقدية' : 'Cash Count'}</Typography>
+              {/* Account-by-Account Reconciliation */}
+              <Typography variant="h6">{isRTL ? 'تسوية الحسابات' : 'Account Reconciliation'}</Typography>
               
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-                {Object.entries(closingForm.denominations).map(([denomination, count]) => (
-                  <Box key={denomination}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label={`${denomination} ${isRTL ? 'ج.م' : 'EGP'}`}
-                      value={count}
-                      onChange={(e) => setClosingForm({
-                        ...closingForm,
-                        denominations: {
-                          ...closingForm.denominations,
-                          [denomination]: parseInt(e.target.value) || 0,
-                        },
-                      })}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start">×</InputAdornment>,
-                      }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-
-              <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
+              {currentSession?.accountMovements && Object.entries(currentSession.accountMovements).map(([accountId, movement]) => {
+                const accountBalance = closingForm.actualAccountBalances[accountId] || 0;
+                const discrepancy = accountBalance - movement.expectedBalance;
+                
+                return (
+                  <Paper key={accountId} sx={{ p: 3 }} elevation={2}>
+                    <Stack spacing={2}>
+                      {/* Account Header */}
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Box>
+                          <Typography variant="h6">{movement.accountName}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {movement.accountType === 'cash' && <LocalAtm sx={{ fontSize: 16, mr: 0.5 }} />}
+                            {movement.accountType === 'bank' && <AccountBalance sx={{ fontSize: 16, mr: 0.5 }} />}
+                            {movement.accountType === 'credit_card' && <CreditCard sx={{ fontSize: 16, mr: 0.5 }} />}
+                            {movement.accountType === 'digital_wallet' && <AccountBalanceWallet sx={{ fontSize: 16, mr: 0.5 }} />}
+                            {isRTL ? 
+                              (movement.accountType === 'cash' ? 'نقدي' : 
+                               movement.accountType === 'bank' ? 'بنكي' : 
+                               movement.accountType === 'credit_card' ? 'بطاقة ائتمان' :
+                               movement.accountType === 'digital_wallet' ? 'محفظة إلكترونية' : 
+                               movement.accountType) :
+                              movement.accountType
+                            }
+                          </Typography>
+                        </Box>
+                        <Chip
+                          label={discrepancy === 0 ? 
+                            (isRTL ? 'متطابق' : 'Balanced') : 
+                            (isRTL ? 'فرق' : 'Discrepancy')
+                          }
+                          color={discrepancy === 0 ? 'success' : 'warning'}
+                          size="small"
+                        />
+                      </Stack>
+                      
+                      {/* Account Movement Details */}
+                      <Grid container spacing={2}>
+                        <Grid item xs={6} md={3}>
+                          <Typography variant="body2" color="text.secondary">
+                            {isRTL ? 'الرصيد الافتتاحي' : 'Opening Balance'}
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium">
+                            {movement.openingBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6} md={3}>
+                          <Typography variant="body2" color="text.secondary">
+                            {isRTL ? 'المعاملات' : 'Transactions'}
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium" color={movement.transactionTotal >= 0 ? 'success.main' : 'error.main'}>
+                            {movement.transactionTotal >= 0 ? '+' : ''}{movement.transactionTotal.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6} md={3}>
+                          <Typography variant="body2" color="text.secondary">
+                            {isRTL ? 'التعديلات' : 'Adjustments'}
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium">
+                            {movement.adjustments.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6} md={3}>
+                          <Typography variant="body2" color="text.secondary">
+                            {isRTL ? 'الرصيد المتوقع' : 'Expected Balance'}
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium" color="primary.main">
+                            {movement.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                      
+                      {/* Actual Count Input */}
+                      <Box>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label={isRTL ? 'الرصيد الفعلي' : 'Actual Balance'}
+                          value={accountBalance}
+                          onChange={(e) => setClosingForm(prev => ({
+                            ...prev,
+                            actualAccountBalances: {
+                              ...prev.actualAccountBalances,
+                              [accountId]: parseFloat(e.target.value) || 0,
+                            },
+                          }))}
+                          InputProps={{
+                            endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
+                          }}
+                          error={discrepancy !== 0}
+                          helperText={
+                            discrepancy !== 0 ? 
+                              `${isRTL ? 'الفرق: ' : 'Difference: '}${discrepancy > 0 ? '+' : ''}${discrepancy.toLocaleString()} ${isRTL ? 'ج.م' : 'EGP'}` : 
+                              (isRTL ? 'الرصيد متطابق' : 'Balance matches')
+                          }
+                        />
+                      </Box>
+                      
+                      {/* Cash Denomination Count (only for cash accounts) */}
+                      {movement.accountType === 'cash' && (
+                        <Box>
+                          <Typography variant="subtitle2" gutterBottom>
+                            {isRTL ? 'عد الفئات النقدية' : 'Cash Denomination Count'}
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 1 }}>
+                            {Object.entries(closingForm.denominations).map(([denomination, count]) => (
+                              <TextField
+                                key={denomination}
+                                size="small"
+                                type="number"
+                                label={`${denomination} ${isRTL ? 'ج.م' : 'EGP'}`}
+                                value={count}
+                                onChange={(e) => {
+                                  const newDenominations = {
+                                    ...closingForm.denominations,
+                                    [denomination]: parseInt(e.target.value) || 0,
+                                  };
+                                  const totalCash = Object.entries(newDenominations).reduce(
+                                    (sum, [denom, cnt]) => sum + (parseFloat(denom) * cnt), 0
+                                  );
+                                  setClosingForm(prev => ({
+                                    ...prev,
+                                    denominations: newDenominations,
+                                    actualAccountBalances: {
+                                      ...prev.actualAccountBalances,
+                                      [accountId]: totalCash,
+                                    },
+                                  }));
+                                }}
+                                InputProps={{
+                                  startAdornment: <InputAdornment position="start">×</InputAdornment>,
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Stack>
+                  </Paper>
+                );
+              })}
+              
+              {/* Summary Section */}
+              <Paper sx={{ p: 3, bgcolor: 'primary.main', color: 'primary.contrastText' }} elevation={3}>
+                <Stack spacing={2}>
                   <Typography variant="h6">
-                    {isRTL ? 'إجمالي النقدية' : 'Total Cash'}
+                    {isRTL ? 'ملخص الإغلاق' : 'Closing Summary'}
                   </Typography>
-                  <Typography variant="h5" color="primary">
-                    {closingForm.actualCashCount.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                        {isRTL ? 'إجمالي المتوقع' : 'Total Expected'}
+                      </Typography>
+                      <Typography variant="h5">
+                        {(currentSession?.accountMovements ? 
+                          Object.values(currentSession.accountMovements).reduce((sum, m) => sum + m.expectedBalance, 0) : 
+                          0
+                        ).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                        {isRTL ? 'إجمالي الفعلي' : 'Total Actual'}
+                      </Typography>
+                      <Typography variant="h5">
+                        {Object.values(closingForm.actualAccountBalances).reduce((sum, val) => sum + val, 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                  
+                  {Object.values(closingForm.actualAccountBalances).reduce((sum, val) => sum + val, 0) !== 
+                   (currentSession?.accountMovements ? 
+                     Object.values(currentSession.accountMovements).reduce((sum, m) => sum + m.expectedBalance, 0) : 
+                     0
+                   ) && (
+                    <Alert severity="warning" sx={{ bgcolor: 'rgba(255, 255, 255, 0.9)' }}>
+                      <AlertTitle>{isRTL ? 'يوجد فروقات' : 'Discrepancies Found'}</AlertTitle>
+                      <Typography variant="body2">
+                        {isRTL ? 
+                          'سيتم إنشاء قيود تسوية تلقائية للفروقات في حساب الفروقات النقدية.' : 
+                          'Automatic adjustment entries will be created for discrepancies in the Cash Over/Short account.'
+                        }
+                      </Typography>
+                    </Alert>
+                  )}
                 </Stack>
-                {currentSession && closingForm.actualCashCount !== currentSession.expectedBalance && (
-                  <Typography
-                    variant="body2"
-                    color={closingForm.actualCashCount > currentSession.expectedBalance ? 'success.main' : 'error.main'}
-                    sx={{ mt: 1 }}
-                  >
-                    {isRTL ? 'الفرق: ' : 'Difference: '}
-                    {closingForm.actualCashCount > currentSession.expectedBalance ? '+' : ''}
-                    {(closingForm.actualCashCount - currentSession.expectedBalance).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                  </Typography>
-                )}
               </Paper>
-
+              
+              {/* Notes */}
               <TextField
                 fullWidth
                 multiline
@@ -804,12 +1375,21 @@ const CashRegisterPage: React.FC = () => {
                 label={isRTL ? 'ملاحظات الإغلاق' : 'Closing Notes'}
                 value={closingForm.notes}
                 onChange={(e) => setClosingForm({ ...closingForm, notes: e.target.value })}
+                placeholder={isRTL ? 
+                  'أي ملاحظات عن الفروقات أو الأحداث المهمة خلال الورديه...' : 
+                  'Any notes about discrepancies or important events during the session...'
+                }
               />
             </Stack>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setCloseDialog(false)}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
-            <Button onClick={handleCloseRegister} variant="contained" color="error">
+            <Button 
+              onClick={handleCloseRegister} 
+              variant="contained" 
+              color="error"
+              disabled={Object.keys(closingForm.actualAccountBalances).length === 0}
+            >
               {isRTL ? 'إغلاق الصندوق' : 'Close Register'}
             </Button>
           </DialogActions>
@@ -822,7 +1402,7 @@ const CashRegisterPage: React.FC = () => {
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="body2">
                 {isRTL ? 'الرصيد المتوقع حالياً: ' : 'Current Expected Balance: '}
-                <strong>{currentSession?.expectedBalance.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}</strong>
+                <strong>{(currentSession?.expectedAmounts?.total || 0).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}</strong>
               </Typography>
             </Alert>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>

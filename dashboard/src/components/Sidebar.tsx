@@ -134,7 +134,7 @@ const menuItems: MenuItem[] = [
       {
         id: 'cash-register',
         title: 'Cash Register',
-        titleAr: 'الصندوق',
+        titleAr: 'الورديه',
         icon: <Paid />,
         path: '/finance/cash-register',
       },
