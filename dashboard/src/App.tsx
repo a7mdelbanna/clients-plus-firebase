@@ -43,6 +43,13 @@ import ClientProtectedRoute from './components/client/ClientProtectedRoute';
 import ClientLogin from './pages/client/ClientLogin';
 import ClientVerify from './pages/client/ClientVerify';
 import ClientDashboard from './pages/client/ClientDashboard';
+import ProductsPage from './pages/products/ProductsPage';
+import ProductFormPage from './pages/products/ProductFormPage';
+import ProductCategoriesPage from './pages/products/ProductCategoriesPage';
+import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
+import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
+import CashRegisterPage from './pages/finance/CashRegisterPage';
+import InventoryPage from './pages/inventory/InventoryPage';
 
 // Import debug utilities (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -79,6 +86,7 @@ import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
 import './utils/debugBookingLinks'; // Import for debugging booking links
 import './utils/syncStaffBranches'; // Import for syncing staff-branch assignments
 import './utils/fixMissingClients'; // Import for fixing missing clients from online booking
+import './utils/debugSidebar'; // Import for debugging sidebar menu items
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
@@ -303,6 +311,51 @@ function App() {
                 <Route path="/projects" element={
                   <PageTransition>
                     <div>Projects Page - Coming Soon</div>
+                  </PageTransition>
+                } />
+                <Route path="/inventory" element={
+                  <PageTransition>
+                    <InventoryPage />
+                  </PageTransition>
+                } />
+                <Route path="/products" element={
+                  <PageTransition>
+                    <ProductsPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/new" element={
+                  <PageTransition>
+                    <ProductFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/:productId/edit" element={
+                  <PageTransition>
+                    <ProductFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/categories" element={
+                  <PageTransition>
+                    <ProductCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance" element={
+                  <PageTransition>
+                    <FinanceAccountsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/accounts" element={
+                  <PageTransition>
+                    <FinanceAccountsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/transactions" element={
+                  <PageTransition>
+                    <FinanceTransactionsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/cash-register" element={
+                  <PageTransition>
+                    <CashRegisterPage />
                   </PageTransition>
                 } />
                 <Route path="/settings" element={

@@ -59,6 +59,7 @@ import {
   Webhook,
   Inventory2Outlined,
   WhatsApp,
+  ShoppingCart,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -101,6 +102,13 @@ const menuItems: MenuItem[] = [
     titleAr: 'الرواتب',
     icon: <Payment />,
     path: '/payroll',
+  },
+  {
+    id: 'products',
+    title: 'Products',
+    titleAr: 'المنتجات',
+    icon: <ShoppingCart />,
+    path: '/products',
   },
   {
     id: 'inventory',

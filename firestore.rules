@@ -278,5 +278,182 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
+    
+    // Product Management Collections (Top-level)
+    match /products/{productId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /productCategories/{categoryId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /inventoryTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if false; // Inventory transactions should never be deleted
+    }
+    
+    match /stockTransfers/{transferId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /purchaseOrders/{orderId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /vendors/{vendorId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /stockAlerts/{alertId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    // Product Management Collections (Company subcollections)
+    match /companies/{companyId}/products/{productId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/productCategories/{categoryId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/inventoryTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if false; // Inventory transactions should never be deleted
+    }
+    
+    match /companies/{companyId}/stockTransfers/{transferId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/purchaseOrders/{orderId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/vendors/{vendorId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/stockAlerts/{alertId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    // Financial Management Collections
+    match /companies/{companyId}/financialAccounts/{accountId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin();
+    }
+    
+    match /companies/{companyId}/financialTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if false; // Financial transactions should never be deleted
+    }
+    
+    match /companies/{companyId}/cashRegisterSessions/{sessionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if false; // Cash register sessions should never be deleted
+    }
+    
+    match /companies/{companyId}/expenseCategories/{categoryId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/financialReports/{reportId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/budgets/{budgetId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/financialSettings {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if false;
+    }
   }
 }

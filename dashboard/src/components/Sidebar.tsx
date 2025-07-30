@@ -59,6 +59,7 @@ import {
   Webhook,
   Inventory2Outlined,
   WhatsApp,
+  ShoppingCart,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -122,6 +123,13 @@ const menuItems: MenuItem[] = [
     titleAr: 'الرواتب',
     icon: <Payment />,
     path: '/payroll',
+  },
+  {
+    id: 'products',
+    title: 'Products',
+    titleAr: 'المنتجات',
+    icon: <ShoppingCart />,
+    path: '/products',
   },
   {
     id: 'inventory',
@@ -257,6 +265,12 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, onOpen }) => {
   const isRTL = theme.direction === 'rtl';
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+
+  // Debug: Log menu items to console
+  React.useEffect(() => {
+    console.log('Sidebar menuItems:', menuItems);
+    console.log('Products menu item:', menuItems.find(item => item.id === 'products'));
+  }, []);
 
   const drawerWidth = open ? 240 : 70;
 
