@@ -60,6 +60,7 @@ import {
   Inventory2Outlined,
   WhatsApp,
   ShoppingCart,
+  PointOfSale,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -137,6 +138,13 @@ const menuItems: MenuItem[] = [
         titleAr: 'الورديه',
         icon: <Paid />,
         path: '/finance/cash-register',
+      },
+      {
+        id: 'pos',
+        title: 'Point of Sale',
+        titleAr: 'نقطة البيع',
+        icon: <PointOfSale />,
+        path: '/finance/pos',
       },
       {
         id: 'invoices',

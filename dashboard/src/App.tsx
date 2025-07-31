@@ -56,6 +56,7 @@ import InvoicesPage from './pages/finance/InvoicesPage';
 import InvoiceFormPage from './pages/finance/InvoiceFormPage';
 import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
+import POSPage from './pages/pos/POSPage';
 
 // Import debug utilities (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -372,6 +373,11 @@ function App() {
                 <Route path="/finance/cash-register" element={
                   <PageTransition>
                     <CashRegisterPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/pos" element={
+                  <PageTransition>
+                    <POSPage />
                   </PageTransition>
                 } />
                 <Route path="/finance/reports" element={
