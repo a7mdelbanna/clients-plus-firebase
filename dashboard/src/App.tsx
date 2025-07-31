@@ -56,6 +56,7 @@ import InvoicesPage from './pages/finance/InvoicesPage';
 import InvoiceFormPage from './pages/finance/InvoiceFormPage';
 import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
+import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import POSPage from './pages/pos/POSPage';
 
 // Import debug utilities (development only)
@@ -313,6 +314,11 @@ function App() {
                 <Route path="/appointments" element={
                   <PageTransition>
                     <AppointmentsPage />
+                  </PageTransition>
+                } />
+                <Route path="/analytics" element={
+                  <PageTransition>
+                    <AnalyticsPage />
                   </PageTransition>
                 } />
                 <Route path="/projects" element={

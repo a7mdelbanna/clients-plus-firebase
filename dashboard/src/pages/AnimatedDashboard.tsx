@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CountUp from 'react-countup';
 import { useInView } from 'react-intersection-observer';
 import { toast } from 'react-toastify';
+import SalesMetricsWidget from '../components/analytics/SalesMetricsWidget';
 import { setupService } from '../services/setup.service';
 import { companyService } from '../services/company.service';
 import type { CompanyStats } from '../services/company.service';
@@ -507,6 +508,11 @@ const AnimatedDashboard: React.FC = () => {
               </Box>
             ))}
           </Box>
+
+          {/* Sales Analytics Widget */}
+          <motion.div variants={itemVariants}>
+            <SalesMetricsWidget />
+          </motion.div>
 
           {/* Action Buttons and Activities */}
           <Box
