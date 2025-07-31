@@ -368,6 +368,7 @@ export interface ProductFilters {
   lowStock?: boolean;
   branchId?: string;
   hasBarcode?: boolean;
+  trackInventory?: boolean;
   priceRange?: {
     min?: number;
     max?: number;

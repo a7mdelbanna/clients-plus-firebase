@@ -192,6 +192,11 @@ class ProductService {
           if (!matchesSearch) return;
         }
 
+        // Filter by trackInventory if specified
+        if (filters?.trackInventory !== undefined && product.trackInventory !== filters.trackInventory) {
+          return;
+        }
+
         if (filters?.branchId && product.branchStock) {
           const branchStock = product.branchStock[filters.branchId];
           if (!branchStock) return;
