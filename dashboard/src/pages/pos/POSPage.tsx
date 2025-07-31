@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  Grid,
   Paper,
   Typography,
   TextField,
@@ -33,6 +32,9 @@ import {
   Autocomplete,
   ToggleButton,
   ToggleButtonGroup,
+  Fab,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
 import {
   Search,
@@ -56,7 +58,6 @@ import {
   Calculate,
   Inventory2,
 } from '@mui/icons-material';
-import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { productService } from '../../services/product.service';
@@ -84,7 +85,7 @@ interface PaymentDetails {
 
 const POSPage: React.FC = () => {
   const theme = useTheme();
-  const { language, isRTL } = useLanguage();
+  const isRTL = theme.direction === 'rtl';
   const { currentUser } = useAuth();
   const { currentBranch } = useBranch();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -305,163 +306,392 @@ const POSPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth={false} sx={{ py: 3 }}>
-      <Grid container spacing={3}>
-        {/* Products Section */}
-        <Grid item xs={12} md={isMobile ? 12 : 8}>
-          <Paper sx={{ p: 2, height: '100%' }}>
-            {/* Header */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h5">
-                {isRTL ? 'نقطة البيع' : 'Point of Sale'}
-              </Typography>
-              
-              <Stack direction="row" spacing={1}>
-                <ToggleButtonGroup
-                  value={viewMode}
-                  exclusive
-                  onChange={(_, value) => value && setViewMode(value)}
-                  size="small"
-                >
-                  <ToggleButton value="grid">
-                    <GridView />
-                  </ToggleButton>
-                  <ToggleButton value="list">
-                    <ViewList />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-                
-                <IconButton onClick={() => setBarcodeDialog(true)}>
-                  <QrCodeScanner />
-                </IconButton>
-              </Stack>
-            </Stack>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}>
+      {/* Header Bar */}
+      <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Toolbar>
+          <ShoppingCart sx={{ mr: 2, color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            {isRTL ? 'نقطة البيع' : 'Point of Sale'}
+          </Typography>
+          
+          <Stack direction="row" spacing={1} alignItems="center">
+            {!isMobile && selectedClient && (
+              <Chip
+                icon={<Person />}
+                label={selectedClient.name}
+                onDelete={() => setSelectedClient(null)}
+                color="primary"
+                size="small"
+              />
+            )}
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, value) => value && setViewMode(value)}
+              size="small"
+              sx={{ bgcolor: 'background.paper' }}
+            >
+              <ToggleButton value="grid" size="small">
+                <GridView fontSize="small" />
+              </ToggleButton>
+              <ToggleButton value="list" size="small">
+                <ViewList fontSize="small" />
+              </ToggleButton>
+            </ToggleButtonGroup>
+            
+            <Button
+              startIcon={<QrCodeScanner />}
+              onClick={() => setBarcodeDialog(true)}
+              variant="outlined"
+              size="small"
+            >
+              {!isMobile && (isRTL ? 'مسح' : 'Scan')}
+            </Button>
+          </Stack>
+        </Toolbar>
+      </AppBar>
 
+      {/* Main Content */}
+      <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Products Section */}
+        <Box sx={{ 
+          flexGrow: 1, 
+          overflow: 'auto',
+          p: { xs: 1, sm: 2 },
+          pb: isMobile ? 10 : 2,
+          bgcolor: 'background.default',
+        }}>
+          <Box sx={{ mb: 2 }}>
             {/* Search Bar */}
-            <TextField
-              fullWidth
-              placeholder={isRTL ? 'البحث عن منتج...' : 'Search for product...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ mb: 2 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                ),
-                endAdornment: searchQuery && (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setSearchQuery('')}>
-                      <Clear />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
+            <Paper sx={{ p: 1.5, mb: 2 }}>
+              <TextField
+                fullWidth
+                placeholder={isRTL ? 'البحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                size="small"
+                variant="outlined"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search color="action" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchQuery('')}>
+                        <Clear fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { 
+                    bgcolor: 'background.default',
+                    '& fieldset': { borderColor: 'divider' },
+                  }
+                }}
+              />
+            </Paper>
 
             {/* Categories */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2, overflowX: 'auto', pb: 1 }}>
-              <Chip
-                label={isRTL ? 'الكل' : 'All'}
-                color={selectedCategory === 'all' ? 'primary' : 'default'}
-                onClick={() => setSelectedCategory('all')}
-              />
-              {categories.map(category => (
+            <Box sx={{ overflowX: 'auto', pb: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ minWidth: 'max-content' }}>
                 <Chip
-                  key={category.id}
-                  label={isRTL ? category.nameAr : category.name}
-                  color={selectedCategory === category.id ? 'primary' : 'default'}
-                  onClick={() => setSelectedCategory(category.id!)}
+                  icon={<Category fontSize="small" />}
+                  label={isRTL ? 'الكل' : 'All'}
+                  color={selectedCategory === 'all' ? 'primary' : 'default'}
+                  onClick={() => setSelectedCategory('all')}
+                  variant={selectedCategory === 'all' ? 'filled' : 'outlined'}
+                  sx={{ fontWeight: selectedCategory === 'all' ? 600 : 400 }}
                 />
-              ))}
-            </Stack>
+                {categories.map(category => (
+                  <Chip
+                    key={category.id}
+                    label={isRTL ? category.nameAr : category.name}
+                    color={selectedCategory === category.id ? 'primary' : 'default'}
+                    onClick={() => setSelectedCategory(category.id!)}
+                    variant={selectedCategory === category.id ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: selectedCategory === category.id ? 600 : 400 }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          </Box>
 
+          {/* Products Container */}
+          <Box>
             {/* Products Grid/List */}
-            {viewMode === 'grid' ? (
-              <Grid container spacing={2}>
-                {filteredProducts.map(product => (
-                  <Grid item xs={6} sm={4} md={3} key={product.id}>
+            {filteredProducts.length === 0 ? (
+              <Box sx={{ 
+                textAlign: 'center', 
+                py: 8,
+                color: 'text.secondary',
+              }}>
+                <Inventory2 sx={{ fontSize: 64, opacity: 0.3, mb: 2 }} />
+                <Typography variant="h6">
+                  {isRTL ? 'لا توجد منتجات' : 'No products found'}
+                </Typography>
+                <Typography variant="body2">
+                  {searchQuery 
+                    ? (isRTL ? 'جرب البحث بكلمات أخرى' : 'Try searching with different keywords')
+                    : (isRTL ? 'أضف منتجات للبدء' : 'Add products to get started')
+                  }
+                </Typography>
+              </Box>
+            ) : viewMode === 'grid' ? (
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: {
+                  xs: 'repeat(2, 1fr)',
+                  sm: 'repeat(3, 1fr)',
+                  md: 'repeat(3, 1fr)',
+                  lg: 'repeat(4, 1fr)',
+                },
+                gap: { xs: 1, sm: 2 },
+              }}>
+                {filteredProducts.map(product => {
+                  const inCart = cart.find(item => item.product.id === product.id);
+                  const stock = product.trackInventory ? 
+                    product.branchStock?.[currentBranch?.id || '']?.quantity || 0 : null;
+                  
+                  return (
                     <Card 
+                      key={product.id}
                       sx={{ 
                         cursor: 'pointer',
-                        '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 },
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': { 
+                          transform: 'translateY(-2px)', 
+                          boxShadow: (theme) => theme.shadows[8],
+                        },
                         transition: 'all 0.2s',
+                        border: '1px solid',
+                        borderColor: inCart ? 'primary.main' : 'divider',
+                        bgcolor: inCart ? 'action.selected' : 'background.paper',
                       }}
                       onClick={() => addToCart(product)}
                     >
-                      {product.primaryImage && (
-                        <CardMedia
-                          component="img"
-                          height="120"
-                          image={product.primaryImage}
-                          alt={product.name}
+                      {inCart && (
+                        <Badge
+                          badgeContent={inCart.quantity}
+                          color="primary"
+                          sx={{
+                            position: 'absolute',
+                            top: 12,
+                            right: 12,
+                            zIndex: 1,
+                            '& .MuiBadge-badge': {
+                              fontSize: '0.875rem',
+                              fontWeight: 'bold',
+                              minWidth: 24,
+                              height: 24,
+                            }
+                          }}
                         />
                       )}
-                      <CardContent sx={{ p: 1.5 }}>
-                        <Typography variant="body2" noWrap>
-                          {isRTL ? product.nameAr || product.name : product.name}
-                        </Typography>
-                        <Typography variant="h6" color="primary">
-                          {product.retailPrice.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                        </Typography>
-                        {product.trackInventory && (
+                      
+                      <Box sx={{ 
+                        height: { xs: 100, sm: 140 }, 
+                        bgcolor: 'grey.100',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                      }}>
+                        {product.primaryImage ? (
+                          <CardMedia
+                            component="img"
+                            height="100%"
+                            image={product.primaryImage}
+                            alt={product.name}
+                            sx={{ 
+                              objectFit: 'cover',
+                              width: '100%',
+                            }}
+                          />
+                        ) : (
+                          <Inventory2 sx={{ fontSize: { xs: 40, sm: 56 }, color: 'action.disabled' }} />
+                        )}
+                        
+                        {stock !== null && stock <= 5 && (
                           <Chip
                             size="small"
-                            label={`${isRTL ? 'المخزون:' : 'Stock:'} ${product.branchStock?.[currentBranch?.id || '']?.quantity || 0}`}
-                            color={product.branchStock?.[currentBranch?.id || '']?.quantity > 0 ? 'success' : 'error'}
+                            label={stock === 0 ? (isRTL ? 'نفذ المخزون' : 'Out of Stock') : `${stock} ${isRTL ? 'فقط' : 'left'}`}
+                            color={stock === 0 ? 'error' : 'warning'}
+                            sx={{
+                              position: 'absolute',
+                              bottom: 4,
+                              left: 4,
+                              fontSize: '0.7rem',
+                            }}
                           />
                         )}
+                      </Box>
+                      
+                      <CardContent sx={{ p: { xs: 1, sm: 1.5 } }}>
+                        <Typography 
+                          variant="body2" 
+                          noWrap 
+                          sx={{ 
+                            fontWeight: 500,
+                            fontSize: { xs: '0.875rem', sm: '0.9rem' },
+                          }}
+                        >
+                          {isRTL ? product.nameAr || product.name : product.name}
+                        </Typography>
+                        
+                        {product.sku && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                            SKU: {product.sku}
+                          </Typography>
+                        )}
+                        
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'baseline', 
+                          justifyContent: 'space-between',
+                          mt: 1,
+                        }}>
+                          <Typography 
+                            variant="h6" 
+                            color="primary"
+                            sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                          >
+                            {product.retailPrice.toLocaleString()}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Box>
                       </CardContent>
                     </Card>
-                  </Grid>
-                ))}
-              </Grid>
+                  );
+                })}
+              </Box>
             ) : (
-              <List>
-                {filteredProducts.map(product => (
-                  <ListItem
-                    key={product.id}
-                    button
-                    onClick={() => addToCart(product)}
-                    divider
-                  >
-                    <ListItemText
-                      primary={isRTL ? product.nameAr || product.name : product.name}
-                      secondary={
-                        <Stack direction="row" spacing={1}>
-                          <Typography variant="body2" color="primary">
-                            {product.retailPrice.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                          </Typography>
-                          {product.sku && (
-                            <Typography variant="body2" color="text.secondary">
-                              SKU: {product.sku}
-                            </Typography>
+              <Paper sx={{ overflow: 'hidden' }}>
+                <List sx={{ p: 0 }}>
+                  {filteredProducts.map((product, index) => {
+                    const inCart = cart.find(item => item.product.id === product.id);
+                    const stock = product.trackInventory ? 
+                      product.branchStock?.[currentBranch?.id || '']?.quantity || 0 : null;
+                    
+                    return (
+                      <ListItem
+                        key={product.id}
+                        button
+                        onClick={() => addToCart(product)}
+                        divider={index < filteredProducts.length - 1}
+                        sx={{
+                          bgcolor: inCart ? 'action.selected' : 'transparent',
+                          '&:hover': { bgcolor: 'action.hover' },
+                          py: 2,
+                        }}
+                      >
+                        <Box sx={{ 
+                          width: 60, 
+                          height: 60, 
+                          mr: 2,
+                          borderRadius: 1,
+                          bgcolor: 'grey.100',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                        }}>
+                          {product.primaryImage ? (
+                            <img
+                              src={product.primaryImage}
+                              alt={product.name}
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                objectFit: 'cover' 
+                              }}
+                            />
+                          ) : (
+                            <Inventory2 color="disabled" />
                           )}
-                        </Stack>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton edge="end" onClick={() => addToCart(product)}>
-                        <Add />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
+                        </Box>
+                        
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography fontWeight={500}>
+                                {isRTL ? product.nameAr || product.name : product.name}
+                              </Typography>
+                              {inCart && (
+                                <Badge badgeContent={inCart.quantity} color="primary" />
+                              )}
+                            </Stack>
+                          }
+                          secondary={
+                            <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 0.5 }}>
+                              <Typography variant="body1" color="primary" fontWeight="bold">
+                                {product.retailPrice.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                              </Typography>
+                              {product.sku && (
+                                <Typography variant="caption" color="text.secondary">
+                                  SKU: {product.sku}
+                                </Typography>
+                              )}
+                              {stock !== null && stock <= 5 && (
+                                <Chip
+                                  size="small"
+                                  label={stock === 0 ? (isRTL ? 'نفذ' : 'Out') : `${stock} ${isRTL ? 'فقط' : 'left'}`}
+                                  color={stock === 0 ? 'error' : 'warning'}
+                                  variant="outlined"
+                                />
+                              )}
+                            </Stack>
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton 
+                            edge="end" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToCart(product);
+                            }}
+                            color="primary"
+                            size="large"
+                            sx={{
+                              bgcolor: 'primary.main',
+                              color: 'primary.contrastText',
+                              '&:hover': {
+                                bgcolor: 'primary.dark',
+                              }
+                            }}
+                          >
+                            <Add />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Paper>
             )}
-          </Paper>
-        </Grid>
+          </Box>
+        </Box>
 
         {/* Cart Section - Desktop */}
         {!isMobile && (
-          <Grid item xs={12} md={4}>
+          <Box sx={{ 
+            width: 400, 
+            borderLeft: 1, 
+            borderColor: 'divider',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: 'background.paper',
+          }}>
             <CartSection />
-          </Grid>
+          </Box>
         )}
-      </Grid>
+      </Box>
 
-      {/* Mobile Cart Drawer */}
+      {/* Mobile Cart FAB and Bottom Bar */}
       {isMobile && (
         <>
           <Box
@@ -471,29 +701,31 @@ const POSPage: React.FC = () => {
               left: 0,
               right: 0,
               bgcolor: 'background.paper',
-              boxShadow: 3,
+              borderTop: 1,
+              borderColor: 'divider',
               p: 2,
               zIndex: 1200,
             }}
           >
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Stack>
-                <Typography variant="body2" color="text.secondary">
-                  {isRTL ? 'الإجمالي' : 'Total'}
+                <Typography variant="caption" color="text.secondary">
+                  {cart.length} {isRTL ? 'منتج' : 'items'}
                 </Typography>
-                <Typography variant="h6">
+                <Typography variant="h6" color="primary">
                   {calculateCartTotal().toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
                 </Typography>
               </Stack>
-              <Badge badgeContent={cart.length} color="primary">
-                <Button
-                  variant="contained"
-                  startIcon={<ShoppingCart />}
-                  onClick={() => setCartDrawer(true)}
-                >
-                  {isRTL ? 'السلة' : 'Cart'}
-                </Button>
-              </Badge>
+              <Fab
+                color="primary"
+                variant="extended"
+                onClick={() => setCartDrawer(true)}
+              >
+                <Badge badgeContent={cart.length} color="error">
+                  <ShoppingCart sx={{ mr: 1 }} />
+                </Badge>
+                {isRTL ? 'عرض السلة' : 'View Cart'}
+              </Fab>
             </Stack>
           </Box>
 
@@ -501,8 +733,43 @@ const POSPage: React.FC = () => {
             anchor={isRTL ? 'left' : 'right'}
             open={cartDrawer}
             onClose={() => setCartDrawer(false)}
+            PaperProps={{
+              sx: { width: '100%', maxWidth: 400 }
+            }}
           >
-            <Box sx={{ width: 350, p: 2 }}>
+            <AppBar position="sticky" color="primary" elevation={0}>
+              <Toolbar>
+                <IconButton
+                  edge="start"
+                  onClick={() => setCartDrawer(false)}
+                  sx={{ mr: 2, color: 'primary.contrastText' }}
+                >
+                  <Clear />
+                </IconButton>
+                <ShoppingCart sx={{ mr: 1 }} />
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                  {isRTL ? 'السلة' : 'Cart'}
+                </Typography>
+                <Chip 
+                  label={cart.length} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: 'primary.dark',
+                    color: 'primary.contrastText',
+                    fontWeight: 'bold',
+                    mr: 2,
+                  }} 
+                />
+                <IconButton 
+                  onClick={clearCart} 
+                  disabled={cart.length === 0}
+                  sx={{ color: 'primary.contrastText' }}
+                >
+                  <Delete />
+                </IconButton>
+              </Toolbar>
+            </AppBar>
+            <Box sx={{ height: 'calc(100% - 64px)', display: 'flex', flexDirection: 'column' }}>
               <CartSection />
             </Box>
           </Drawer>
@@ -542,181 +809,349 @@ const POSPage: React.FC = () => {
 
       {/* Payment Dialog */}
       <PaymentDialog />
-    </Container>
+    </Box>
   );
 
   // Cart Section Component
   function CartSection() {
     return (
-      <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-          <Typography variant="h6">
-            {isRTL ? 'السلة' : 'Cart'}
-          </Typography>
-          <IconButton size="small" onClick={clearCart} disabled={cart.length === 0}>
-            <Delete />
-          </IconButton>
-        </Stack>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+        {!isMobile && (
+          <Box sx={{ 
+            p: 2, 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+          }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <ShoppingCart />
+                <Typography variant="h6">
+                  {isRTL ? 'السلة' : 'Cart'}
+                </Typography>
+                <Chip 
+                  label={cart.length} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: 'primary.dark',
+                    color: 'primary.contrastText',
+                    fontWeight: 'bold',
+                  }} 
+                />
+              </Stack>
+              {cart.length > 0 && (
+                <IconButton 
+                  size="small" 
+                  onClick={clearCart}
+                  sx={{ color: 'primary.contrastText' }}
+                >
+                  <Delete fontSize="small" />
+                </IconButton>
+              )}
+            </Stack>
+          </Box>
+        )}
 
         {/* Client Selection */}
-        <Autocomplete
-          options={clients}
-          value={selectedClient}
-          onChange={(_, client) => setSelectedClient(client)}
-          getOptionLabel={(client) => `${client.name} - ${client.phoneNumber || client.email || ''}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={isRTL ? 'العميل' : 'Client'}
-              placeholder={isRTL ? 'اختر عميل (اختياري)' : 'Select client (optional)'}
-              InputProps={{
-                ...params.InputProps,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Person />
-                  </InputAdornment>
-                ),
-              }}
-            />
-          )}
-          sx={{ mb: 2 }}
-        />
+        <Box sx={{ p: 2, bgcolor: 'background.default' }}>
+          <Autocomplete
+            options={clients}
+            value={selectedClient}
+            onChange={(_, client) => setSelectedClient(client)}
+            getOptionLabel={(client) => client.name}
+            renderOption={(props, client) => (
+              <Box component="li" {...props}>
+                <Stack>
+                  <Typography variant="body2" fontWeight={500}>
+                    {client.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {client.phoneNumber || client.email || (isRTL ? 'لا توجد معلومات اتصال' : 'No contact info')}
+                  </Typography>
+                </Stack>
+              </Box>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                label={isRTL ? 'العميل' : 'Client'}
+                placeholder={isRTL ? 'البحث عن عميل...' : 'Search for client...'}
+                variant="outlined"
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <InputAdornment position="start">
+                        <Person color="action" />
+                      </InputAdornment>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: 'background.paper',
+              }
+            }}
+          />
+        </Box>
 
-        <Divider sx={{ mb: 2 }} />
+        <Divider />
 
         {/* Cart Items */}
-        <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2 }}>
+        <Box sx={{ flexGrow: 1, overflowY: 'auto', bgcolor: 'background.default' }}>
           {cart.length === 0 ? (
-            <Alert severity="info">
-              {isRTL ? 'السلة فارغة' : 'Cart is empty'}
-            </Alert>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              height: '100%',
+              p: 4,
+            }}>
+              <Box sx={{
+                width: 120,
+                height: 120,
+                borderRadius: '50%',
+                bgcolor: 'action.hover',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 3,
+              }}>
+                <ShoppingCart sx={{ fontSize: 56, color: 'action.disabled' }} />
+              </Box>
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                {isRTL ? 'السلة فارغة' : 'Cart is empty'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                {isRTL ? 'ابدأ بإضافة المنتجات من القائمة' : 'Start by adding products from the catalog'}
+              </Typography>
+            </Box>
           ) : (
-            <Stack spacing={2}>
+            <Stack spacing={1} sx={{ p: 2 }}>
               {cart.map((item) => (
-                <Paper key={item.product.id} variant="outlined" sx={{ p: 2 }}>
-                  <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography variant="body1">
-                        {isRTL ? item.product.nameAr || item.product.name : item.product.name}
-                      </Typography>
-                      <IconButton size="small" onClick={() => removeFromCart(item.product.id!)}>
-                        <Clear />
-                      </IconButton>
-                    </Stack>
+                <Card 
+                  key={item.product.id} 
+                  variant="outlined"
+                  sx={{ 
+                    overflow: 'hidden',
+                    '&:hover': { boxShadow: 2 },
+                    transition: 'box-shadow 0.2s',
+                  }}
+                >
+                  <CardContent sx={{ p: 2 }}>
+                    <Stack spacing={1.5}>
+                      {/* Product Info */}
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                        <Box sx={{ flexGrow: 1, pr: 1 }}>
+                          <Typography variant="body1" fontWeight={500} sx={{ mb: 0.5 }}>
+                            {isRTL ? item.product.nameAr || item.product.name : item.product.name}
+                          </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2" color="text.secondary">
+                              {item.price.toLocaleString()}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {isRTL ? 'ج.م × ' : 'EGP × '}
+                              {item.quantity}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => removeFromCart(item.product.id!)}
+                          sx={{ 
+                            color: 'error.main',
+                            '&:hover': { bgcolor: 'error.lighter' }
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Stack>
 
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <IconButton 
-                        size="small"
-                        onClick={() => updateQuantity(item.product.id!, item.quantity - 1)}
-                      >
-                        <Remove />
-                      </IconButton>
-                      <TextField
-                        size="small"
-                        value={item.quantity}
-                        onChange={(e) => updateQuantity(item.product.id!, parseInt(e.target.value) || 0)}
-                        sx={{ width: 60, textAlign: 'center' }}
-                        inputProps={{ style: { textAlign: 'center' } }}
-                      />
-                      <IconButton 
-                        size="small"
-                        onClick={() => updateQuantity(item.product.id!, item.quantity + 1)}
-                      >
-                        <Add />
-                      </IconButton>
-                      <Typography variant="body2" color="text.secondary">
-                        × {item.price.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                      </Typography>
-                    </Stack>
+                      {/* Quantity Controls */}
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Box sx={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center',
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                        }}>
+                          <IconButton 
+                            size="small"
+                            onClick={() => updateQuantity(item.product.id!, item.quantity - 1)}
+                            sx={{ 
+                              borderRadius: 0,
+                              '&:hover': { bgcolor: 'action.hover' }
+                            }}
+                          >
+                            <Remove fontSize="small" />
+                          </IconButton>
+                          <Box sx={{ 
+                            px: 2, 
+                            minWidth: 50, 
+                            textAlign: 'center',
+                            borderLeft: 1,
+                            borderRight: 1,
+                            borderColor: 'divider',
+                          }}>
+                            <Typography variant="body2" fontWeight={500}>
+                              {item.quantity}
+                            </Typography>
+                          </Box>
+                          <IconButton 
+                            size="small"
+                            onClick={() => updateQuantity(item.product.id!, item.quantity + 1)}
+                            sx={{ 
+                              borderRadius: 0,
+                              '&:hover': { bgcolor: 'action.hover' }
+                            }}
+                          >
+                            <Add fontSize="small" />
+                          </IconButton>
+                        </Box>
+                        
+                        <Typography variant="h6" color="primary" fontWeight={600}>
+                          {item.subtotal.toLocaleString()}
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                            {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Typography>
+                      </Stack>
 
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <TextField
-                        size="small"
-                        label={isRTL ? 'الخصم' : 'Discount'}
-                        value={item.discount}
-                        onChange={(e) => updateDiscount(item.product.id!, parseFloat(e.target.value) || 0, item.discountType)}
-                        sx={{ width: 100 }}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              {item.discountType === 'percentage' ? '%' : isRTL ? 'ج.م' : 'EGP'}
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                      <ToggleButtonGroup
-                        size="small"
-                        value={item.discountType}
-                        exclusive
-                        onChange={(_, value) => value && updateDiscount(item.product.id!, item.discount, value)}
-                      >
-                        <ToggleButton value="fixed">
-                          {isRTL ? 'ثابت' : 'Fixed'}
-                        </ToggleButton>
-                        <ToggleButton value="percentage">
-                          %
-                        </ToggleButton>
-                      </ToggleButtonGroup>
+                      {/* Discount */}
+                      {item.discount > 0 && (
+                        <Box sx={{ 
+                          p: 1, 
+                          bgcolor: 'success.lighter', 
+                          borderRadius: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <LocalOffer fontSize="small" color="success" />
+                            <Typography variant="body2" color="success.dark">
+                              {isRTL ? 'خصم' : 'Discount'} {item.discount}
+                              {item.discountType === 'percentage' ? '%' : ` ${isRTL ? 'ج.م' : 'EGP'}`}
+                            </Typography>
+                          </Stack>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => updateDiscount(item.product.id!, 0, item.discountType)}
+                            sx={{ color: 'success.dark' }}
+                          >
+                            <Clear fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      )}
                     </Stack>
-
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" color="text.secondary">
-                        {isRTL ? 'المجموع' : 'Subtotal'}
-                      </Typography>
-                      <Typography variant="body1" fontWeight="medium">
-                        {item.subtotal.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                      </Typography>
-                    </Stack>
-                  </Stack>
-                </Paper>
+                  </CardContent>
+                </Card>
               ))}
             </Stack>
           )}
         </Box>
 
-        <Divider sx={{ mb: 2 }} />
+        <Divider />
 
         {/* Totals */}
-        <Stack spacing={1} sx={{ mb: 2 }}>
-          <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">
-              {isRTL ? 'المجموع الفرعي' : 'Subtotal'}
-            </Typography>
-            <Typography variant="body2">
-              {(calculateCartTotal() + calculateTotalDiscount()).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-            </Typography>
-          </Stack>
-          <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">
-              {isRTL ? 'الخصم' : 'Discount'}
-            </Typography>
-            <Typography variant="body2" color="error">
-              -{calculateTotalDiscount().toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-            </Typography>
-          </Stack>
-          <Divider />
-          <Stack direction="row" justifyContent="space-between">
-            <Typography variant="h6">
-              {isRTL ? 'الإجمالي' : 'Total'}
-            </Typography>
-            <Typography variant="h6" color="primary">
-              {calculateCartTotal().toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-            </Typography>
-          </Stack>
-        </Stack>
+        <Box sx={{ p: 2, bgcolor: 'background.default' }}>
+          <Paper sx={{ p: 2, bgcolor: 'background.paper' }}>
+            <Stack spacing={2}>
+              {cart.length > 0 && (
+                <>
+                  {/* Items Summary */}
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" color="text.secondary">
+                      {cart.length} {isRTL ? cart.length === 1 ? 'منتج' : 'منتجات' : cart.length === 1 ? 'item' : 'items'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {cart.reduce((acc, item) => acc + item.quantity, 0)} {isRTL ? 'قطعة' : 'pcs'}
+                    </Typography>
+                  </Stack>
 
-        {/* Checkout Button */}
-        <Button
-          fullWidth
-          variant="contained"
-          size="large"
-          startIcon={<Payment />}
-          onClick={handleCheckout}
-          disabled={cart.length === 0}
-        >
-          {isRTL ? 'الدفع' : 'Checkout'}
-        </Button>
-      </Paper>
+                  {calculateTotalDiscount() > 0 && (
+                    <>
+                      <Divider />
+                      <Stack spacing={1}>
+                        <Stack direction="row" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary">
+                            {isRTL ? 'المجموع الفرعي' : 'Subtotal'}
+                          </Typography>
+                          <Typography variant="body2">
+                            {(calculateCartTotal() + calculateTotalDiscount()).toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                        <Stack direction="row" justifyContent="space-between">
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <LocalOffer fontSize="small" color="success" />
+                            <Typography variant="body2" color="success.main">
+                              {isRTL ? 'الخصم' : 'Discount'}
+                            </Typography>
+                          </Stack>
+                          <Typography variant="body2" color="success.main" fontWeight={500}>
+                            -{calculateTotalDiscount().toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                    </>
+                  )}
+                  
+                  <Divider />
+                  
+                  {/* Total */}
+                  <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+                    <Typography variant="h6" fontWeight={600}>
+                      {isRTL ? 'الإجمالي' : 'Total'}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5} alignItems="baseline">
+                      <Typography variant="h4" color="primary" fontWeight={700}>
+                        {calculateCartTotal().toLocaleString()}
+                      </Typography>
+                      <Typography variant="body1" color="text.secondary">
+                        {isRTL ? 'ج.م' : 'EGP'}
+                      </Typography>
+                    </Stack>
+                  </Stack>
+                </>
+              )}
+            </Stack>
+          </Paper>
+
+          {/* Checkout Button */}
+          <Button
+            fullWidth
+            variant="contained"
+            size="large"
+            startIcon={<Payment />}
+            onClick={handleCheckout}
+            disabled={cart.length === 0}
+            sx={{ 
+              mt: 2,
+              py: 1.5,
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              boxShadow: 2,
+              '&:hover': {
+                boxShadow: 4,
+              }
+            }}
+          >
+            {cart.length === 0 
+              ? (isRTL ? 'أضف منتجات للمتابعة' : 'Add items to proceed')
+              : isRTL ? 'متابعة الدفع' : 'Proceed to Payment'
+            }
+          </Button>
+        </Box>
+      </Box>
     );
   }
 
@@ -726,10 +1161,10 @@ const POSPage: React.FC = () => {
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentReference, setPaymentReference] = useState('');
 
-    const paymentMethods: { method: PaymentMethod; icon: React.ReactNode; label: string; labelAr: string }[] = [
-      { method: 'cash', icon: <LocalAtm />, label: 'Cash', labelAr: 'نقدي' },
-      { method: 'card', icon: <CreditCard />, label: 'Card', labelAr: 'بطاقة' },
-      { method: 'digital_wallet', icon: <AccountBalanceWallet />, label: 'Digital Wallet', labelAr: 'محفظة إلكترونية' },
+    const paymentMethods: { method: PaymentMethod; icon: React.ReactNode; label: string; labelAr: string; color: string }[] = [
+      { method: 'cash', icon: <LocalAtm />, label: 'Cash', labelAr: 'نقدي', color: 'success.main' },
+      { method: 'card', icon: <CreditCard />, label: 'Card', labelAr: 'بطاقة', color: 'info.main' },
+      { method: 'digital_wallet', icon: <AccountBalanceWallet />, label: 'Digital Wallet', labelAr: 'محفظة إلكترونية', color: 'warning.main' },
     ];
 
     const handleAddPayment = () => {
@@ -744,31 +1179,73 @@ const POSPage: React.FC = () => {
     const quickAmounts = [50, 100, 200, 500, 1000];
 
     return (
-      <Dialog open={paymentDialog} onClose={() => setPaymentDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{isRTL ? 'الدفع' : 'Payment'}</DialogTitle>
-        <DialogContent>
+      <Dialog 
+        open={paymentDialog} 
+        onClose={() => setPaymentDialog(false)} 
+        maxWidth="sm" 
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 2 }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: 'primary.main', 
+          color: 'primary.contrastText',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+        }}>
+          <Payment />
+          {isRTL ? 'الدفع والإنهاء' : 'Payment & Checkout'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
           <Stack spacing={3}>
             {/* Total Amount */}
-            <Alert severity="info">
-              <Stack direction="row" justifyContent="space-between">
-                <Typography>{isRTL ? 'المبلغ المطلوب' : 'Amount Due'}</Typography>
-                <Typography variant="h6">
-                  {calculateCartTotal().toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+            <Paper sx={{ 
+              p: 2, 
+              bgcolor: 'primary.lighter',
+              borderRadius: 2,
+            }}>
+              <Stack spacing={1} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  {isRTL ? 'المبلغ المطلوب' : 'Amount Due'}
+                </Typography>
+                <Typography variant="h3" color="primary" fontWeight={700}>
+                  {calculateCartTotal().toLocaleString()}
+                  <Typography component="span" variant="h6" color="text.secondary" sx={{ ml: 1 }}>
+                    {isRTL ? 'ج.م' : 'EGP'}
+                  </Typography>
                 </Typography>
               </Stack>
-            </Alert>
+            </Paper>
 
             {/* Payment Methods Tabs */}
-            <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="fullWidth">
-              {paymentMethods.map((pm, index) => (
-                <Tab
-                  key={pm.method}
-                  icon={pm.icon}
-                  label={isRTL ? pm.labelAr : pm.label}
-                  iconPosition="start"
-                />
-              ))}
-            </Tabs>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={(_, v) => setActiveTab(v)} 
+                variant="fullWidth"
+                sx={{
+                  '& .MuiTab-root': {
+                    py: 2,
+                  }
+                }}
+              >
+                {paymentMethods.map((pm, index) => (
+                  <Tab
+                    key={pm.method}
+                    icon={pm.icon}
+                    label={isRTL ? pm.labelAr : pm.label}
+                    iconPosition="start"
+                    sx={{
+                      '&.Mui-selected': {
+                        color: pm.color,
+                      }
+                    }}
+                  />
+                ))}
+              </Tabs>
+            </Box>
 
             {/* Payment Amount Input */}
             <Stack spacing={2}>
@@ -825,26 +1302,52 @@ const POSPage: React.FC = () => {
             {payments.length > 0 && (
               <>
                 <Divider />
-                <Stack spacing={1}>
-                  {payments.map((payment, index) => (
-                    <Stack key={index} direction="row" justifyContent="space-between" alignItems="center">
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {paymentMethods.find(pm => pm.method === payment.method)?.icon}
-                        <Typography>
-                          {payment.amount.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                        </Typography>
-                        {payment.reference && (
-                          <Typography variant="body2" color="text.secondary">
-                            ({payment.reference})
-                          </Typography>
-                        )}
-                      </Stack>
-                      <IconButton size="small" onClick={() => removePayment(index)}>
-                        <Clear />
-                      </IconButton>
-                    </Stack>
-                  ))}
-                </Stack>
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    {isRTL ? 'المدفوعات المضافة' : 'Added Payments'}
+                  </Typography>
+                  <Stack spacing={1}>
+                    {payments.map((payment, index) => {
+                      const pm = paymentMethods.find(p => p.method === payment.method);
+                      return (
+                        <Paper 
+                          key={index} 
+                          variant="outlined" 
+                          sx={{ 
+                            p: 1.5,
+                            borderColor: pm?.color,
+                            borderWidth: 2,
+                          }}
+                        >
+                          <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                              <Box sx={{ color: pm?.color }}>
+                                {pm?.icon}
+                              </Box>
+                              <Box>
+                                <Typography variant="body1" fontWeight={500}>
+                                  {payment.amount.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                                </Typography>
+                                {payment.reference && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {isRTL ? 'المرجع: ' : 'Ref: '}{payment.reference}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Stack>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => removePayment(index)}
+                              color="error"
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                </Box>
               </>
             )}
 
