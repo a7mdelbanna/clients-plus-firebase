@@ -18,7 +18,7 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Sale, SaleFilters, SaleItem, SalePayment, DailySalesSummary } from '../types/sale.types';
+import type { Sale, SaleFilters, SaleItem, SalePayment, DailySalesSummary } from '../types/sale.types';
 import { productService } from './product.service';
 import { financeService } from './finance.service';
 
