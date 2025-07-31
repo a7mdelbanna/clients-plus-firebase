@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
-import { PaymentMethod } from './finance.types';
+import type { PaymentMethod } from './finance.types';
 
 export interface SaleItem {
   productId: string;
