@@ -580,13 +580,13 @@ const POSPage: React.FC = () => {
                     return (
                       <ListItem
                         key={product.id}
-                        button
                         onClick={() => addToCart(product)}
                         divider={index < filteredProducts.length - 1}
                         sx={{
                           bgcolor: inCart ? 'action.selected' : 'transparent',
                           '&:hover': { bgcolor: 'action.hover' },
                           py: 2,
+                          cursor: 'pointer',
                         }}
                       >
                         <Box sx={{ 
@@ -615,58 +615,53 @@ const POSPage: React.FC = () => {
                           )}
                         </Box>
                         
-                        <ListItemText
-                          primary={
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Typography fontWeight={500}>
-                                {isRTL ? product.nameAr || product.name : product.name}
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography fontWeight={500}>
+                              {isRTL ? product.nameAr || product.name : product.name}
+                            </Typography>
+                            {inCart && (
+                              <Badge badgeContent={inCart.quantity} color="primary" />
+                            )}
+                          </Stack>
+                          <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 0.5 }}>
+                            <Typography variant="body1" color="primary" fontWeight="bold">
+                              {product.retailPrice.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
+                            </Typography>
+                            {product.sku && (
+                              <Typography variant="caption" color="text.secondary">
+                                SKU: {product.sku}
                               </Typography>
-                              {inCart && (
-                                <Badge badgeContent={inCart.quantity} color="primary" />
-                              )}
-                            </Stack>
-                          }
-                          secondary={
-                            <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 0.5 }}>
-                              <Typography variant="body1" color="primary" fontWeight="bold">
-                                {product.retailPrice.toLocaleString()} {isRTL ? 'ج.م' : 'EGP'}
-                              </Typography>
-                              {product.sku && (
-                                <Typography variant="caption" color="text.secondary">
-                                  SKU: {product.sku}
-                                </Typography>
-                              )}
-                              {stock !== null && stock <= 5 && (
-                                <Chip
-                                  size="small"
-                                  label={stock === 0 ? (isRTL ? 'نفذ' : 'Out') : `${stock} ${isRTL ? 'فقط' : 'left'}`}
-                                  color={stock === 0 ? 'error' : 'warning'}
-                                  variant="outlined"
-                                />
-                              )}
-                            </Stack>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <IconButton 
-                            edge="end" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              addToCart(product);
-                            }}
-                            color="primary"
-                            size="large"
-                            sx={{
-                              bgcolor: 'primary.main',
-                              color: 'primary.contrastText',
-                              '&:hover': {
-                                bgcolor: 'primary.dark',
-                              }
-                            }}
-                          >
-                            <Add />
-                          </IconButton>
-                        </ListItemSecondaryAction>
+                            )}
+                            {stock !== null && stock <= 5 && (
+                              <Chip
+                                size="small"
+                                label={stock === 0 ? (isRTL ? 'نفذ' : 'Out') : `${stock} ${isRTL ? 'فقط' : 'left'}`}
+                                color={stock === 0 ? 'error' : 'warning'}
+                                variant="outlined"
+                              />
+                            )}
+                          </Stack>
+                        </Box>
+                        <IconButton 
+                          edge="end" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToCart(product);
+                          }}
+                          color="primary"
+                          size="large"
+                          sx={{
+                            ml: 1,
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
+                            '&:hover': {
+                              bgcolor: 'primary.dark',
+                            }
+                          }}
+                        >
+                          <Add />
+                        </IconButton>
                       </ListItem>
                     );
                   })}
