@@ -1663,6 +1663,52 @@ class FinanceService {
 
   // ==================== Financial Settings ====================
 
+  // Get user document
+  async getUserDocument(userId: string): Promise<any> {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        return userDoc.data();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user document:', error);
+      return null;
+    }
+  }
+
+  // Get active cash register session
+  async getActiveCashRegister(
+    companyId: string,
+    branchId: string,
+    userId: string
+  ): Promise<CashRegisterSession | null> {
+    try {
+      const q = query(
+        collection(db, 'companies', companyId, this.cashRegistersCollection),
+        where('branchId', '==', branchId),
+        where('openedBy', '==', userId),
+        where('status', '==', 'open'),
+        orderBy('openedAt', 'desc'),
+        limit(1)
+      );
+
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        return null;
+      }
+
+      const doc = snapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data(),
+      } as CashRegisterSession;
+    } catch (error) {
+      console.error('Error getting active cash register:', error);
+      return null;
+    }
+  }
+
   // Get financial settings
   async getFinancialSettings(companyId: string): Promise<FinancialSettings | null> {
     try {

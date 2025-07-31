@@ -63,10 +63,13 @@ import { useBranch } from '../../contexts/BranchContext';
 import { productService } from '../../services/product.service';
 import { clientService } from '../../services/client.service';
 import { financeService } from '../../services/finance.service';
+import { saleService } from '../../services/sale.service';
 import type { Product, ProductCategory } from '../../types/product.types';
 import type { Client } from '../../types/client.types';
 import type { PaymentMethod } from '../../types/finance.types';
+import type { SaleItem, SalePayment } from '../../types/sale.types';
 import { Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 
 interface CartItem {
   product: Product;
@@ -280,26 +283,127 @@ const POSPage: React.FC = () => {
   };
 
   const completeTransaction = async () => {
-    if (!currentUser?.companyId || !currentBranch?.id) return;
+    if (!currentUser?.companyId || !currentBranch?.id || !currentUser?.uid) return;
     
     if (getRemainingAmount() > 0.01) {
-      alert(isRTL ? 'المبلغ المدفوع غير كافي' : 'Insufficient payment amount');
+      toast.error(isRTL ? 'المبلغ المدفوع غير كافي' : 'Insufficient payment amount');
       return;
     }
 
     setLoading(true);
     try {
-      // TODO: Create sale transaction in finance service
-      // TODO: Update inventory if tracking is enabled
-      // TODO: Create receipt
-      
-      // For now, just clear the cart
+      // Prepare sale items
+      const saleItems: SaleItem[] = cart.map(item => ({
+        productId: item.product.id!,
+        productName: item.product.name,
+        productNameAr: item.product.nameAr,
+        sku: item.product.sku,
+        barcode: item.product.barcode,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        discount: item.discount,
+        discountType: item.discountType,
+        subtotal: item.subtotal,
+        cost: item.product.costPrice,
+      }));
+
+      // Get cash register session if open
+      const cashRegisterSession = await financeService.getActiveCashRegister(
+        currentUser.companyId,
+        currentBranch.id,
+        currentUser.uid
+      );
+
+      // Map payment methods to account IDs based on cash register mappings
+      const salePayments: SalePayment[] = await Promise.all(payments.map(async (payment) => {
+        let accountId: string | undefined;
+        
+        if (cashRegisterSession?.accountMappings) {
+          switch (payment.method) {
+            case 'cash':
+              accountId = cashRegisterSession.accountMappings.cashAccountId;
+              break;
+            case 'card':
+              accountId = cashRegisterSession.accountMappings.cardAccountId;
+              break;
+            case 'bank_transfer':
+              accountId = cashRegisterSession.accountMappings.bankAccountId;
+              break;
+            case 'digital_wallet':
+              accountId = cashRegisterSession.accountMappings.digitalWalletAccountId;
+              break;
+          }
+        }
+
+        return {
+          method: payment.method,
+          amount: payment.amount,
+          reference: payment.reference,
+          accountId,
+        };
+      }));
+
+      // Calculate totals
+      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const totalDiscount = calculateTotalDiscount();
+      const total = calculateCartTotal();
+      const totalPaid = getTotalPaid();
+      const change = totalPaid - total;
+
+      // Get current user info
+      const userDoc = await financeService.getUserDocument(currentUser.uid);
+      const staffName = userDoc?.displayName || userDoc?.email || 'Staff';
+
+      // Create the sale
+      const saleData = {
+        companyId: currentUser.companyId,
+        branchId: currentBranch.id,
+        customerId: selectedClient?.id,
+        customerName: selectedClient?.name,
+        customerPhone: selectedClient?.phoneNumber,
+        customerEmail: selectedClient?.email,
+        items: saleItems,
+        subtotal,
+        totalDiscount,
+        totalTax: 0, // TODO: Implement tax calculation
+        total,
+        payments: salePayments,
+        totalPaid,
+        change,
+        status: 'draft' as const,
+        staffId: currentUser.uid,
+        staffName,
+        cashRegisterId: cashRegisterSession?.id,
+        source: 'pos' as const,
+        totalCost: saleItems.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0),
+        profitMargin: total - saleItems.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0),
+      };
+
+      const saleId = await saleService.createSale(saleData);
+
+      // Complete the sale (update inventory and financial accounts)
+      await saleService.completeSale(
+        currentUser.companyId,
+        saleId,
+        saleItems,
+        salePayments,
+        cashRegisterSession?.id
+      );
+
+      // Clear cart and close dialog
       clearCart();
       setPaymentDialog(false);
-      alert(isRTL ? 'تم إتمام البيع بنجاح' : 'Sale completed successfully');
+      
+      toast.success(
+        isRTL 
+          ? `تم إتمام البيع بنجاح - رقم الإيصال: ${saleData.receiptNumber || saleId}` 
+          : `Sale completed successfully - Receipt: ${saleData.receiptNumber || saleId}`
+      );
+
+      // TODO: Generate and print receipt
     } catch (error) {
       console.error('Error completing transaction:', error);
-      alert(isRTL ? 'خطأ في إتمام العملية' : 'Error completing transaction');
+      toast.error(isRTL ? 'خطأ في إتمام العملية' : 'Error completing transaction');
     } finally {
       setLoading(false);
     }
