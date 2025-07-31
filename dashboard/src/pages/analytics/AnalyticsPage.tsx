@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Box,
   Paper,
@@ -85,7 +84,6 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export default function AnalyticsPage() {
-  const { t } = useTranslation();
   const { user } = useAuth();
   const { currentBranch } = useBranch();
   const theme = useTheme();

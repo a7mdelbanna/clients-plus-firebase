@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Card,
   CardContent,
@@ -33,7 +32,6 @@ interface DashboardMetrics {
 }
 
 export default function SalesMetricsWidget() {
-  const { t } = useTranslation();
   const { user } = useAuth();
   const { currentBranch } = useBranch();
   const theme = useTheme();
