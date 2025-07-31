@@ -168,7 +168,7 @@ const FinanceReportsPage: React.FC = () => {
       const { startDate, endDate } = getDateRange();
 
       // Load transactions
-      const transactionsData = await financeService.getTransactions(
+      const result = await financeService.getTransactions(
         currentUser.companyId,
         {
           branchId: currentBranch?.id,
@@ -177,6 +177,9 @@ const FinanceReportsPage: React.FC = () => {
           status: 'completed',
         }
       );
+
+      // Extract transactions array from the result
+      const transactionsData = result.transactions || [];
 
       setTransactions(transactionsData);
 
@@ -196,16 +199,19 @@ const FinanceReportsPage: React.FC = () => {
   };
 
   const calculateMetrics = (transactions: FinancialTransaction[]): ReportMetrics => {
-    const income = transactions
+    // Ensure transactions is an array
+    const transactionsList = Array.isArray(transactions) ? transactions : [];
+    
+    const income = transactionsList
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.totalAmount, 0);
 
-    const expenses = transactions
+    const expenses = transactionsList
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.totalAmount, 0);
 
     const netProfit = income - expenses;
-    const transactionCount = transactions.length;
+    const transactionCount = transactionsList.length;
     const averageTransaction = transactionCount > 0 ? (income + expenses) / transactionCount : 0;
     const profitMargin = income > 0 ? (netProfit / income) * 100 : 0;
 
@@ -224,10 +230,13 @@ const FinanceReportsPage: React.FC = () => {
   };
 
   const prepareChartData = (transactions: FinancialTransaction[]): ChartData => {
+    // Ensure transactions is an array
+    const transactionsList = Array.isArray(transactions) ? transactions : [];
+    
     // Group transactions by date
     const dailyMap = new Map<string, { income: number; expenses: number }>();
     
-    transactions.forEach(transaction => {
+    transactionsList.forEach(transaction => {
       const dateKey = format(transaction.date.toDate(), 'yyyy-MM-dd');
       const existing = dailyMap.get(dateKey) || { income: 0, expenses: 0 };
       
@@ -251,7 +260,7 @@ const FinanceReportsPage: React.FC = () => {
 
     // Category breakdown
     const categoryMap = new Map<string, number>();
-    transactions.forEach(transaction => {
+    transactionsList.forEach(transaction => {
       const category = transaction.category || 'Other';
       categoryMap.set(category, (categoryMap.get(category) || 0) + transaction.totalAmount);
     });
@@ -269,9 +278,9 @@ const FinanceReportsPage: React.FC = () => {
 
     // Payment methods
     const paymentMap = new Map<string, { amount: number; count: number }>();
-    const totalPaymentAmount = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
+    const totalPaymentAmount = transactionsList.reduce((sum, t) => sum + t.totalAmount, 0);
     
-    transactions.forEach(transaction => {
+    transactionsList.forEach(transaction => {
       const method = transaction.paymentMethod || 'other';
       const existing = paymentMap.get(method) || { amount: 0, count: 0 };
       existing.amount += transaction.totalAmount;
