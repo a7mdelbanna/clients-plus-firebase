@@ -7,6 +7,8 @@ import {
   Typography,
   useTheme,
   useMediaQuery,
+  Avatar,
+  alpha,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -25,47 +27,111 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick }) => {
   const theme = useTheme();
   const { isDarkMode, toggleTheme } = useThemeMode();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isRTL = theme.direction === 'rtl';
+  const isRTL = true; // Force RTL for Arabic
 
   return (
     <AppBar
       position="sticky"
-      elevation={0}
+      elevation={1}
       sx={{
-        backgroundColor: theme.palette.background.paper,
+        backgroundColor: theme.palette.mode === 'dark' 
+          ? theme.palette.background.paper 
+          : theme.palette.background.paper,
         borderBottom: `1px solid ${theme.palette.divider}`,
         color: theme.palette.text.primary,
+        boxShadow: theme.palette.mode === 'dark'
+          ? '0 2px 8px rgba(0, 0, 0, 0.3)'
+          : '0 2px 8px rgba(0, 0, 0, 0.1)',
+        zIndex: 1000,
+        width: '100%',
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
-        {/* Menu Button for Mobile */}
-        {isMobile && (
-          <IconButton
-            edge="start"
-            color="inherit"
-            aria-label="menu"
-            onClick={onMenuClick}
-            sx={{ mr: isRTL ? 0 : 2, ml: isRTL ? 2 : 0 }}
-          >
-            <MenuIcon />
-          </IconButton>
-        )}
+        {/* Left Side - Logo and Menu */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Menu Button for Mobile */}
+          {isMobile && (
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="menu"
+              onClick={onMenuClick}
+              sx={{ 
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                },
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          
+          {/* Logo - Only show on desktop when sidebar is collapsed */}
+          {!isMobile && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar
+                sx={{
+                  width: 36,
+                  height: 36,
+                  bgcolor: theme.palette.primary.main,
+                  fontSize: '0.875rem',
+                  fontWeight: 700,
+                }}
+              >
+                C+
+              </Avatar>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  fontWeight: 700,
+                  color: theme.palette.text.primary,
+                  display: { xs: 'none', sm: 'block' },
+                }}
+              >
+                Clients+
+              </Typography>
+            </Box>
+          )}
+        </Box>
 
-        {/* Branch Selector */}
-        <Box sx={{ flexGrow: 1 }}>
+        {/* Center - Branch Selector */}
+        <Box sx={{ flexGrow: 1, mx: 2 }}>
           <BranchSelector />
         </Box>
 
         {/* Right Side Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {/* Notifications */}
-          <IconButton color="inherit" sx={{ ml: 1 }}>
-            <Notifications />
+          <IconButton 
+            color="inherit" 
+            sx={{ 
+              ml: 1,
+              backgroundColor: theme.palette.action.hover,
+              '&:hover': {
+                backgroundColor: theme.palette.action.selected,
+              },
+            }}
+          >
+            <Notifications sx={{ fontSize: 24 }} />
           </IconButton>
 
           {/* Theme Toggle */}
-          <IconButton onClick={toggleTheme} color="inherit">
-            {isDarkMode ? <LightMode /> : <DarkMode />}
+          <IconButton 
+            onClick={toggleTheme} 
+            color="inherit"
+            sx={{ 
+              backgroundColor: theme.palette.action.hover,
+              '&:hover': {
+                backgroundColor: theme.palette.action.selected,
+              },
+            }}
+          >
+            {isDarkMode ? (
+              <LightMode sx={{ fontSize: 24, color: '#FFC107' }} />
+            ) : (
+              <DarkMode sx={{ fontSize: 24, color: '#1976D2' }} />
+            )}
           </IconButton>
         </Box>
       </Toolbar>

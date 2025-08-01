@@ -26,6 +26,7 @@ import CategoriesPage from './pages/settings/categories/CategoriesPage';
 import ClientCategoriesPage from './pages/settings/categories/ClientCategoriesPage';
 import AppointmentCategoriesPage from './pages/settings/categories/AppointmentCategoriesPage';
 import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage';
+import ExpenseCategoriesPage from './pages/settings/categories/ExpenseCategoriesPage';
 import LocationSettingsPage from './pages/settings/location-settings/LocationSettingsPage';
 import BranchManagementPage from './pages/settings/branches/BranchManagementPage';
 import BranchFormPage from './pages/settings/branches/BranchFormPage';
@@ -52,12 +53,17 @@ import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
 import TransfersPage from './pages/finance/TransfersPage';
 import CashRegisterPage from './pages/finance/CashRegisterPage';
 import FinanceReportsPage from './pages/finance/FinanceReportsPage';
+import FinanceReportsPageEnhanced from './pages/finance/FinanceReportsPageEnhanced';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import InvoiceFormPage from './pages/finance/InvoiceFormPage';
 import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import POSPage from './pages/pos/POSPage';
+import ExpenseManagementPage from './pages/finance/expense/ExpenseManagementPage';
+import FinanceExpenseCategoriesPage from './pages/finance/expense/ExpenseCategoriesPage';
+import NewExpensePage from './pages/finance/expense/NewExpensePage';
+import FinanceOverviewPage from './pages/finance/FinanceOverviewPage';
 
 // Import debug utilities (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -84,6 +90,8 @@ import PublicBookingWrapper from './pages/public/PublicBookingWrapper';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
+import './styles/sidebar.css';
+import './styles/rtl-layout.css';
 import { initializeUserOnAuth } from './utils/initializeUser';
 import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -358,7 +366,7 @@ function App() {
                 } />
                 <Route path="/finance" element={
                   <PageTransition>
-                    <FinanceAccountsPage />
+                    <FinanceOverviewPage />
                   </PageTransition>
                 } />
                 <Route path="/finance/accounts" element={
@@ -388,7 +396,22 @@ function App() {
                 } />
                 <Route path="/finance/reports" element={
                   <PageTransition>
-                    <FinanceReportsPage />
+                    <FinanceReportsPageEnhanced />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expenses" element={
+                  <PageTransition>
+                    <ExpenseManagementPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/categories" element={
+                  <PageTransition>
+                    <FinanceExpenseCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/new" element={
+                  <PageTransition>
+                    <NewExpensePage />
                   </PageTransition>
                 } />
                 <Route path="/finance/invoices" element={
@@ -504,6 +527,11 @@ function App() {
                 <Route path="/settings/categories/events" element={
                   <PageTransition>
                     <EventCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories/expenses" element={
+                  <PageTransition>
+                    <ExpenseCategoriesPage />
                   </PageTransition>
                 } />
                 <Route path="/settings/location-settings" element={

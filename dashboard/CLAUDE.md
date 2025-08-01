@@ -1161,16 +1161,158 @@ firebase deploy                          # Deploy everything
    
    **Note**: Superadmin system is functional but needs UI/UX enhancements and Arabic language support for production use.
 
-## Next Major Features
-- **Superadmin UI/UX Improvements**:
-  - Arabic language support for all superadmin interfaces
-  - Enhanced responsive design and mobile optimization
-  - Advanced filtering and search capabilities
-  - Audit logs viewer implementation
-- **Business Features**:
-  - Project tracking and management
-  - Invoice generation and billing
-  - Advanced reporting and analytics
-  - Calendar integration with appointments
-  - Enhanced notification system
-  - File storage and document management
+## Feature Development Roadmap (Prioritized by Business Impact)
+
+### 🔥 Phase 1: Revenue Protection & Growth (CRITICAL - 5-6 weeks)
+**Goal**: Immediate impact on revenue through better financial visibility and customer retention
+
+#### 1.1 Fix & Enhance Financial Analytics (Week 1)
+- **Current Issues**:
+  - FinanceReportsPage transaction filtering errors (FIXED)
+  - Limited financial insights
+  - No profit/loss statements
+- **Deliverables**:
+  - Complete financial dashboard with real metrics
+  - Profit & Loss statements
+  - Cash flow visualization
+  - Expense categorization and tracking
+  - Multi-period comparisons
+- **Dependencies**: finance.service.ts, transaction system, chart libraries
+
+#### 1.2 Customer Retention System (Weeks 2-4)
+- **Business Impact**: 20-30% reduction in no-shows, increased repeat bookings
+- **Features**:
+  - Automated appointment reminders (SMS/WhatsApp/Email)
+  - Service follow-up reminders (e.g., "Time for your monthly facial!")
+  - Birthday and special occasion greetings
+  - Loyalty points system
+  - Missed appointment win-back campaigns
+- **New Services Needed**:
+  - notification.service.ts (SMS/WhatsApp integration)
+  - loyalty.service.ts
+  - automation.service.ts
+- **Dependencies**: client data, appointment system, communication APIs
+
+#### 1.3 Enhanced Business Dashboard (Weeks 5-6)
+- **Current State**: Basic dashboard with placeholder data
+- **Enhancements**:
+  - Real-time KPI dashboard
+  - Staff performance rankings and metrics
+  - Service profitability analysis
+  - Customer lifetime value tracking
+  - Booking trends and peak hour analysis
+  - Revenue forecasting
+- **Dependencies**: All existing services for data aggregation
+
+### 📊 Phase 2: Operational Excellence (MEDIUM - 3-4 weeks)
+
+#### 2.1 Complete POS Transaction Recording
+- **Current Gaps**: Transaction recording might be incomplete
+- **Features**:
+  - Ensure all sales update inventory
+  - Payment method tracking
+  - Cash drawer reconciliation
+  - Daily sales reports
+  - Receipt customization
+- **Dependencies**: sale.service.ts, inventory.service.ts, finance.service.ts
+
+#### 2.2 Inventory Management Enhancements
+- **Current State**: Basic inventory tracking exists
+- **Enhancements**:
+  - Low stock alerts with customizable thresholds
+  - Expiry date tracking for products
+  - Stock movement history and audit trail
+  - Supplier management and purchase orders
+  - Barcode scanning support
+  - Stock take and adjustment features
+- **New Features**: supplier.service.ts, stockAlert.service.ts
+
+### 💰 Phase 3: Staff & Financial Management (MEDIUM - 4-5 weeks)
+
+#### 3.1 Staff Commission & Performance System
+- **Features**:
+  - Commission calculation rules (percentage, fixed, tiered)
+  - Service-based commission tracking
+  - Performance bonuses
+  - Tips tracking and distribution
+  - Monthly commission reports
+- **Dependencies**: staff.service.ts, appointment data, sales data
+
+#### 3.2 Basic Payroll Management
+- **Features**:
+  - Salary calculation with deductions
+  - Commission integration
+  - Leave management
+  - Payslip generation
+  - Export to accounting software
+- **New Services**: payroll.service.ts, leave.service.ts
+
+### 📱 Phase 4: Advanced Features (LOWER PRIORITY)
+
+#### 4.1 Marketing Campaigns
+- Email campaign builder
+- SMS blast messaging
+- Customer segmentation
+- Campaign analytics
+
+#### 4.2 Advanced Analytics
+- Predictive analytics
+- Customer churn prediction
+- Demand forecasting
+- Business intelligence dashboard
+
+#### 4.3 Mobile Applications
+- Staff mobile app (React Native)
+- Customer booking app
+- Owner dashboard app
+
+## Implementation Approach
+
+### Before Starting Each Phase:
+1. **Full System Analysis**
+   - Map all related components and services
+   - Identify dependencies and connections
+   - Review existing code for reusability
+   - Plan database schema changes
+
+2. **Research & Best Practices**
+   - Industry-specific requirements
+   - Compliance and regulations
+   - User experience patterns
+   - Performance considerations
+
+3. **Technical Planning**
+   - API design and endpoints
+   - State management approach
+   - Database indexing needs
+   - Security considerations
+
+### Quality Assurance:
+- Unit tests for critical business logic
+- Integration tests for workflows
+- Performance testing for large datasets
+- Security audit for sensitive features
+
+## Current System Architecture Overview
+
+### Core Services:
+- **Client Management**: client.service.ts, clientVisit.service.ts
+- **Appointment System**: appointment.service.ts, calendar components
+- **Staff Management**: staff.service.ts, schedule management
+- **Financial System**: finance.service.ts, transaction tracking
+- **Inventory**: inventory.service.ts, product management
+- **POS**: sale.service.ts, checkout flow
+
+### Key Integrations:
+- Firebase Auth for user management
+- Firestore for real-time data
+- Firebase Storage for images
+- Branch-based multi-tenancy
+- Role-based access control
+
+### Technical Debt to Address:
+- Standardize error handling across services
+- Implement proper TypeScript types
+- Add loading states consistently
+- Improve offline capabilities
+- Optimize Firestore queries

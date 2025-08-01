@@ -424,6 +424,40 @@ class FinanceService {
     }
   }
 
+  // Update a financial transaction
+  async updateTransaction(
+    companyId: string,
+    transactionId: string,
+    updates: Partial<FinancialTransaction>
+  ): Promise<void> {
+    try {
+      const transactionRef = doc(
+        db,
+        'companies',
+        companyId,
+        this.transactionsCollection,
+        transactionId
+      );
+
+      const updateData: any = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      };
+
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      await updateDoc(transactionRef, updateData);
+    } catch (error) {
+      console.error('Error updating financial transaction:', error);
+      throw error;
+    }
+  }
+
   // Get transactions with filters
   async getTransactions(
     companyId: string,
@@ -436,37 +470,10 @@ class FinanceService {
       let filterCount = 0;
       let hasBranchFilter = false;
       let hasDateFilter = false;
+      let needsClientSideSort = false;
 
-      // Apply filters and count them
-      if (filters?.branchId) {
-        constraints.push(where('branchId', '==', filters.branchId));
-        hasBranchFilter = true;
-        filterCount++;
-      }
-      if (filters?.type) {
-        constraints.push(where('type', '==', filters.type));
-        filterCount++;
-      }
-      if (filters?.status) {
-        constraints.push(where('status', '==', filters.status));
-        filterCount++;
-      }
-      if (filters?.accountId) {
-        constraints.push(where('accountId', '==', filters.accountId));
-        filterCount++;
-      }
-      if (filters?.category) {
-        constraints.push(where('category', '==', filters.category));
-        filterCount++;
-      }
-      if (filters?.paymentMethod) {
-        constraints.push(where('paymentMethod', '==', filters.paymentMethod));
-        filterCount++;
-      }
-      if (filters?.digitalWalletType) {
-        constraints.push(where('digitalWalletPayment.walletType', '==', filters.digitalWalletType));
-        filterCount++;
-      }
+      // Apply only date filters to the query to avoid index requirements
+      // All other filters will be applied client-side
       if (filters?.startDate) {
         constraints.push(where('date', '>=', Timestamp.fromDate(filters.startDate)));
         hasDateFilter = true;
@@ -475,27 +482,20 @@ class FinanceService {
         constraints.push(where('date', '<=', Timestamp.fromDate(filters.endDate)));
         hasDateFilter = true;
       }
+      
+      // Check if we have filters that require client-side processing
+      needsClientSideSort = !!(filters?.branchId || filters?.type || filters?.status || 
+                              filters?.accountId || filters?.category || filters?.paymentMethod || 
+                              filters?.digitalWalletType || filters?.search || 
+                              filters?.minAmount || filters?.maxAmount);
 
-      // Use server-side sorting only when we have no filters OR only date filters
-      // Any non-date filters require client-side sorting to avoid index requirements
-      const hasNonDateFilters = !!(filters?.branchId || filters?.type || filters?.status || 
-                                   filters?.accountId || filters?.category || filters?.paymentMethod || 
-                                   filters?.digitalWalletType);
-      const needsClientSideSort = hasNonDateFilters;
+      // Always use simple query with orderBy to avoid index requirements
+      constraints.push(orderBy('date', 'desc'));
       
-      // Only add orderBy if we can use server-side sorting (no non-date filters)
-      if (!needsClientSideSort) {
-        constraints.push(orderBy('date', 'desc'));
-      }
-      
-      // Don't use limit when we need client-side operations
-      if (!needsClientSideSort) {
-        constraints.push(limit(pageSize));
-        // Pagination
-        if (lastDoc) {
-          constraints.push(startAfter(lastDoc));
-        }
-      }
+      // Since we're filtering client-side, we need to get more documents
+      // to ensure we have enough after filtering
+      const queryLimit = filters ? pageSize * 5 : pageSize;
+      constraints.push(limit(queryLimit));
 
       const q = query(
         collection(db, 'companies', companyId, this.transactionsCollection),
@@ -511,7 +511,15 @@ class FinanceService {
           ...doc.data(),
         } as FinancialTransaction;
 
-        // Apply client-side filters
+        // Apply all client-side filters
+        if (filters?.branchId && transaction.branchId !== filters.branchId) return;
+        if (filters?.type && transaction.type !== filters.type) return;
+        if (filters?.status && transaction.status !== filters.status) return;
+        if (filters?.accountId && transaction.accountId !== filters.accountId) return;
+        if (filters?.category && transaction.category !== filters.category) return;
+        if (filters?.paymentMethod && transaction.paymentMethod !== filters.paymentMethod) return;
+        if (filters?.digitalWalletType && transaction.digitalWalletPayment?.walletType !== filters.digitalWalletType) return;
+        
         if (filters?.search) {
           const searchLower = filters.search.toLowerCase();
           const matchesSearch = 
@@ -538,30 +546,16 @@ class FinanceService {
         });
       }
 
-      // Apply pagination client-side if needed
-      let lastDocResult = null;
-      if (needsClientSideSort) {
-        // Find the start index if lastDoc is provided
-        let startIndex = 0;
-        if (lastDoc) {
-          const lastDocId = lastDoc.id;
-          startIndex = transactions.findIndex(t => t.id === lastDocId) + 1;
-        }
-        
-        // Slice for pagination
-        transactions = transactions.slice(startIndex, startIndex + pageSize);
-        
-        // Set lastDoc for next page
-        if (transactions.length === pageSize && startIndex + pageSize < snapshot.docs.length) {
-          const lastTransactionId = transactions[transactions.length - 1].id;
-          lastDocResult = snapshot.docs.find(doc => doc.id === lastTransactionId) || null;
-        }
-      } else {
-        lastDocResult = snapshot.docs[snapshot.docs.length - 1] || null;
-      }
+      // Limit results to requested page size
+      const finalTransactions = transactions.slice(0, pageSize);
+      
+      // Get the last document for pagination
+      const lastDocResult = finalTransactions.length > 0 
+        ? snapshot.docs[snapshot.docs.length - 1] || null
+        : null;
 
       return {
-        transactions,
+        transactions: finalTransactions,
         lastDoc: lastDocResult,
       };
     } catch (error) {

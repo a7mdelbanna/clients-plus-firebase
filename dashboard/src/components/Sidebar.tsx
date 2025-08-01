@@ -665,6 +665,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, onOpen }) => {
               height: '100%',
               borderRight: `1px solid ${theme.palette.divider}`,
               transition: 'width 0.3s',
+              backgroundColor: theme.palette.background.paper,
             }}
           >
             {drawerContent}
