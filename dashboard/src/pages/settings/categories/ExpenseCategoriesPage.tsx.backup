@@ -27,6 +27,7 @@ import {
   MenuItem,
   FormControlLabel,
   Switch,
+  Grid,
   Alert,
 } from '@mui/material';
 import PageContainer from '../../../components/PageContainer';
@@ -48,80 +49,69 @@ import type { ExpenseCategory } from '../../../types/expense.types';
 import type { SelectChangeEvent } from '@mui/material/Select';
 
 // Category icons mapping
-const categoryIcons: Record<string, React.ComponentType> = {
-  money: AttachMoney,
-  receipt: Receipt,
-  repeat: Repeat,
-  category: Category,
-  check: CheckCircle,
-  cancel: Cancel,
+const categoryIcons: { [key: string]: any } = {
+  Business: () => <Category />,
+  AccountBalance: () => <AttachMoney />,
+  LocalShipping: () => <Category />,
+  Campaign: () => <Category />,
+  Engineering: () => <Category />,
+  BusinessCenter: () => <Category />,
+  Security: () => <Category />,
+  MoreHoriz: () => <Category />,
 };
 
-interface CategoryFormData {
-  name: string;
-  nameAr: string;
-  description: string;
-  descriptionAr: string;
-  icon: string;
-  color: string;
-  parentId: string;
-  budgetLimit: string;
-  isFixed: boolean;
-  requiresApproval: boolean;
-  approvalThreshold: string;
-}
-
-const ExpenseCategoriesPage: React.FC = () => {
+export default function ExpenseCategoriesPage() {
   const theme = useTheme();
   const { currentUser } = useAuth();
   const isRTL = theme.direction === 'rtl';
 
   // State
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CategoryFormData>({
+
+  // Form state
+  const [formData, setFormData] = useState({
     name: '',
     nameAr: '',
-    description: '',
-    descriptionAr: '',
-    icon: 'category',
-    color: '#8B5CF6',
     parentId: '',
     budgetLimit: '',
-    isFixed: false,
     requiresApproval: false,
     approvalThreshold: '',
+    requiresReceipt: true,
+    allowRecurring: false,
+    description: '',
+    descriptionAr: '',
   });
 
   // Load categories
   useEffect(() => {
+    const loadCategories = async () => {
+      if (!currentUser?.companyId) return;
+
+      try {
+        setLoading(true);
+        const data = await expenseService.getCategories(currentUser.companyId);
+        setCategories(data);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        setError(isRTL ? 'حدث خطأ في تحميل الفئات' : 'Error loading categories');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadCategories();
-  }, [currentUser]);
+  }, [currentUser, isRTL]);
 
-  const loadCategories = async () => {
-    if (!currentUser?.companyId) return;
-
-    try {
-      setLoading(true);
-      const data = await expenseService.getCategories(currentUser.companyId);
-      setCategories(data);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      setError(isRTL ? 'خطأ في تحميل الفئات' : 'Error loading categories');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Filter categories
-  const filteredCategories = categories.filter(category => 
-    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    category.nameAr.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter categories based on search
+  const filteredCategories = categories.filter(category =>
+    (category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     category.nameAr.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Format currency
@@ -141,30 +131,28 @@ const ExpenseCategoriesPage: React.FC = () => {
       setFormData({
         name: category.name,
         nameAr: category.nameAr,
-        description: category.description || '',
-        descriptionAr: category.descriptionAr || '',
-        icon: category.icon || 'category',
-        color: category.color || '#8B5CF6',
         parentId: category.parentId || '',
         budgetLimit: category.budgetLimit?.toString() || '',
-        isFixed: category.isFixed || false,
         requiresApproval: category.requiresApproval || false,
         approvalThreshold: category.approvalThreshold?.toString() || '',
+        requiresReceipt: category.requiresReceipt || true,
+        allowRecurring: category.allowRecurring || false,
+        description: category.description || '',
+        descriptionAr: category.descriptionAr || '',
       });
     } else {
       setEditingCategory(null);
       setFormData({
         name: '',
         nameAr: '',
-        description: '',
-        descriptionAr: '',
-        icon: 'category',
-        color: '#8B5CF6',
         parentId: '',
         budgetLimit: '',
-        isFixed: false,
         requiresApproval: false,
         approvalThreshold: '',
+        requiresReceipt: true,
+        allowRecurring: false,
+        description: '',
+        descriptionAr: '',
       });
     }
     setOpenDialog(true);
@@ -172,26 +160,23 @@ const ExpenseCategoriesPage: React.FC = () => {
 
   // Handle save
   const handleSave = async () => {
-    if (!currentUser?.companyId || !formData.name || !formData.nameAr) {
-      setError(isRTL ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
-      return;
-    }
+    if (!currentUser?.companyId) return;
 
     try {
       const categoryData = {
         name: formData.name,
         nameAr: formData.nameAr,
-        description: formData.description,
-        descriptionAr: formData.descriptionAr,
-        icon: formData.icon,
-        color: formData.color,
         parentId: formData.parentId || undefined,
         budgetLimit: formData.budgetLimit ? parseFloat(formData.budgetLimit) : undefined,
-        isFixed: formData.isFixed,
+        monthlyBudget: formData.budgetLimit ? parseFloat(formData.budgetLimit) : undefined,
         requiresApproval: formData.requiresApproval,
-        approvalThreshold: formData.approvalThreshold && formData.requiresApproval 
-          ? parseFloat(formData.approvalThreshold) 
-          : undefined,
+        approvalThreshold: formData.approvalThreshold ? parseFloat(formData.approvalThreshold) : undefined,
+        requiresReceipt: formData.requiresReceipt,
+        allowRecurring: formData.allowRecurring,
+        description: formData.description || undefined,
+        descriptionAr: formData.descriptionAr || undefined,
+        icon: 'Category',
+        color: '#' + Math.floor(Math.random()*16777215).toString(16), // Random color
         isActive: true,
       };
 
@@ -334,22 +319,16 @@ const ExpenseCategoriesPage: React.FC = () => {
                   <TableRow key={category.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar
-                          sx={{
-                            bgcolor: category.color || theme.palette.primary.main,
-                            width: 40,
-                            height: 40,
-                          }}
-                        >
+                        <Avatar sx={{ bgcolor: category.color, width: 36, height: 36 }}>
                           <Icon />
                         </Avatar>
                         <Box>
-                          <Typography variant="body2" fontWeight={500}>
+                          <Typography variant="body2" fontWeight="medium">
                             {isRTL ? category.nameAr : category.name}
                           </Typography>
                           {category.description && (
                             <Typography variant="caption" color="text.secondary">
-                              {isRTL ? category.descriptionAr : category.description}
+                              {isRTL ? category.descriptionAr || category.description : category.description}
                             </Typography>
                           )}
                         </Box>
@@ -360,40 +339,54 @@ const ExpenseCategoriesPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {category.isFixed && (
-                          <Chip 
-                            label={isRTL ? 'ثابت' : 'Fixed'} 
-                            size="small" 
-                            color="primary"
+                        {category.requiresApproval && (
+                          <Chip
+                            size="small"
+                            icon={<CheckCircle sx={{ fontSize: 16 }} />}
+                            label={isRTL ? 'يتطلب موافقة' : 'Requires Approval'}
+                            color="warning"
+                            sx={{ fontSize: '0.75rem' }}
                           />
                         )}
-                        {category.requiresApproval && (
-                          <Chip 
-                            label={isRTL ? 'يتطلب موافقة' : 'Requires Approval'} 
-                            size="small" 
-                            color="warning"
+                        {category.requiresReceipt && (
+                          <Chip
+                            size="small"
+                            icon={<Receipt sx={{ fontSize: 16 }} />}
+                            label={isRTL ? 'يتطلب إيصال' : 'Requires Receipt'}
+                            color="info"
+                            sx={{ fontSize: '0.75rem' }}
+                          />
+                        )}
+                        {category.allowRecurring && (
+                          <Chip
+                            size="small"
+                            icon={<Repeat sx={{ fontSize: 16 }} />}
+                            label={isRTL ? 'يسمح بالتكرار' : 'Allow Recurring'}
+                            color="secondary"
+                            sx={{ fontSize: '0.75rem' }}
                           />
                         )}
                       </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
+                        size="small"
                         label={category.isActive ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'غير نشط' : 'Inactive')}
                         color={category.isActive ? 'success' : 'default'}
-                        size="small"
                       />
                     </TableCell>
                     <TableCell align="right">
                       <IconButton
                         size="small"
                         onClick={() => handleOpenDialog(category)}
+                        disabled={category.isSystem}
                       >
                         <Edit />
                       </IconButton>
                       <IconButton
                         size="small"
-                        onClick={() => category.id && handleDelete(category.id)}
-                        color="error"
+                        onClick={() => handleDelete(category.id!)}
+                        disabled={category.isSystem}
                       >
                         <Delete />
                       </IconButton>
@@ -414,9 +407,8 @@ const ExpenseCategoriesPage: React.FC = () => {
             : (isRTL ? 'إضافة فئة جديدة' : 'Add New Category')}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            {/* Row 1: Names */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label={isRTL ? 'اسم الفئة (إنجليزي)' : 'Category Name (English)'}
@@ -424,6 +416,8 @@ const ExpenseCategoriesPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label={isRTL ? 'اسم الفئة (عربي)' : 'Category Name (Arabic)'}
@@ -431,17 +425,14 @@ const ExpenseCategoriesPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
                 required
               />
-            </Box>
-
-            {/* Row 2: Parent Category and Budget */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <FormControl fullWidth sx={{ minWidth: { sm: '50%' } }}>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
                 <InputLabel>{isRTL ? 'الفئة الرئيسية' : 'Parent Category'}</InputLabel>
                 <Select
-                  value={formData.parentId || ''}
+                  value={formData.parentId}
                   onChange={(e: SelectChangeEvent) => setFormData({ ...formData, parentId: e.target.value })}
                   label={isRTL ? 'الفئة الرئيسية' : 'Parent Category'}
-                  displayEmpty
                 >
                   <MenuItem value="">
                     <em>{isRTL ? 'لا يوجد' : 'None'}</em>
@@ -455,6 +446,8 @@ const ExpenseCategoriesPage: React.FC = () => {
                     ))}
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label={isRTL ? 'الميزانية الشهرية' : 'Monthly Budget'}
@@ -465,37 +458,28 @@ const ExpenseCategoriesPage: React.FC = () => {
                   startAdornment: <InputAdornment position="start">EGP</InputAdornment>,
                 }}
               />
-            </Box>
-
-            {/* Row 3: Descriptions */}
-            <TextField
-              fullWidth
-              label={isRTL ? 'الوصف (إنجليزي)' : 'Description (English)'}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              multiline
-              rows={2}
-            />
-            <TextField
-              fullWidth
-              label={isRTL ? 'الوصف (عربي)' : 'Description (Arabic)'}
-              value={formData.descriptionAr}
-              onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
-              multiline
-              rows={2}
-            />
-
-            {/* Row 4: Toggles */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.isFixed}
-                    onChange={(e) => setFormData({ ...formData, isFixed: e.target.checked })}
-                  />
-                }
-                label={isRTL ? 'مصروف ثابت' : 'Fixed Expense'}
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={isRTL ? 'الوصف (إنجليزي)' : 'Description (English)'}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                multiline
+                rows={2}
               />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={isRTL ? 'الوصف (عربي)' : 'Description (Arabic)'}
+                value={formData.descriptionAr}
+                onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
+                multiline
+                rows={2}
+              />
+            </Grid>
+            <Grid item xs={12}>
               <FormControlLabel
                 control={
                   <Switch
@@ -505,37 +489,59 @@ const ExpenseCategoriesPage: React.FC = () => {
                 }
                 label={isRTL ? 'يتطلب موافقة' : 'Requires Approval'}
               />
-            </Box>
-
-            {/* Approval Threshold */}
+            </Grid>
             {formData.requiresApproval && (
-              <TextField
-                fullWidth
-                label={isRTL ? 'حد الموافقة' : 'Approval Threshold'}
-                type="number"
-                value={formData.approvalThreshold}
-                onChange={(e) => setFormData({ ...formData, approvalThreshold: e.target.value })}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">EGP</InputAdornment>,
-                }}
-                helperText={isRTL ? 'المبلغ الذي يتطلب موافقة' : 'Amount that requires approval'}
-              />
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label={isRTL ? 'حد الموافقة' : 'Approval Threshold'}
+                  type="number"
+                  value={formData.approvalThreshold}
+                  onChange={(e) => setFormData({ ...formData, approvalThreshold: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">EGP</InputAdornment>,
+                  }}
+                  helperText={isRTL ? 'المبلغ الذي يتطلب موافقة' : 'Amount that requires approval'}
+                />
+              </Grid>
             )}
-          </Box>
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.requiresReceipt}
+                    onChange={(e) => setFormData({ ...formData, requiresReceipt: e.target.checked })}
+                  />
+                }
+                label={isRTL ? 'يتطلب إيصال' : 'Requires Receipt'}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.allowRecurring}
+                    onChange={(e) => setFormData({ ...formData, allowRecurring: e.target.checked })}
+                  />
+                }
+                label={isRTL ? 'يسمح بالتكرار' : 'Allow Recurring'}
+              />
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>
             {isRTL ? 'إلغاء' : 'Cancel'}
           </Button>
-          <Button onClick={handleSave} variant="contained">
-            {editingCategory
-              ? (isRTL ? 'تحديث' : 'Update')
-              : (isRTL ? 'إضافة' : 'Add')}
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={!formData.name || !formData.nameAr}
+          >
+            {editingCategory ? (isRTL ? 'تحديث' : 'Update') : (isRTL ? 'إضافة' : 'Add')}
           </Button>
         </DialogActions>
       </Dialog>
     </PageContainer>
   );
-};
-
-export default ExpenseCategoriesPage;
+}
