@@ -178,22 +178,32 @@ const ExpenseCategoriesPage: React.FC = () => {
     }
 
     try {
-      const categoryData = {
+      const categoryData: any = {
         name: formData.name,
         nameAr: formData.nameAr,
-        description: formData.description,
-        descriptionAr: formData.descriptionAr,
         icon: formData.icon,
         color: formData.color,
-        parentId: formData.parentId || undefined,
-        budgetLimit: formData.budgetLimit ? parseFloat(formData.budgetLimit) : undefined,
         isFixed: formData.isFixed,
         requiresApproval: formData.requiresApproval,
-        approvalThreshold: formData.approvalThreshold && formData.requiresApproval 
-          ? parseFloat(formData.approvalThreshold) 
-          : undefined,
         isActive: true,
       };
+
+      // Only add optional fields if they have values
+      if (formData.description) {
+        categoryData.description = formData.description;
+      }
+      if (formData.descriptionAr) {
+        categoryData.descriptionAr = formData.descriptionAr;
+      }
+      if (formData.parentId) {
+        categoryData.parentId = formData.parentId;
+      }
+      if (formData.budgetLimit) {
+        categoryData.budgetLimit = parseFloat(formData.budgetLimit);
+      }
+      if (formData.requiresApproval && formData.approvalThreshold) {
+        categoryData.approvalThreshold = parseFloat(formData.approvalThreshold);
+      }
 
       if (editingCategory) {
         await expenseService.updateCategory(currentUser.companyId, editingCategory.id!, categoryData);
