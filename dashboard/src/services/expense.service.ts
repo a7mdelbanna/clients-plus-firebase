@@ -222,7 +222,7 @@ class ExpenseService {
     try {
       const q = query(
         collection(db, 'companies', companyId, this.categoriesCollection),
-        orderBy('order', 'asc')
+        orderBy('createdAt', 'desc')
       );
       
       const snapshot = await getDocs(q);
@@ -248,7 +248,7 @@ class ExpenseService {
   ): Unsubscribe {
     const q = query(
       collection(db, 'companies', companyId, this.categoriesCollection),
-      orderBy('order', 'asc')
+      orderBy('createdAt', 'desc')
     );
     
     return onSnapshot(q, (snapshot) => {

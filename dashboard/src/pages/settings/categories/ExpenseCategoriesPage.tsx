@@ -213,10 +213,28 @@ const ExpenseCategoriesPage: React.FC = () => {
         setSuccess(isRTL ? 'تم إنشاء الفئة بنجاح' : 'Category created successfully');
       }
 
-      // Reload categories
-      const data = await expenseService.getCategories(currentUser.companyId);
-      setCategories(data);
+      // Close dialog first to avoid aria-hidden issues
       setOpenDialog(false);
+      
+      // Reset form
+      setFormData({
+        name: '',
+        nameAr: '',
+        description: '',
+        descriptionAr: '',
+        icon: 'category',
+        color: '#8B5CF6',
+        parentId: '',
+        budgetLimit: '',
+        isFixed: false,
+        requiresApproval: false,
+        approvalThreshold: '',
+      });
+      
+      // Reload categories after a short delay
+      setTimeout(async () => {
+        await loadCategories();
+      }, 100);
     } catch (error) {
       console.error('Error saving category:', error);
       setError(isRTL ? 'حدث خطأ في حفظ الفئة' : 'Error saving category');
