@@ -181,16 +181,17 @@ class ExpenseService {
   // ==================== EXPENSE CATEGORIES ====================
 
   // Create expense category
-  async createCategory(category: Omit<ExpenseCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  async createCategory(companyId: string, category: Omit<ExpenseCategory, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
       const categoryData = {
         ...category,
+        companyId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
       const docRef = await addDoc(
-        collection(db, 'companies', category.companyId, this.categoriesCollection),
+        collection(db, 'companies', companyId, this.categoriesCollection),
         categoryData
       );
 

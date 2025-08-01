@@ -47,7 +47,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick }) => {
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
-        {/* Left Side - Logo and Menu */}
+        {/* Left Side - Menu Button */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           {/* Menu Button for Mobile */}
           {isMobile && (
@@ -65,33 +65,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick }) => {
             >
               <MenuIcon />
             </IconButton>
-          )}
-          
-          {/* Logo - Only show on desktop when sidebar is collapsed */}
-          {!isMobile && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 36,
-                  height: 36,
-                  bgcolor: theme.palette.primary.main,
-                  fontSize: '0.875rem',
-                  fontWeight: 700,
-                }}
-              >
-                C+
-              </Avatar>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  fontWeight: 700,
-                  color: theme.palette.text.primary,
-                  display: { xs: 'none', sm: 'block' },
-                }}
-              >
-                Clients+
-              </Typography>
-            </Box>
           )}
         </Box>
 
