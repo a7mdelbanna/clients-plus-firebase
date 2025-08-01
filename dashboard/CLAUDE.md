@@ -1065,6 +1065,55 @@ firebase deploy                          # Deploy everything
       - Avoids stale references when components re-render
     - **Prevention**: Always render Menu components close to their anchor elements
 
+31. **Form Fields with Different Heights (MUI Grid Migration)**:
+    - **Error**: Form fields have inconsistent heights, MUI Grid warnings about deprecated props (item, xs, sm)
+    - **Root Cause**: Using MUI Grid v1 syntax with v2, inconsistent field types in same row
+    - **Solution**: Replace Grid with Box flexbox layout:
+      ```typescript
+      // Before (causes warnings and height issues):
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <TextField />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <Select />  {/* Different height than TextField */}
+        </Grid>
+      </Grid>
+      
+      // After (consistent heights, no warnings):
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+          <TextField fullWidth />
+          <FormControl fullWidth>
+            <Select />
+          </FormControl>
+        </Box>
+      </Box>
+      ```
+    - **Key Points**:
+      - Use Box with flexbox for layouts instead of deprecated Grid
+      - Group similar field types in same row
+      - Ensure all fields in a row are wrapped properly (TextField vs FormControl+Select)
+    - **Prevention**: Always use Box with flexbox for form layouts, avoid mixing Grid v1 syntax
+
+32. **MUI Select Label Not Floating to Top**:
+    - **Error**: Select dropdown label appears inside the field instead of floating above
+    - **Root Cause**: Empty Select with displayEmpty prop causes label positioning issues
+    - **Solution**: Force label to shrink position:
+      ```typescript
+      // Before (label stays inside):
+      <FormControl fullWidth>
+        <InputLabel>Parent Category</InputLabel>
+        <Select value="" displayEmpty>
+          
+      // After (label floats above):
+      <FormControl fullWidth>
+        <InputLabel shrink={true}>Parent Category</InputLabel>
+        <Select value="" displayEmpty notched>
+      ```
+    - **Additional Fix**: Ensure value is controlled: `value={formData.field || ''}`
+    - **Prevention**: Always use shrink={true} on InputLabel when using displayEmpty on Select
+
 ### Superadmin Dashboard (2025-07-22 - Evening & 2025-07-23 - Early Morning)
    - ✅ **Secure Access Architecture**:
      - Random 32-character URL hash (e.g., `/sa-7f8e3b2a9c1d4e5f6789abcdef012345/dashboard`)

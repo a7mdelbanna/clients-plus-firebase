@@ -436,12 +436,13 @@ const ExpenseCategoriesPage: React.FC = () => {
             {/* Row 2: Parent Category and Budget */}
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <FormControl fullWidth sx={{ minWidth: { sm: '50%' } }}>
-                <InputLabel>{isRTL ? 'الفئة الرئيسية' : 'Parent Category'}</InputLabel>
+                <InputLabel shrink={true}>{isRTL ? 'الفئة الرئيسية' : 'Parent Category'}</InputLabel>
                 <Select
                   value={formData.parentId || ''}
                   onChange={(e: SelectChangeEvent) => setFormData({ ...formData, parentId: e.target.value })}
                   label={isRTL ? 'الفئة الرئيسية' : 'Parent Category'}
                   displayEmpty
+                  notched
                 >
                   <MenuItem value="">
                     <em>{isRTL ? 'لا يوجد' : 'None'}</em>
