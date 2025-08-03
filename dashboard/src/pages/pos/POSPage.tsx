@@ -55,6 +55,7 @@ import {
   CreditCard,
   LocalAtm,
   AccountBalanceWallet,
+  AccountBalance,
   Calculate,
   Inventory2,
 } from '@mui/icons-material';
