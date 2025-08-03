@@ -201,7 +201,7 @@ const TransfersPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg">
+    <Container maxWidth="lg" sx={{ mt: 3 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>

@@ -605,6 +605,11 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
 4. **Responsive Design**: Works seamlessly on desktop and mobile
 5. **Theme Customization**: Each company can have its own brand colors
 6. **Security First**: Proper authentication and authorization at all levels
+7. **Consistent Page Layout**: 
+   - All pages should have `mt: 3` (24px) top margin on the main Container element
+   - This creates consistent spacing between the page header and content
+   - Example: `<Container maxWidth="xl" sx={{ mt: 3 }}>`
+   - Applied to all finance pages and should be standard for new pages
 
 ## Important Commands
 ```bash
