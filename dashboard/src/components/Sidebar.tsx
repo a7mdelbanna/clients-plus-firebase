@@ -179,13 +179,6 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    id: 'expenses',
-    title: 'Expenses',
-    titleAr: 'المصروفات',
-    icon: <MoneyOff />,
-    path: '/finance/expenses',
-  },
-  {
     id: 'payroll',
     title: 'Payroll',
     titleAr: 'الرواتب',
