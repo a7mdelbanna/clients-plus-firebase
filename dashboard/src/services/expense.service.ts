@@ -58,8 +58,6 @@ class ExpenseService {
       icon: 'Business',
       color: '#1976d2',
       order: 1,
-      requiresApproval: true,
-      approvalThreshold: 5000,
       requiresReceipt: true,
       allowRecurring: true,
       isActive: true,
@@ -71,7 +69,6 @@ class ExpenseService {
       icon: 'AccountBalance',
       color: '#388e3c',
       order: 2,
-      requiresApproval: true,
       requiresReceipt: true,
       allowRecurring: true,
       isActive: true,
@@ -83,8 +80,6 @@ class ExpenseService {
       icon: 'LocalShipping',
       color: '#7b1fa2',
       order: 3,
-      requiresApproval: false,
-      approvalThreshold: 10000,
       requiresReceipt: true,
       allowRecurring: false,
       isActive: true,
@@ -96,8 +91,6 @@ class ExpenseService {
       icon: 'Campaign',
       color: '#d32f2f',
       order: 4,
-      requiresApproval: true,
-      approvalThreshold: 3000,
       requiresReceipt: true,
       allowRecurring: false,
       isActive: true,
@@ -109,8 +102,6 @@ class ExpenseService {
       icon: 'Engineering',
       color: '#f57c00',
       order: 5,
-      requiresApproval: false,
-      approvalThreshold: 5000,
       requiresReceipt: true,
       allowRecurring: false,
       isActive: true,
@@ -122,8 +113,6 @@ class ExpenseService {
       icon: 'BusinessCenter',
       color: '#0288d1',
       order: 6,
-      requiresApproval: true,
-      approvalThreshold: 5000,
       requiresReceipt: true,
       allowRecurring: false,
       isActive: true,
@@ -135,7 +124,6 @@ class ExpenseService {
       icon: 'Security',
       color: '#689f38',
       order: 7,
-      requiresApproval: true,
       requiresReceipt: true,
       allowRecurring: true,
       isActive: true,
@@ -147,8 +135,6 @@ class ExpenseService {
       icon: 'MoreHoriz',
       color: '#616161',
       order: 99,
-      requiresApproval: false,
-      approvalThreshold: 2000,
       requiresReceipt: false,
       allowRecurring: false,
       isActive: true,
@@ -412,27 +398,12 @@ class ExpenseService {
     autoApprove: boolean = false
   ): Promise<string> {
     try {
-      // Check if approval is required
-      let requiresApproval = false;
-      const category = await this.getCategoryById(expense.companyId, expense.expenseDetails.categoryId);
-      
-      if (category) {
-        requiresApproval = category.requiresApproval;
-        if (category.approvalThreshold && expense.totalAmount < category.approvalThreshold) {
-          requiresApproval = false;
-        }
-      }
-      
-      // Set approval status
-      expense.expenseDetails.approvalStatus = requiresApproval && !autoApprove ? 'pending' : 'approved';
+      // Set status to completed
+      expense.status = 'completed' as const;
       
       // Create the financial transaction through finance service
       const transactionId = await financeService.createTransaction(expense);
       
-      // If approval is required, create workflow
-      if (requiresApproval && !autoApprove) {
-        await this.createApprovalWorkflow(expense.companyId, transactionId, expense);
-      }
       
       // Skip vendor statistics update - we're using contacts now, not vendors
       // Vendor stats can be tracked through transaction history if needed

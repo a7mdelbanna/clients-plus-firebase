@@ -78,7 +78,6 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
     invoiceNumber: '',
     description: '',
     paymentMethod: 'cash',
-    status: 'pending',
     notes: '',
   });
 
@@ -250,7 +249,6 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
           categoryId: formData.categoryId,
           vendorId: formData.vendorId,
           receipts: [],
-          approvalStatus: formData.status === 'approved' ? 'approved' : formData.status === 'pending' ? 'pending' : 'draft',
           isRecurring: false,
           itemDetails: items
             .filter(item => item.description && item.amount > 0)
@@ -267,7 +265,7 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
         createdBy: currentUser.uid,
       };
 
-      await expenseService.createExpenseTransaction(expenseData, formData.status === 'approved');
+      await expenseService.createExpenseTransaction(expenseData, true);
       
       toast.success('تم إنشاء المصروف بنجاح');
       
@@ -280,7 +278,6 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
         invoiceNumber: '',
         description: '',
         paymentMethod: 'cash',
-        status: 'pending',
         notes: '',
       });
       setItems([{ description: '', amount: 0, quantity: 1, total: 0 }]);
@@ -563,19 +560,6 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
                     <MenuItem value="bank_transfer">تحويل بنكي</MenuItem>
                     <MenuItem value="check">شيك</MenuItem>
                     <MenuItem value="credit">آجل</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl sx={{ flex: 1 }}>
-                  <InputLabel>الحالة</InputLabel>
-                  <Select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    label="الحالة"
-                  >
-                    <MenuItem value="pending">معلق</MenuItem>
-                    <MenuItem value="approved">معتمد</MenuItem>
-                    <MenuItem value="paid">مدفوع</MenuItem>
-                    <MenuItem value="cancelled">ملغي</MenuItem>
                   </Select>
                 </FormControl>
               </Box>

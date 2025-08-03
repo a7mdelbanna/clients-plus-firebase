@@ -90,10 +90,10 @@ const mockTrendData = Array.from({ length: 30 }, (_, i) => {
 });
 
 const mockRecentExpenses = [
-  { id: 1, vendor: 'شركة النور للتجميل', amount: 3500, category: 'المنتجات', categoryColor: '#7b1fa2', time: '2 hours ago', status: 'approved' },
-  { id: 2, vendor: 'شركة الكهرباء', amount: 1200, category: 'المرافق', categoryColor: '#1976d2', time: 'Today', status: 'approved' },
-  { id: 3, vendor: 'وكالة الإعلان الرقمي', amount: 5000, category: 'التسويق', categoryColor: '#d32f2f', time: 'Yesterday', status: 'pending' },
-  { id: 4, vendor: 'شركة الصيانة', amount: 800, category: 'الصيانة', categoryColor: '#f57c00', time: '2 days ago', status: 'approved' },
+  { id: 1, vendor: 'شركة النور للتجميل', amount: 3500, category: 'المنتجات', categoryColor: '#7b1fa2', time: '2 hours ago' },
+  { id: 2, vendor: 'شركة الكهرباء', amount: 1200, category: 'المرافق', categoryColor: '#1976d2', time: 'Today' },
+  { id: 3, vendor: 'وكالة الإعلان الرقمي', amount: 5000, category: 'التسويق', categoryColor: '#d32f2f', time: 'Yesterday' },
+  { id: 4, vendor: 'شركة الصيانة', amount: 800, category: 'الصيانة', categoryColor: '#f57c00', time: '2 days ago' },
 ];
 
 const mockTopVendors = [
@@ -384,8 +384,7 @@ export default function ExpenseDashboard() {
           amount: trans.amount,
           category: isRTL ? category?.nameAr : category?.name,
           categoryColor: category?.color || '#666',
-          time: timeAgo,
-          status: trans.metadata?.approvalStatus || 'approved'
+          time: timeAgo
         };
       });
     
@@ -427,7 +426,6 @@ export default function ExpenseDashboard() {
             categoryId: categories[0].id!,
             vendorId: '',
             receipts: [],
-            approvalStatus: 'approved' as const,
             isRecurring: false,
           },
           createdBy: currentUser.uid,
@@ -705,13 +703,9 @@ export default function ExpenseDashboard() {
                         <Typography variant="body2" fontWeight="medium">
                           {formatCurrency(expense.amount)}
                         </Typography>
-                        <Chip
-                          label={expense.status === 'approved' ? (isRTL ? 'معتمد' : 'Approved') : (isRTL ? 'معلق' : 'Pending')}
-                          size="small"
-                          color={expense.status === 'approved' ? 'success' : 'warning'}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.75rem' }}
-                        />
+                        <Typography variant="caption" color="text.secondary">
+                          {expense.category}
+                        </Typography>
                       </Box>
                     </ListItem>
                     {index < Math.min(recentExpenses.length, 4) - 1 && <Divider />}

@@ -129,9 +129,8 @@ export default function ExpenseList({ onAddExpense }: ExpenseListProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'success';
-      case 'pending': return 'warning';
-      case 'rejected': return 'error';
+      case 'completed': return 'success';
+      case 'cancelled': return 'error';
       default: return 'default';
     }
   };
@@ -139,10 +138,8 @@ export default function ExpenseList({ onAddExpense }: ExpenseListProps) {
   const getStatusLabel = (status: string) => {
     if (isRTL) {
       switch (status) {
-        case 'approved': return 'معتمد';
-        case 'pending': return 'معلق';
-        case 'rejected': return 'مرفوض';
         case 'completed': return 'مكتمل';
+        case 'cancelled': return 'ملغي';
         default: return status;
       }
     }
@@ -304,7 +301,7 @@ export default function ExpenseList({ onAddExpense }: ExpenseListProps) {
                   <Chip
                     label={getStatusLabel(expense.status || 'completed')}
                     size="small"
-                    color={getStatusColor(expense.expenseDetails?.approvalStatus || expense.status)}
+                    color={getStatusColor(expense.status || 'completed')}
                   />
                 </TableCell>
                 <TableCell>{expense.reference || '-'}</TableCell>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import NewExpenseDialog from '../../../components/finance/expense/NewExpenseDialog';
 import {
   Box,
   Paper,
@@ -43,7 +44,6 @@ import {
   ArrowUpward,
   ArrowDownward,
   MoreVert,
-  PendingActions,
   Assessment,
   Settings,
   FileDownload,
@@ -55,7 +55,6 @@ import { useBranch } from '../../../contexts/BranchContext';
 import { motion } from 'framer-motion';
 import ExpenseDashboard from '../../../components/finance/expense/ExpenseDashboard';
 import ExpenseList from '../../../components/finance/expense/ExpenseList';
-import ApprovalQueue from '../../../components/finance/expense/ApprovalQueue';
 import VendorList from '../../../components/finance/expense/VendorList';
 import RecurringExpenses from '../../../components/finance/expense/RecurringExpenses';
 import ExpenseBudgets from '../../../components/finance/expense/ExpenseBudgets';
@@ -79,17 +78,23 @@ function TabPanel(props: TabPanelProps) {
       hidden={value !== index}
       id={`expense-tabpanel-${index}`}
       aria-labelledby={`expense-tab-${index}`}
+      style={{ 
+        height: '100%', 
+        flex: 1, 
+        overflow: 'hidden',
+        display: value === index ? 'flex' : 'none',
+        flexDirection: 'column'
+      }}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ py: 3, width: '100%', height: '100%', overflow: 'auto', flex: 1 }}>{children}</Box>}
     </div>
   );
 }
 
 interface SummaryData {
   totalExpenses: number;
-  pendingApprovals: number;
-  pendingCount: number;
+  expenseCount: number;
   budgetRemaining: number;
   budgetPercentage: number;
   activeVendors: number;
@@ -101,16 +106,17 @@ const ExpenseManagementPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { currentBranch } = useBranch();
+  const { currentBranch, loading: branchLoading } = useBranch();
   const isRTL = theme.direction === 'rtl';
 
   const [tabValue, setTabValue] = useState(0);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [loading, setLoading] = useState(true);
+  const [openNewExpenseDialog, setOpenNewExpenseDialog] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [summaryData, setSummaryData] = useState<SummaryData>({
     totalExpenses: 0,
-    pendingApprovals: 0,
-    pendingCount: 0,
+    expenseCount: 0,
     budgetRemaining: 0,
     budgetPercentage: 0,
     activeVendors: 0,
@@ -139,10 +145,17 @@ const ExpenseManagementPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Load summary data
-  useEffect(() => {
-    const loadSummaryData = async () => {
-      if (!currentUser?.companyId || !currentBranch?.id) return;
+  // Load summary data function
+  const loadSummaryData = async () => {
+    if (!currentUser?.companyId || !currentBranch?.id) {
+      console.log('ExpenseManagementPage: Waiting for branch context...', {
+        hasUser: !!currentUser,
+        companyId: currentUser?.companyId,
+        hasBranch: !!currentBranch,
+        branchId: currentBranch?.id
+      });
+      return;
+    }
       
       setLoading(true);
       try {
@@ -170,13 +183,7 @@ const ExpenseManagementPage: React.FC = () => {
         
         // Calculate summary metrics
         const totalExpenses = transactions.reduce((sum, t) => sum + (t.totalAmount || t.amount || 0), 0);
-        const pendingTransactions = transactions.filter(t => 
-          ((t as any).expenseDetails?.approvalStatus === 'pending' || 
-           t.status === 'pending' || 
-           (t as any).approvalStatus === 'pending')
-        );
-        const pendingApprovals = pendingTransactions.reduce((sum, t) => sum + (t.totalAmount || t.amount || 0), 0);
-        const pendingCount = pendingTransactions.length;
+        const expenseCount = transactions.length; // Total number of expense transactions
         
         // Try to get active budget for this branch
         const activeBudget = await expenseService.getActiveBudget(
@@ -212,8 +219,7 @@ const ExpenseManagementPage: React.FC = () => {
         
         setSummaryData({
           totalExpenses,
-          pendingApprovals,
-          pendingCount,
+          expenseCount,
           budgetRemaining,
           budgetPercentage: Math.min(100, budgetPercentage),
           activeVendors,
@@ -226,13 +232,44 @@ const ExpenseManagementPage: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    };
-    
+  };
+
+  // Load summary data on component mount and when dependencies change
+  useEffect(() => {
     loadSummaryData();
   }, [currentUser, currentBranch]);
 
+  // Show loading state while contexts are initializing
+  if (branchLoading || !currentUser) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Show error state if required context data is missing
+  if (!currentUser.companyId || !currentBranch) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="h6" color="error" gutterBottom>
+          {isRTL ? 'خطأ في تحميل البيانات' : 'Data Loading Error'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {isRTL 
+            ? 'لا يمكن تحميل صفحة المصروفات. تأكد من إعداد الشركة والفرع بشكل صحيح.'
+            : 'Cannot load expense page. Please ensure company and branch are properly configured.'
+          }
+        </Typography>
+        <Button variant="contained" onClick={() => navigate('/dashboard')}>
+          {isRTL ? 'العودة للوحة الرئيسية' : 'Return to Dashboard'}
+        </Button>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, width: '100%', height: '100%', overflow: 'auto' }}>
       {/* Header Section */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
@@ -258,7 +295,7 @@ const ExpenseManagementPage: React.FC = () => {
             variant="contained"
             startIcon={<Add />}
             color="primary"
-            onClick={() => navigate('/finance/expense/new')}
+            onClick={() => setOpenNewExpenseDialog(true)}
           >
             {isRTL ? 'مصروف جديد' : 'New Expense'}
           </Button>
@@ -270,7 +307,7 @@ const ExpenseManagementPage: React.FC = () => {
 
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -302,45 +339,11 @@ const ExpenseManagementPage: React.FC = () => {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Avatar sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1), mr: 2 }}>
-                    <PendingActions color="warning" />
-                  </Avatar>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {isRTL ? 'بانتظار الموافقة' : 'Pending Approval'}
-                    </Typography>
-                    <Typography variant="h5" fontWeight="bold">
-                      {loading ? <CircularProgress size={24} /> : formatCurrency(summaryData.pendingApprovals)}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Badge badgeContent={summaryData.pendingCount} color="warning">
-                  <Typography variant="body2">
-                    {isRTL 
-                      ? `${summaryData.pendingCount} مصروفات`
-                      : `${summaryData.pendingCount} expenses`
-                    }
-                  </Typography>
-                </Badge>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={12} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
           >
             <Card>
               <CardContent>
@@ -368,11 +371,11 @@ const ExpenseManagementPage: React.FC = () => {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
             <Card>
               <CardContent>
@@ -402,13 +405,13 @@ const ExpenseManagementPage: React.FC = () => {
       </Grid>
 
       {/* Main Content Tabs */}
-      <Paper sx={{ width: '100%' }}>
+      <Paper sx={{ width: '100%', height: 'calc(100vh - 400px)', display: 'flex', flexDirection: 'column' }}>
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+          sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab 
             label={isRTL ? 'نظرة عامة' : 'Overview'} 
@@ -417,15 +420,10 @@ const ExpenseManagementPage: React.FC = () => {
           />
           <Tab 
             label={
-              <Badge badgeContent={summaryData.pendingCount} color="warning">
-                {isRTL ? 'الموافقات' : 'Approvals'}
+              <Badge badgeContent={summaryData.expenseCount} color="primary">
+                {isRTL ? 'المصروفات' : 'Expenses'}
               </Badge>
             }
-            icon={<PendingActions />}
-            iconPosition="start"
-          />
-          <Tab 
-            label={isRTL ? 'المصروفات' : 'Expenses'} 
             icon={<Receipt />}
             iconPosition="start"
           />
@@ -452,23 +450,19 @@ const ExpenseManagementPage: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <ApprovalQueue />
+          <ExpenseList key={refreshKey} onAddExpense={() => setOpenNewExpenseDialog(true)} />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <ExpenseList />
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
           <VendorList />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={tabValue} index={3}>
           <RecurringExpenses />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={5}>
-          <ExpenseBudgets />
+        <TabPanel value={tabValue} index={4}>
+          <ExpenseBudgets key={`budget-${refreshKey}-${tabValue}`} />
         </TabPanel>
       </Paper>
 
@@ -509,6 +503,19 @@ const ExpenseManagementPage: React.FC = () => {
           <ListItemText>{isRTL ? 'تصدير البيانات' : 'Export Data'}</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* New Expense Dialog */}
+      <NewExpenseDialog
+        open={openNewExpenseDialog}
+        onClose={() => setOpenNewExpenseDialog(false)}
+        onSuccess={() => {
+          setOpenNewExpenseDialog(false);
+          // Reload summary data after creating new expense
+          loadSummaryData();
+          // Force refresh the expense list
+          setRefreshKey(prev => prev + 1);
+        }}
+      />
     </Box>
   );
 };
