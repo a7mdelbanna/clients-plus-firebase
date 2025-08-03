@@ -314,10 +314,11 @@ const POSPage: React.FC = () => {
         currentUser.uid
       );
 
-      // Map payment methods to account IDs based on cash register mappings
+      // Map payment methods to account IDs based on cash register mappings or account type
       const salePayments: SalePayment[] = await Promise.all(payments.map(async (payment) => {
         let accountId: string | undefined;
         
+        // First try to use cash register mappings
         if (cashRegisterSession?.accountMappings) {
           switch (payment.method) {
             case 'cash':
@@ -332,6 +333,54 @@ const POSPage: React.FC = () => {
             case 'digital_wallet':
               accountId = cashRegisterSession.accountMappings.digitalWalletAccountId;
               break;
+          }
+        }
+        
+        // If no account mapping found, try to find appropriate account by type
+        if (!accountId) {
+          const accounts = await financeService.getAccounts(currentUser.companyId, {
+            branchId: currentBranch.id,
+            status: 'active'
+          });
+          
+          // Find the appropriate account based on payment method
+          let targetAccount;
+          switch (payment.method) {
+            case 'cash':
+              // First try to find default cash account, then any cash account
+              targetAccount = accounts.find(acc => acc.type === 'cash' && acc.isDefault) ||
+                            accounts.find(acc => acc.type === 'cash');
+              break;
+            case 'card':
+            case 'credit_card':
+              // For card payments, prefer credit_card type, then bank
+              targetAccount = accounts.find(acc => acc.type === 'credit_card' && acc.isDefault) ||
+                            accounts.find(acc => acc.type === 'credit_card') ||
+                            accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
+                            accounts.find(acc => acc.type === 'bank');
+              break;
+            case 'bank_transfer':
+              // For bank transfers, use bank account
+              targetAccount = accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
+                            accounts.find(acc => acc.type === 'bank');
+              break;
+            case 'digital_wallet':
+              // For digital wallets, prefer digital_wallet type, then bank
+              targetAccount = accounts.find(acc => acc.type === 'digital_wallet' && acc.isDefault) ||
+                            accounts.find(acc => acc.type === 'digital_wallet') ||
+                            accounts.find(acc => acc.type === 'bank');
+              break;
+            default:
+              // Fallback to any default account
+              targetAccount = accounts.find(acc => acc.isDefault);
+              break;
+          }
+          
+          if (targetAccount) {
+            accountId = targetAccount.id;
+          } else {
+            // Last resort: use the first active account
+            accountId = accounts[0]?.id;
           }
         }
 
@@ -1259,12 +1308,96 @@ const POSPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState(0);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentReference, setPaymentReference] = useState('');
+    const [targetAccount, setTargetAccount] = useState<{ name: string; nameAr: string } | null>(null);
+    const [loadingAccount, setLoadingAccount] = useState(false);
 
     const paymentMethods: { method: PaymentMethod; icon: React.ReactNode; label: string; labelAr: string; color: string }[] = [
       { method: 'cash', icon: <LocalAtm />, label: 'Cash', labelAr: 'نقدي', color: 'success.main' },
       { method: 'card', icon: <CreditCard />, label: 'Card', labelAr: 'بطاقة', color: 'info.main' },
       { method: 'digital_wallet', icon: <AccountBalanceWallet />, label: 'Digital Wallet', labelAr: 'محفظة إلكترونية', color: 'warning.main' },
     ];
+
+    // Load target account when payment method changes
+    useEffect(() => {
+      const loadTargetAccount = async () => {
+        if (!currentUser?.companyId || !currentBranch?.id) return;
+        
+        setLoadingAccount(true);
+        try {
+          // First check if there's an active cash register with mappings
+          const cashRegisterSession = await financeService.getActiveCashRegister(
+            currentUser.companyId,
+            currentBranch.id,
+            currentUser.uid
+          );
+          
+          let accountId: string | undefined;
+          const currentMethod = paymentMethods[activeTab].method;
+          
+          // Check cash register mappings first
+          if (cashRegisterSession?.accountMappings) {
+            switch (currentMethod) {
+              case 'cash':
+                accountId = cashRegisterSession.accountMappings.cashAccountId;
+                break;
+              case 'card':
+                accountId = cashRegisterSession.accountMappings.cardAccountId;
+                break;
+              case 'digital_wallet':
+                accountId = cashRegisterSession.accountMappings.digitalWalletAccountId;
+                break;
+            }
+          }
+          
+          // If no mapping, find account by type
+          if (!accountId) {
+            const accounts = await financeService.getAccounts(currentUser.companyId, {
+              branchId: currentBranch.id,
+              status: 'active'
+            });
+            
+            let targetAcc;
+            switch (currentMethod) {
+              case 'cash':
+                targetAcc = accounts.find(acc => acc.type === 'cash' && acc.isDefault) ||
+                           accounts.find(acc => acc.type === 'cash');
+                break;
+              case 'card':
+                targetAcc = accounts.find(acc => acc.type === 'credit_card' && acc.isDefault) ||
+                           accounts.find(acc => acc.type === 'credit_card') ||
+                           accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
+                           accounts.find(acc => acc.type === 'bank');
+                break;
+              case 'digital_wallet':
+                targetAcc = accounts.find(acc => acc.type === 'digital_wallet' && acc.isDefault) ||
+                           accounts.find(acc => acc.type === 'digital_wallet') ||
+                           accounts.find(acc => acc.type === 'bank');
+                break;
+            }
+            
+            if (targetAcc) {
+              setTargetAccount({ name: targetAcc.name, nameAr: targetAcc.nameAr });
+            } else {
+              setTargetAccount(null);
+            }
+          } else {
+            // Get account details by ID
+            const accounts = await financeService.getAccounts(currentUser.companyId);
+            const account = accounts.find(acc => acc.id === accountId);
+            if (account) {
+              setTargetAccount({ name: account.name, nameAr: account.nameAr });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading target account:', error);
+          setTargetAccount(null);
+        } finally {
+          setLoadingAccount(false);
+        }
+      };
+      
+      loadTargetAccount();
+    }, [activeTab, currentUser?.companyId, currentBranch?.id]);
 
     const handleAddPayment = () => {
       const amount = parseFloat(paymentAmount);
@@ -1345,6 +1478,33 @@ const POSPage: React.FC = () => {
                 ))}
               </Tabs>
             </Box>
+
+            {/* Account Indicator */}
+            {targetAccount && (
+              <Alert 
+                severity="info" 
+                icon={<AccountBalance />}
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="body2">
+                  {isRTL 
+                    ? `سيتم الإيداع في: ${targetAccount.nameAr || targetAccount.name}`
+                    : `Will be deposited to: ${targetAccount.name}`
+                  }
+                </Typography>
+              </Alert>
+            )}
+            
+            {!targetAccount && !loadingAccount && (
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                <Typography variant="body2">
+                  {isRTL 
+                    ? 'لا يوجد حساب مالي مناسب لهذه الطريقة. يرجى إنشاء حساب من إعدادات المالية.'
+                    : 'No suitable account found for this payment method. Please create an account in Finance settings.'
+                  }
+                </Typography>
+              </Alert>
+            )}
 
             {/* Payment Amount Input */}
             <Stack spacing={2}>
