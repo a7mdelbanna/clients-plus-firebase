@@ -513,38 +513,68 @@ const FinanceTransactionsPage: React.FC = () => {
           </Box>
 
           {/* Filters */}
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1.5fr 1fr 1fr 2fr' }, gap: 2, alignItems: 'center' }}>
-              <Box>
-                <Stack direction="row" spacing={1}>
-                  <DatePicker
-                    label={isRTL ? 'من' : 'From'}
-                    value={filters.dateRange.start}
-                    onChange={(newValue) => setFilters({
-                      ...filters,
-                      dateRange: { ...filters.dateRange, start: newValue || new Date() }
-                    })}
-                    slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                  />
-                  <DatePicker
-                    label={isRTL ? 'إلى' : 'To'}
-                    value={filters.dateRange.end}
-                    onChange={(newValue) => setFilters({
-                      ...filters,
-                      dateRange: { ...filters.dateRange, end: newValue || new Date() }
-                    })}
-                    slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                  />
-                </Stack>
+          <Paper sx={{ p: 2, mb: 3, overflow: 'visible' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexWrap: 'wrap',
+              gap: 2,
+              alignItems: 'center',
+              '& > *': {
+                minWidth: 0,
+              }
+            }}>
+              {/* Date Range */}
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 1,
+                flex: { xs: '1 1 100%', md: '0 1 280px' }
+              }}>
+                <DatePicker
+                  label={isRTL ? 'من' : 'From'}
+                  value={filters.dateRange.start}
+                  onChange={(newValue) => setFilters({
+                    ...filters,
+                    dateRange: { ...filters.dateRange, start: newValue || new Date() }
+                  })}
+                  slotProps={{ 
+                    textField: { 
+                      size: 'small', 
+                      fullWidth: true,
+                      sx: { bgcolor: 'background.paper' }
+                    } 
+                  }}
+                />
+                <DatePicker
+                  label={isRTL ? 'إلى' : 'To'}
+                  value={filters.dateRange.end}
+                  onChange={(newValue) => setFilters({
+                    ...filters,
+                    dateRange: { ...filters.dateRange, end: newValue || new Date() }
+                  })}
+                  slotProps={{ 
+                    textField: { 
+                      size: 'small', 
+                      fullWidth: true,
+                      sx: { bgcolor: 'background.paper' }
+                    } 
+                  }}
+                />
               </Box>
 
-              <Box>
+              {/* Type Toggle */}
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '0 1 auto' } }}>
                 <ToggleButtonGroup
                   value={filters.type}
                   exclusive
                   onChange={(_, newType) => setFilters({ ...filters, type: newType || 'all' })}
                   size="small"
-                  fullWidth
+                  sx={{ 
+                    height: '40px',
+                    '& .MuiToggleButton-root': {
+                      px: { xs: 1, sm: 2 },
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                    }
+                  }}
                 >
                   <ToggleButton value="all">{isRTL ? 'الكل' : 'All'}</ToggleButton>
                   <ToggleButton value="income" color="success">
@@ -558,13 +588,15 @@ const FinanceTransactionsPage: React.FC = () => {
                 </ToggleButtonGroup>
               </Box>
 
-              <Box>
+              {/* Account Select */}
+              <Box sx={{ flex: { xs: '1 1 45%', sm: '0 1 180px' } }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>{isRTL ? 'الحساب' : 'Account'}</InputLabel>
                   <Select
                     value={filters.accountId}
                     onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}
                     label={isRTL ? 'الحساب' : 'Account'}
+                    sx={{ bgcolor: 'background.paper' }}
                   >
                     <MenuItem value="">{isRTL ? 'جميع الحسابات' : 'All Accounts'}</MenuItem>
                     {accounts.map((account) => (
@@ -576,13 +608,15 @@ const FinanceTransactionsPage: React.FC = () => {
                 </FormControl>
               </Box>
 
-              <Box>
+              {/* Status Select */}
+              <Box sx={{ flex: { xs: '1 1 45%', sm: '0 1 140px' } }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>{isRTL ? 'الحالة' : 'Status'}</InputLabel>
                   <Select
                     value={filters.status}
                     onChange={(e) => setFilters({ ...filters, status: e.target.value as any })}
                     label={isRTL ? 'الحالة' : 'Status'}
+                    sx={{ bgcolor: 'background.paper' }}
                   >
                     <MenuItem value="all">{isRTL ? 'جميع الحالات' : 'All Status'}</MenuItem>
                     <MenuItem value="completed">{isRTL ? 'مكتملة' : 'Completed'}</MenuItem>
@@ -592,13 +626,15 @@ const FinanceTransactionsPage: React.FC = () => {
                 </FormControl>
               </Box>
 
-              <Box>
+              {/* Search Field */}
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 200px' } }}>
                 <TextField
                   fullWidth
                   size="small"
                   placeholder={isRTL ? 'بحث...' : 'Search...'}
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  sx={{ bgcolor: 'background.paper' }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
