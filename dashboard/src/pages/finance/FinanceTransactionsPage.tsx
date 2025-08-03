@@ -5,10 +5,6 @@ import {
   Card,
   CardContent,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   InputAdornment,
   InputLabel,
@@ -16,13 +12,10 @@ import {
   Paper,
   Select,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Typography,
   useTheme,
   Chip,
-  Alert,
   CircularProgress,
   List,
   ListItem,
@@ -32,17 +25,12 @@ import {
   Avatar,
   Divider,
   IconButton,
-  FormControlLabel,
-  Switch,
   Menu,
   ListItemIcon,
-  Autocomplete,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
 } from '@mui/material';
 import {
-  Add,
   Receipt,
   TrendingUp,
   TrendingDown,
@@ -52,27 +40,17 @@ import {
   CreditCard,
   AccountBalanceWallet,
   LocalAtm,
-  CalendarToday,
-  FilterList,
   Download,
   Search,
-  ArrowUpward,
-  ArrowDownward,
-  Edit,
-  Delete,
-  MoreVert,
-  Print,
-  Email,
-  Phone,
-  QrCode2,
   AttachMoney,
-  Category,
   Person,
-  Description,
   Schedule,
-  CheckCircle,
   Cancel,
   Pending,
+  MoneyOff,
+  MoreVert,
+  Print,
+  Delete,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -82,33 +60,28 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { financeService } from '../../services/finance.service';
 import { clientService } from '../../services/client.service';
-import { productService } from '../../services/product.service';
 import type {
   FinancialTransaction,
   TransactionType,
-  PaymentMethod,
   FinancialAccount,
   TransactionCategory,
 } from '../../types/finance.types';
 import type { Client } from '../../services/client.service';
-import type { Product } from '../../types/product.types';
-import { Timestamp } from 'firebase/firestore';
+import TransferDialog from '../../components/finance/TransferDialog';
+import NewExpenseDialog from '../../components/finance/expense/NewExpenseDialog';
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
 
-const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
-  return (
-    <div hidden={value !== index}>
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
-  );
-};
+// Income categories - kept for display purposes only
+const incomeCategories: TransactionCategory[] = [
+  { id: 'service', name: 'Service', nameAr: 'خدمة', icon: '✂️', color: '#27AE60' },
+  { id: 'product', name: 'Product Sale', nameAr: 'بيع منتج', icon: '🛍️', color: '#E74C3C' },
+  { id: 'appointment', name: 'Appointment', nameAr: 'موعد', icon: '📅', color: '#3498DB' },
+  { id: 'package', name: 'Package', nameAr: 'باقة', icon: '🎁', color: '#9B59B6' },
+  { id: 'membership', name: 'Membership', nameAr: 'عضوية', icon: '💳', color: '#F39C12' },
+  { id: 'other', name: 'Other', nameAr: 'أخرى', icon: '💵', color: '#95A5A6' },
+];
 
-// Transaction categories
+// Expense categories - kept for display purposes only
 const expenseCategories: TransactionCategory[] = [
   { id: 'salary', name: 'Salary', nameAr: 'مرتبات', icon: '💰', color: '#FF6B6B' },
   { id: 'rent', name: 'Rent', nameAr: 'إيجار', icon: '🏠', color: '#4ECDC4' },
@@ -119,15 +92,6 @@ const expenseCategories: TransactionCategory[] = [
   { id: 'other', name: 'Other', nameAr: 'أخرى', icon: '📌', color: '#AAB7B8' },
 ];
 
-const incomeCategories: TransactionCategory[] = [
-  { id: 'service', name: 'Service', nameAr: 'خدمة', icon: '✂️', color: '#27AE60' },
-  { id: 'product', name: 'Product Sale', nameAr: 'بيع منتج', icon: '🛍️', color: '#E74C3C' },
-  { id: 'appointment', name: 'Appointment', nameAr: 'موعد', icon: '📅', color: '#3498DB' },
-  { id: 'package', name: 'Package', nameAr: 'باقة', icon: '🎁', color: '#9B59B6' },
-  { id: 'membership', name: 'Membership', nameAr: 'عضوية', icon: '💳', color: '#F39C12' },
-  { id: 'other', name: 'Other', nameAr: 'أخرى', icon: '💵', color: '#95A5A6' },
-];
-
 const FinanceTransactionsPage: React.FC = () => {
   const theme = useTheme();
   const { currentUser } = useAuth();
@@ -136,13 +100,11 @@ const FinanceTransactionsPage: React.FC = () => {
 
   // State
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
 
@@ -156,26 +118,6 @@ const FinanceTransactionsPage: React.FC = () => {
     status: 'all' as 'all' | 'completed' | 'pending' | 'cancelled',
   });
 
-  // Form state
-  const [formData, setFormData] = useState({
-    type: 'income' as TransactionType,
-    amount: 0,
-    accountId: '',
-    categoryId: '',
-    referenceType: '',
-    referenceId: '',
-    clientId: '',
-    description: '',
-    descriptionAr: '',
-    date: new Date(),
-    paymentMethod: 'cash' as PaymentMethod,
-    digitalWalletFee: 0,
-    attachments: [] as string[],
-    tags: [] as string[],
-    isRecurring: false,
-    recurringInterval: 'monthly' as 'daily' | 'weekly' | 'monthly' | 'yearly',
-    recurringEndDate: null as Date | null,
-  });
 
   // Load data
   useEffect(() => {
@@ -211,12 +153,9 @@ const FinanceTransactionsPage: React.FC = () => {
       );
       setTransactions(transactionsData);
 
-      // Load clients and products for autocomplete
+      // Load clients for display
       const { clients: clientsData } = await clientService.getClients(currentUser.companyId);
       setClients(clientsData);
-
-      const { products: productsData } = await productService.getProducts(currentUser.companyId);
-      setProducts(productsData);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -225,121 +164,14 @@ const FinanceTransactionsPage: React.FC = () => {
   };
 
   // Handlers
-  const handleOpenDialog = (transaction?: FinancialTransaction) => {
-    if (transaction) {
-      setEditingTransaction(transaction);
-      setFormData({
-        type: transaction.type,
-        amount: transaction.amount,
-        accountId: transaction.accountId,
-        categoryId: transaction.categoryId || '',
-        referenceType: transaction.referenceType || '',
-        referenceId: transaction.referenceId || '',
-        clientId: transaction.clientId || '',
-        description: transaction.description || '',
-        descriptionAr: transaction.descriptionAr || '',
-        date: transaction.date.toDate(),
-        paymentMethod: transaction.paymentMethod,
-        digitalWalletFee: transaction.digitalWalletFee || 0,
-        attachments: transaction.attachments || [],
-        tags: transaction.tags || [],
-        isRecurring: transaction.isRecurring || false,
-        recurringInterval: transaction.recurringInterval || 'monthly',
-        recurringEndDate: transaction.recurringEndDate?.toDate() || null,
-      });
-    } else {
-      setEditingTransaction(null);
-      setFormData({
-        type: 'income',
-        amount: 0,
-        accountId: accounts.find(a => a.isDefault)?.id || '',
-        categoryId: '',
-        referenceType: '',
-        referenceId: '',
-        clientId: '',
-        description: '',
-        descriptionAr: '',
-        date: new Date(),
-        paymentMethod: 'cash',
-        digitalWalletFee: 0,
-        attachments: [],
-        tags: [],
-        isRecurring: false,
-        recurringInterval: 'monthly',
-        recurringEndDate: null,
-      });
-    }
-    setDialogOpen(true);
+  const handleTransferSuccess = () => {
+    setTransferDialogOpen(false);
+    loadData();
   };
 
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-    setEditingTransaction(null);
-  };
-
-  const handleSaveTransaction = async () => {
-    if (!currentUser?.companyId || !currentBranch?.id) return;
-
-    try {
-      const transactionData: Omit<FinancialTransaction, 'id' | 'createdAt' | 'updatedAt'> = {
-        companyId: currentUser.companyId,
-        branchId: currentBranch.id,
-        type: formData.type,
-        amount: formData.amount,
-        accountId: formData.accountId,
-        categoryId: formData.categoryId || undefined,
-        date: Timestamp.fromDate(formData.date),
-        paymentMethod: formData.paymentMethod,
-        status: 'completed',
-        createdBy: currentUser.uid,
-      };
-
-      // Add optional fields
-      if (formData.referenceType && formData.referenceId) {
-        transactionData.referenceType = formData.referenceType;
-        transactionData.referenceId = formData.referenceId;
-      }
-      if (formData.clientId) {
-        transactionData.clientId = formData.clientId;
-      }
-      if (formData.description) {
-        transactionData.description = formData.description;
-      }
-      if (formData.descriptionAr) {
-        transactionData.descriptionAr = formData.descriptionAr;
-      }
-      if (formData.digitalWalletFee > 0) {
-        transactionData.digitalWalletFee = formData.digitalWalletFee;
-      }
-      if (formData.attachments.length > 0) {
-        transactionData.attachments = formData.attachments;
-      }
-      if (formData.tags.length > 0) {
-        transactionData.tags = formData.tags;
-      }
-      if (formData.isRecurring) {
-        transactionData.isRecurring = true;
-        transactionData.recurringInterval = formData.recurringInterval;
-        if (formData.recurringEndDate) {
-          transactionData.recurringEndDate = Timestamp.fromDate(formData.recurringEndDate);
-        }
-      }
-
-      if (editingTransaction?.id) {
-        await financeService.updateTransaction(
-          currentUser.companyId,
-          editingTransaction.id,
-          transactionData
-        );
-      } else {
-        await financeService.createTransaction(transactionData);
-      }
-
-      handleCloseDialog();
-      loadData();
-    } catch (error) {
-      console.error('Error saving transaction:', error);
-    }
+  const handleExpenseSuccess = () => {
+    setExpenseDialogOpen(false);
+    loadData();
   };
 
   // Get filtered transactions
@@ -376,7 +208,7 @@ const FinanceTransactionsPage: React.FC = () => {
     return <Payment />;
   };
 
-  // Get category
+  // Get category for display
   const getCategory = (categoryId: string, type: TransactionType) => {
     const categories = type === 'expense' ? expenseCategories : incomeCategories;
     return categories.find(c => c.id === categoryId);
@@ -429,10 +261,19 @@ const FinanceTransactionsPage: React.FC = () => {
               </Button>
               <Button
                 variant="contained"
-                startIcon={<Add />}
-                onClick={() => handleOpenDialog()}
+                color="error"
+                startIcon={<MoneyOff />}
+                onClick={() => setExpenseDialogOpen(true)}
               >
-                {isRTL ? 'معاملة جديدة' : 'New Transaction'}
+                {isRTL ? 'إضافة مصروف' : 'Add Expense'}
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<SwapHoriz />}
+                onClick={() => setTransferDialogOpen(true)}
+              >
+                {isRTL ? 'تحويل' : 'Transfer'}
               </Button>
             </Stack>
           </Stack>
@@ -777,232 +618,20 @@ const FinanceTransactionsPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Add/Edit Dialog */}
-        <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-          <DialogTitle>
-            {editingTransaction
-              ? (isRTL ? 'تعديل المعاملة' : 'Edit Transaction')
-              : (isRTL ? 'معاملة جديدة' : 'New Transaction')}
-          </DialogTitle>
-          <DialogContent>
-            <Stack spacing={3} sx={{ mt: 1 }}>
-              {/* Transaction Type */}
-              <ToggleButtonGroup
-                value={formData.type}
-                exclusive
-                onChange={(_, newType) => setFormData({ ...formData, type: newType || 'income' })}
-                fullWidth
-              >
-                <ToggleButton value="income" color="success">
-                  <TrendingUp sx={{ mr: 1 }} />
-                  {isRTL ? 'إيرادات' : 'Income'}
-                </ToggleButton>
-                <ToggleButton value="expense" color="error">
-                  <TrendingDown sx={{ mr: 1 }} />
-                  {isRTL ? 'مصروفات' : 'Expense'}
-                </ToggleButton>
-                <ToggleButton value="transfer" color="primary">
-                  <SwapHoriz sx={{ mr: 1 }} />
-                  {isRTL ? 'تحويل' : 'Transfer'}
-                </ToggleButton>
-              </ToggleButtonGroup>
+        {/* Transfer Dialog */}
+        <TransferDialog
+          open={transferDialogOpen}
+          onClose={() => setTransferDialogOpen(false)}
+          onSuccess={handleTransferSuccess}
+          accounts={accounts}
+        />
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                {/* Amount */}
-                <Box>
-                  <TextField
-                    fullWidth
-                    required
-                    type="number"
-                    label={isRTL ? 'المبلغ' : 'Amount'}
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
-                    }}
-                  />
-                </Box>
-
-                {/* Date */}
-                <Box>
-                  <DatePicker
-                    label={isRTL ? 'التاريخ' : 'Date'}
-                    value={formData.date}
-                    onChange={(newValue) => setFormData({ ...formData, date: newValue || new Date() })}
-                    slotProps={{ textField: { fullWidth: true, required: true } }}
-                  />
-                </Box>
-
-                {/* Account */}
-                <Box>
-                  <FormControl fullWidth required>
-                    <InputLabel>{isRTL ? 'الحساب' : 'Account'}</InputLabel>
-                    <Select
-                      value={formData.accountId}
-                      onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                      label={isRTL ? 'الحساب' : 'Account'}
-                    >
-                      {accounts.map((account) => (
-                        <MenuItem key={account.id} value={account.id}>
-                          {isRTL ? account.nameAr : account.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Box>
-
-                {/* Category */}
-                <Box>
-                  <FormControl fullWidth>
-                    <InputLabel>{isRTL ? 'الفئة' : 'Category'}</InputLabel>
-                    <Select
-                      value={formData.categoryId}
-                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                      label={isRTL ? 'الفئة' : 'Category'}
-                    >
-                      <MenuItem value="">
-                        <em>{isRTL ? 'بدون فئة' : 'No Category'}</em>
-                      </MenuItem>
-                      {(formData.type === 'expense' ? expenseCategories : incomeCategories).map((category) => (
-                        <MenuItem key={category.id} value={category.id}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <span>{category.icon}</span>
-                            <span>{isRTL ? category.nameAr : category.name}</span>
-                          </Stack>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Box>
-
-                {/* Client */}
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <Autocomplete
-                    options={clients}
-                    getOptionLabel={(option) => option.name}
-                    value={clients.find(c => c.id === formData.clientId) || null}
-                    onChange={(_, newValue) => setFormData({ ...formData, clientId: newValue?.id || '' })}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label={isRTL ? 'العميل' : 'Client'}
-                        placeholder={isRTL ? 'اختر عميل...' : 'Select client...'}
-                      />
-                    )}
-                  />
-                </Box>
-
-                {/* Description */}
-                <Box>
-                  <TextField
-                    fullWidth
-                    label={isRTL ? 'الوصف' : 'Description'}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    multiline
-                    rows={2}
-                  />
-                </Box>
-                <Box>
-                  <TextField
-                    fullWidth
-                    label={isRTL ? 'الوصف (عربي)' : 'Description (Arabic)'}
-                    value={formData.descriptionAr}
-                    onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
-                    multiline
-                    rows={2}
-                  />
-                </Box>
-
-                {/* Payment Method */}
-                <Box>
-                  <FormControl fullWidth>
-                    <InputLabel>{isRTL ? 'طريقة الدفع' : 'Payment Method'}</InputLabel>
-                    <Select
-                      value={formData.paymentMethod}
-                      onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as PaymentMethod })}
-                      label={isRTL ? 'طريقة الدفع' : 'Payment Method'}
-                    >
-                      <MenuItem value="cash">{isRTL ? 'نقدي' : 'Cash'}</MenuItem>
-                      <MenuItem value="card">{isRTL ? 'بطاقة' : 'Card'}</MenuItem>
-                      <MenuItem value="bank_transfer">{isRTL ? 'تحويل بنكي' : 'Bank Transfer'}</MenuItem>
-                      <MenuItem value="digital_wallet">{isRTL ? 'محفظة رقمية' : 'Digital Wallet'}</MenuItem>
-                      <MenuItem value="check">{isRTL ? 'شيك' : 'Check'}</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
-
-                {/* Digital Wallet Fee */}
-                {formData.paymentMethod === 'digital_wallet' && (
-                  <Box>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label={isRTL ? 'رسوم المحفظة' : 'Wallet Fee'}
-                      value={formData.digitalWalletFee}
-                      onChange={(e) => setFormData({ ...formData, digitalWalletFee: parseFloat(e.target.value) || 0 })}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">{isRTL ? 'ج.م' : 'EGP'}</InputAdornment>,
-                      }}
-                      helperText={isRTL ? 'رسوم المعاملة للمحفظة الرقمية' : 'Transaction fee for digital wallet'}
-                    />
-                  </Box>
-                )}
-
-                {/* Recurring */}
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formData.isRecurring}
-                        onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
-                      />
-                    }
-                    label={isRTL ? 'معاملة متكررة' : 'Recurring Transaction'}
-                  />
-                </Box>
-
-                {formData.isRecurring && (
-                  <>
-                    <Box>
-                      <FormControl fullWidth>
-                        <InputLabel>{isRTL ? 'التكرار' : 'Interval'}</InputLabel>
-                        <Select
-                          value={formData.recurringInterval}
-                          onChange={(e) => setFormData({ ...formData, recurringInterval: e.target.value as any })}
-                          label={isRTL ? 'التكرار' : 'Interval'}
-                        >
-                          <MenuItem value="daily">{isRTL ? 'يومي' : 'Daily'}</MenuItem>
-                          <MenuItem value="weekly">{isRTL ? 'أسبوعي' : 'Weekly'}</MenuItem>
-                          <MenuItem value="monthly">{isRTL ? 'شهري' : 'Monthly'}</MenuItem>
-                          <MenuItem value="yearly">{isRTL ? 'سنوي' : 'Yearly'}</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Box>
-                    <Box>
-                      <DatePicker
-                        label={isRTL ? 'تاريخ الانتهاء' : 'End Date'}
-                        value={formData.recurringEndDate}
-                        onChange={(newValue) => setFormData({ ...formData, recurringEndDate: newValue })}
-                        slotProps={{ textField: { fullWidth: true } }}
-                      />
-                    </Box>
-                  </>
-                )}
-              </Box>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
-            <Button
-              onClick={handleSaveTransaction}
-              variant="contained"
-              disabled={!formData.amount || !formData.accountId}
-            >
-              {editingTransaction ? (isRTL ? 'حفظ' : 'Save') : (isRTL ? 'إضافة' : 'Add')}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {/* Expense Dialog */}
+        <NewExpenseDialog
+          open={expenseDialogOpen}
+          onClose={() => setExpenseDialogOpen(false)}
+          onSuccess={handleExpenseSuccess}
+        />
 
         {/* Context Menu */}
         <Menu
@@ -1013,19 +642,6 @@ const FinanceTransactionsPage: React.FC = () => {
             setSelectedTransaction(null);
           }}
         >
-          <MenuItem
-            onClick={() => {
-              if (selectedTransaction) {
-                handleOpenDialog(selectedTransaction);
-              }
-              setAnchorEl(null);
-            }}
-          >
-            <ListItemIcon>
-              <Edit fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>{isRTL ? 'تعديل' : 'Edit'}</ListItemText>
-          </MenuItem>
           <MenuItem
             onClick={() => {
               // TODO: Print receipt
