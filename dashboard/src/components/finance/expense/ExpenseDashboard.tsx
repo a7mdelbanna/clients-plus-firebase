@@ -68,8 +68,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useBranch } from '../../../contexts/BranchContext';
 import { expenseService } from '../../../services/expense.service';
 import { financeService } from '../../../services/finance.service';
+import { contactService } from '../../../services/contact.service';
 import type { ExpenseCategory, ExpenseTransaction, Vendor } from '../../../types/expense.types';
 import type { FinancialTransaction } from '../../../types/finance.types';
+import type { Contact } from '../../../types/contact.types';
+import { ContactType } from '../../../types/contact.types';
 
 // Mock data for demonstration
 const mockCategoryData = [
@@ -96,7 +99,7 @@ const mockRecentExpenses = [
   { id: 4, vendor: 'شركة الصيانة', amount: 800, category: 'الصيانة', categoryColor: '#f57c00', time: '2 days ago' },
 ];
 
-const mockTopVendors = [
+const mockTopContacts = [
   { id: 1, name: 'شركة النور للتجميل', spent: 45000, transactions: 12, change: 15 },
   { id: 2, name: 'مؤسسة الجمال', spent: 38000, transactions: 10, change: -5 },
   { id: 3, name: 'شركة الكهرباء', spent: 14400, transactions: 12, change: 8 },
@@ -120,10 +123,10 @@ export default function ExpenseDashboard() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [budgetData, setBudgetData] = useState<any[]>([]);
   const [trendData, setTrendData] = useState<any[]>([]);
-  const [vendorData, setVendorData] = useState<any[]>([]);
+  const [contactData, setContactData] = useState<any[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<any[]>([]);
 
   const formatCurrency = (amount: number) => {
@@ -184,15 +187,22 @@ export default function ExpenseDashboard() {
         
         setTransactions(expenseTransactions);
         
-        // Load vendors
-        const vendorsData = await expenseService.getVendors(currentUser.companyId);
-        setVendors(vendorsData);
+        // Load contacts (beneficiaries)
+        const contactsResult = await contactService.getContacts(
+          currentUser.companyId,
+          {
+            types: [ContactType.VENDOR, ContactType.SUPPLIER],
+            status: ['active', 'inactive']
+          },
+          100
+        );
+        setContacts(contactsResult.contacts);
         
         // Process data for charts
         await processBudgetData(categoriesData, expenseTransactions);
         processTrendData(expenseTransactions);
-        processVendorData(vendorsData, expenseTransactions);
-        processRecentExpenses(expenseTransactions, categoriesData, vendorsData);
+        processContactData(contactsResult.contacts, expenseTransactions);
+        processRecentExpenses(expenseTransactions, categoriesData, contactsResult.contacts);
         
         // Only use real data, no mock fallback
         // This ensures users see actual data or empty states
@@ -306,34 +316,34 @@ export default function ExpenseDashboard() {
     setTrendData(data);
   };
   
-  // Process vendor data
-  const processVendorData = (vendors: Vendor[], transactions: FinancialTransaction[]) => {
-    const vendorMap = new Map<string, { spent: number; count: number; lastMonth: number }>();
+  // Process contact data
+  const processContactData = (contacts: Contact[], transactions: FinancialTransaction[]) => {
+    const contactMap = new Map<string, { spent: number; count: number; lastMonth: number }>();
     
     // Calculate current month spending from expense transactions
     transactions.forEach(trans => {
-      // Check if this is an expense transaction with vendor
+      // Check if this is an expense transaction with vendor/contact
       const vendorId = trans.metadata?.vendorId || trans.vendorId;
       if (vendorId) {
-        const current = vendorMap.get(vendorId) || { spent: 0, count: 0, lastMonth: 0 };
+        const current = contactMap.get(vendorId) || { spent: 0, count: 0, lastMonth: 0 };
         current.spent += trans.amount;
         current.count += 1;
-        vendorMap.set(vendorId, current);
+        contactMap.set(vendorId, current);
       }
     });
     
-    // Create vendor data sorted by spending
-    const data = Array.from(vendorMap.entries())
-      .map(([vendorId, data]) => {
-        const vendor = vendors.find(v => v.id === vendorId);
-        if (!vendor) return null;
+    // Create contact data sorted by spending
+    const data = Array.from(contactMap.entries())
+      .map(([contactId, data]) => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return null;
         
         // Calculate change (mock for now, would need last month data)
         const change = Math.floor(Math.random() * 40) - 20;
         
         return {
-          id: vendorId,
-          name: vendor.name,
+          id: contactId,
+          name: contact.displayName,
           spent: data.spent,
           transactions: data.count,
           change
@@ -343,14 +353,14 @@ export default function ExpenseDashboard() {
       .sort((a, b) => b!.spent - a!.spent)
       .slice(0, 4);
     
-    setVendorData(data as any[]);
+    setContactData(data as any[]);
   };
   
   // Process recent expenses
   const processRecentExpenses = (
     transactions: FinancialTransaction[], 
     categories: ExpenseCategory[], 
-    vendors: Vendor[]
+    contacts: Contact[]
   ) => {
     const data = transactions
       .sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime())
@@ -359,7 +369,7 @@ export default function ExpenseDashboard() {
         const categoryId = trans.metadata?.categoryId || trans.categoryId;
         const vendorId = trans.metadata?.vendorId || trans.vendorId;
         const category = categories.find(c => c.id === categoryId);
-        const vendor = vendors.find(v => v.id === vendorId);
+        const contact = contacts.find(c => c.id === vendorId);
         const transDate = trans.createdAt.toDate();
         const now = new Date();
         const diffHours = Math.floor((now.getTime() - transDate.getTime()) / (1000 * 60 * 60));
@@ -380,7 +390,7 @@ export default function ExpenseDashboard() {
         
         return {
           id: trans.id,
-          vendor: vendor?.name || trans.description,
+          vendor: contact?.displayName || trans.description,
           amount: trans.amount,
           category: isRTL ? category?.nameAr : category?.name,
           categoryColor: category?.color || '#666',
@@ -606,26 +616,26 @@ export default function ExpenseDashboard() {
         {/* Right Column - Vendors and Recent Expenses */}
         <Grid item xs={12} md={6}>
           <Stack spacing={3}>
-            {/* Top Vendors */}
+            {/* Top Beneficiaries */}
             <Paper elevation={2} sx={{ p: 4, borderRadius: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {isRTL ? 'أعلى الموردين' : 'Top Vendors'}
+                  {isRTL ? 'أعلى المستفيدين' : 'Top Beneficiaries'}
                 </Typography>
                 <IconButton size="small">
                   <MoreVert />
                 </IconButton>
               </Box>
               <List dense>
-                {vendorData.length === 0 ? (
+                {contactData.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <Store sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                     <Typography variant="body2" color="text.secondary">
-                      {isRTL ? 'لا توجد بيانات موردين' : 'No vendor data available'}
+                      {isRTL ? 'لا توجد بيانات مستفيدين' : 'No beneficiary data available'}
                     </Typography>
                   </Box>
-                ) : vendorData.slice(0, 4).map((vendor, index) => (
-                  <React.Fragment key={vendor.id}>
+                ) : contactData.slice(0, 4).map((contact, index) => (
+                  <React.Fragment key={contact.id}>
                     <ListItem sx={{ px: 0, py: 1.5 }}>
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), width: 40, height: 40 }}>
@@ -633,33 +643,33 @@ export default function ExpenseDashboard() {
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={vendor.name}
+                        primary={contact.name}
                         secondary={
                           <Typography variant="caption" color="text.secondary" component="span">
-                            {vendor.transactions} {isRTL ? 'معاملات' : 'transactions'}
+                            {contact.transactions} {isRTL ? 'معاملات' : 'transactions'}
                           </Typography>
                         }
                       />
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="body2" fontWeight="medium">
-                          {formatCurrency(vendor.spent)}
+                          {formatCurrency(contact.spent)}
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                          {vendor.change > 0 ? (
+                          {contact.change > 0 ? (
                             <TrendingUp color="success" sx={{ fontSize: 16 }} />
                           ) : (
                             <TrendingDown color="error" sx={{ fontSize: 16 }} />
                           )}
                           <Typography
                             variant="caption"
-                            color={vendor.change > 0 ? 'success.main' : 'error.main'}
+                            color={contact.change > 0 ? 'success.main' : 'error.main'}
                           >
-                            {vendor.change > 0 ? '+' : ''}{vendor.change}%
+                            {contact.change > 0 ? '+' : ''}{contact.change}%
                           </Typography>
                         </Box>
                       </Box>
                     </ListItem>
-                    {index < Math.min(vendorData.length, 4) - 1 && <Divider />}
+                    {index < Math.min(contactData.length, 4) - 1 && <Divider />}
                   </React.Fragment>
                 ))}
               </List>

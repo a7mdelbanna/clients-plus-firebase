@@ -55,11 +55,11 @@ import { useBranch } from '../../../contexts/BranchContext';
 import { motion } from 'framer-motion';
 import ExpenseDashboard from '../../../components/finance/expense/ExpenseDashboard';
 import ExpenseList from '../../../components/finance/expense/ExpenseList';
-import VendorList from '../../../components/finance/expense/VendorList';
-import RecurringExpenses from '../../../components/finance/expense/RecurringExpenses';
 import ExpenseBudgets from '../../../components/finance/expense/ExpenseBudgets';
 import { expenseService } from '../../../services/expense.service';
 import { financeService } from '../../../services/finance.service';
+import { contactService } from '../../../services/contact.service';
+import { ContactType } from '../../../types/contact.types';
 import type { ExpenseCategory, ExpenseTransaction, Vendor } from '../../../types/expense.types';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { CircularProgress } from '@mui/material';
@@ -97,8 +97,8 @@ interface SummaryData {
   expenseCount: number;
   budgetRemaining: number;
   budgetPercentage: number;
-  activeVendors: number;
-  newVendors: number;
+  activeContacts: number;
+  newContacts: number;
   expenseChange: number;
 }
 
@@ -119,8 +119,8 @@ const ExpenseManagementPage: React.FC = () => {
     expenseCount: 0,
     budgetRemaining: 0,
     budgetPercentage: 0,
-    activeVendors: 0,
-    newVendors: 0,
+    activeContacts: 0,
+    newContacts: 0,
     expenseChange: 0,
   });
 
@@ -178,8 +178,16 @@ const ExpenseManagementPage: React.FC = () => {
         // Load categories for budget calculation
         const categories = await expenseService.getCategories(currentUser.companyId);
         
-        // Load vendors
-        const vendors = await expenseService.getVendors(currentUser.companyId);
+        // Load contacts (beneficiaries - vendors, suppliers, etc.)
+        const contactsResult = await contactService.getContacts(
+          currentUser.companyId,
+          {
+            types: [ContactType.VENDOR, ContactType.SUPPLIER],
+            status: ['active', 'inactive']
+          },
+          100
+        );
+        const contacts = contactsResult.contacts;
         
         // Calculate summary metrics
         const totalExpenses = transactions.reduce((sum, t) => sum + (t.totalAmount || t.amount || 0), 0);
@@ -206,11 +214,11 @@ const ExpenseManagementPage: React.FC = () => {
           budgetPercentage = 0;
         }
         
-        // Vendor metrics
-        const activeVendors = vendors.filter(v => v.status === 'active').length;
+        // Contact metrics
+        const activeContacts = contacts.filter(c => c.status === 'active').length;
         const thisMonthStart = startOfMonth(now);
-        const newVendors = vendors.filter(v => 
-          v.createdAt && v.createdAt.toDate() >= thisMonthStart
+        const newContacts = contacts.filter(c => 
+          c.createdAt && c.createdAt.toDate() >= thisMonthStart
         ).length;
         
         // Calculate expense change (would need last month data for real calculation)
@@ -222,8 +230,8 @@ const ExpenseManagementPage: React.FC = () => {
           expenseCount,
           budgetRemaining,
           budgetPercentage: Math.min(100, budgetPercentage),
-          activeVendors,
-          newVendors,
+          activeContacts,
+          newContacts,
           expenseChange,
         });
         
@@ -385,17 +393,17 @@ const ExpenseManagementPage: React.FC = () => {
                   </Avatar>
                   <Box sx={{ flexGrow: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {isRTL ? 'الموردين النشطين' : 'Active Vendors'}
+                      {isRTL ? 'المستفيدين النشطين' : 'Active Beneficiaries'}
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
-                      {loading ? <CircularProgress size={24} /> : summaryData.activeVendors}
+                      {loading ? <CircularProgress size={24} /> : summaryData.activeContacts}
                     </Typography>
                   </Box>
                 </Box>
                 <Typography variant="body2" color="text.secondary">
                   {isRTL 
-                    ? `${summaryData.newVendors} موردين جدد هذا الشهر`
-                    : `${summaryData.newVendors} new this month`
+                    ? `${summaryData.newContacts} مستفيدين جدد هذا الشهر`
+                    : `${summaryData.newContacts} new this month`
                   }
                 </Typography>
               </CardContent>
@@ -428,16 +436,6 @@ const ExpenseManagementPage: React.FC = () => {
             iconPosition="start"
           />
           <Tab 
-            label={isRTL ? 'الموردين' : 'Vendors'} 
-            icon={<Store />}
-            iconPosition="start"
-          />
-          <Tab 
-            label={isRTL ? 'المتكررة' : 'Recurring'} 
-            icon={<Schedule />}
-            iconPosition="start"
-          />
-          <Tab 
             label={isRTL ? 'الميزانيات' : 'Budgets'} 
             icon={<AccountBalance />}
             iconPosition="start"
@@ -454,14 +452,6 @@ const ExpenseManagementPage: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <VendorList />
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <RecurringExpenses />
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={4}>
           <ExpenseBudgets key={`budget-${refreshKey}-${tabValue}`} />
         </TabPanel>
       </Paper>
