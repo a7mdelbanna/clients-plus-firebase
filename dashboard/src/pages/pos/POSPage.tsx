@@ -35,6 +35,10 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   Search,
@@ -85,6 +89,7 @@ interface PaymentDetails {
   method: PaymentMethod;
   amount: number;
   reference?: string;
+  accountId?: string;
 }
 
 const POSPage: React.FC = () => {
@@ -266,8 +271,8 @@ const POSPage: React.FC = () => {
     setPaymentDialog(true);
   };
 
-  const addPayment = (method: PaymentMethod, amount: number, reference?: string) => {
-    const payment: PaymentDetails = { method, amount, reference };
+  const addPayment = (method: PaymentMethod, amount: number, reference?: string, accountId?: string) => {
+    const payment: PaymentDetails = { method, amount, reference, accountId };
     setPayments([...payments, payment]);
   };
 
@@ -315,83 +320,15 @@ const POSPage: React.FC = () => {
         currentUser.uid
       );
 
-      // Map payment methods to account IDs based on cash register mappings or account type
-      const salePayments: SalePayment[] = await Promise.all(payments.map(async (payment) => {
-        let accountId: string | undefined;
-        
-        // First try to use cash register mappings
-        if (cashRegisterSession?.accountMappings) {
-          switch (payment.method) {
-            case 'cash':
-              accountId = cashRegisterSession.accountMappings.cashAccountId;
-              break;
-            case 'card':
-              accountId = cashRegisterSession.accountMappings.cardAccountId;
-              break;
-            case 'bank_transfer':
-              accountId = cashRegisterSession.accountMappings.bankAccountId;
-              break;
-            case 'digital_wallet':
-              accountId = cashRegisterSession.accountMappings.digitalWalletAccountId;
-              break;
-          }
-        }
-        
-        // If no account mapping found, try to find appropriate account by type
-        if (!accountId) {
-          const accounts = await financeService.getAccounts(currentUser.companyId, {
-            branchId: currentBranch.id,
-            status: 'active'
-          });
-          
-          // Find the appropriate account based on payment method
-          let targetAccount;
-          switch (payment.method) {
-            case 'cash':
-              // First try to find default cash account, then any cash account
-              targetAccount = accounts.find(acc => acc.type === 'cash' && acc.isDefault) ||
-                            accounts.find(acc => acc.type === 'cash');
-              break;
-            case 'card':
-            case 'credit_card':
-              // For card payments, prefer credit_card type, then bank
-              targetAccount = accounts.find(acc => acc.type === 'credit_card' && acc.isDefault) ||
-                            accounts.find(acc => acc.type === 'credit_card') ||
-                            accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
-                            accounts.find(acc => acc.type === 'bank');
-              break;
-            case 'bank_transfer':
-              // For bank transfers, use bank account
-              targetAccount = accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
-                            accounts.find(acc => acc.type === 'bank');
-              break;
-            case 'digital_wallet':
-              // For digital wallets, prefer digital_wallet type, then bank
-              targetAccount = accounts.find(acc => acc.type === 'digital_wallet' && acc.isDefault) ||
-                            accounts.find(acc => acc.type === 'digital_wallet') ||
-                            accounts.find(acc => acc.type === 'bank');
-              break;
-            default:
-              // Fallback to any default account
-              targetAccount = accounts.find(acc => acc.isDefault);
-              break;
-          }
-          
-          if (targetAccount) {
-            accountId = targetAccount.id;
-          } else {
-            // Last resort: use the first active account
-            accountId = accounts[0]?.id;
-          }
-        }
-
+      // Map payment methods to account IDs - use the account selected by the user
+      const salePayments: SalePayment[] = payments.map((payment) => {
         return {
           method: payment.method,
           amount: payment.amount,
           reference: payment.reference,
-          accountId,
+          accountId: payment.accountId, // Use the account ID selected by the user
         };
-      }));
+      });
 
       // Calculate totals
       const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -1309,8 +1246,9 @@ const POSPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState(0);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentReference, setPaymentReference] = useState('');
-    const [targetAccount, setTargetAccount] = useState<{ name: string; nameAr: string } | null>(null);
-    const [loadingAccount, setLoadingAccount] = useState(false);
+    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+    const [availableAccounts, setAvailableAccounts] = useState<FinancialAccount[]>([]);
+    const [loadingAccounts, setLoadingAccounts] = useState(false);
 
     const paymentMethods: { method: PaymentMethod; icon: React.ReactNode; label: string; labelAr: string; color: string }[] = [
       { method: 'cash', icon: <LocalAtm />, label: 'Cash', labelAr: 'نقدي', color: 'success.main' },
@@ -1318,94 +1256,64 @@ const POSPage: React.FC = () => {
       { method: 'digital_wallet', icon: <AccountBalanceWallet />, label: 'Digital Wallet', labelAr: 'محفظة إلكترونية', color: 'warning.main' },
     ];
 
-    // Load target account when payment method changes
+    // Load available accounts
     useEffect(() => {
-      const loadTargetAccount = async () => {
+      const loadAccounts = async () => {
         if (!currentUser?.companyId || !currentBranch?.id) return;
         
-        setLoadingAccount(true);
+        setLoadingAccounts(true);
         try {
-          // First check if there's an active cash register with mappings
-          const cashRegisterSession = await financeService.getActiveCashRegister(
-            currentUser.companyId,
-            currentBranch.id,
-            currentUser.uid
-          );
+          const accounts = await financeService.getAccounts(currentUser.companyId, {
+            branchId: currentBranch.id,
+            status: 'active'
+          });
           
-          let accountId: string | undefined;
+          setAvailableAccounts(accounts);
+          
+          // Try to suggest a default account based on payment method
           const currentMethod = paymentMethods[activeTab].method;
+          let suggestedAccount;
           
-          // Check cash register mappings first
-          if (cashRegisterSession?.accountMappings) {
-            switch (currentMethod) {
-              case 'cash':
-                accountId = cashRegisterSession.accountMappings.cashAccountId;
-                break;
-              case 'card':
-                accountId = cashRegisterSession.accountMappings.cardAccountId;
-                break;
-              case 'digital_wallet':
-                accountId = cashRegisterSession.accountMappings.digitalWalletAccountId;
-                break;
-            }
+          switch (currentMethod) {
+            case 'cash':
+              suggestedAccount = accounts.find(acc => acc.type === 'cash' && acc.isDefault) ||
+                               accounts.find(acc => acc.type === 'cash');
+              break;
+            case 'card':
+              suggestedAccount = accounts.find(acc => acc.type === 'credit_card' && acc.isDefault) ||
+                               accounts.find(acc => acc.type === 'credit_card') ||
+                               accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
+                               accounts.find(acc => acc.type === 'bank');
+              break;
+            case 'digital_wallet':
+              suggestedAccount = accounts.find(acc => acc.type === 'digital_wallet' && acc.isDefault) ||
+                               accounts.find(acc => acc.type === 'digital_wallet') ||
+                               accounts.find(acc => acc.type === 'bank');
+              break;
           }
           
-          // If no mapping, find account by type
-          if (!accountId) {
-            const accounts = await financeService.getAccounts(currentUser.companyId, {
-              branchId: currentBranch.id,
-              status: 'active'
-            });
-            
-            let targetAcc;
-            switch (currentMethod) {
-              case 'cash':
-                targetAcc = accounts.find(acc => acc.type === 'cash' && acc.isDefault) ||
-                           accounts.find(acc => acc.type === 'cash');
-                break;
-              case 'card':
-                targetAcc = accounts.find(acc => acc.type === 'credit_card' && acc.isDefault) ||
-                           accounts.find(acc => acc.type === 'credit_card') ||
-                           accounts.find(acc => acc.type === 'bank' && acc.isDefault) ||
-                           accounts.find(acc => acc.type === 'bank');
-                break;
-              case 'digital_wallet':
-                targetAcc = accounts.find(acc => acc.type === 'digital_wallet' && acc.isDefault) ||
-                           accounts.find(acc => acc.type === 'digital_wallet') ||
-                           accounts.find(acc => acc.type === 'bank');
-                break;
-            }
-            
-            if (targetAcc) {
-              setTargetAccount({ name: targetAcc.name, nameAr: targetAcc.nameAr });
-            } else {
-              setTargetAccount(null);
-            }
-          } else {
-            // Get account details by ID
-            const accounts = await financeService.getAccounts(currentUser.companyId);
-            const account = accounts.find(acc => acc.id === accountId);
-            if (account) {
-              setTargetAccount({ name: account.name, nameAr: account.nameAr });
-            }
+          // Only set if not already selected
+          if (!selectedAccountId && suggestedAccount) {
+            setSelectedAccountId(suggestedAccount.id!);
           }
         } catch (error) {
-          console.error('Error loading target account:', error);
-          setTargetAccount(null);
+          console.error('Error loading accounts:', error);
         } finally {
-          setLoadingAccount(false);
+          setLoadingAccounts(false);
         }
       };
       
-      loadTargetAccount();
-    }, [activeTab, currentUser?.companyId, currentBranch?.id]);
+      loadAccounts();
+    }, [currentUser?.companyId, currentBranch?.id]);
 
     const handleAddPayment = () => {
       const amount = parseFloat(paymentAmount);
-      if (amount > 0) {
-        addPayment(paymentMethods[activeTab].method, amount, paymentReference);
+      if (amount > 0 && selectedAccountId) {
+        addPayment(paymentMethods[activeTab].method, amount, paymentReference, selectedAccountId);
         setPaymentAmount('');
         setPaymentReference('');
+      } else if (!selectedAccountId) {
+        toast.error(isRTL ? 'يرجى اختيار الحساب المالي' : 'Please select a financial account');
       }
     };
 
@@ -1480,32 +1388,46 @@ const POSPage: React.FC = () => {
               </Tabs>
             </Box>
 
-            {/* Account Indicator */}
-            {targetAccount && (
-              <Alert 
-                severity="info" 
-                icon={<AccountBalance />}
-                sx={{ mb: 1 }}
+            {/* Account Selection */}
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>{isRTL ? 'الحساب المالي' : 'Financial Account'}</InputLabel>
+              <Select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                label={isRTL ? 'الحساب المالي' : 'Financial Account'}
+                startAdornment={
+                  <InputAdornment position="start">
+                    <AccountBalance />
+                  </InputAdornment>
+                }
               >
-                <Typography variant="body2">
-                  {isRTL 
-                    ? `سيتم الإيداع في: ${targetAccount.nameAr || targetAccount.name}`
-                    : `Will be deposited to: ${targetAccount.name}`
-                  }
-                </Typography>
-              </Alert>
-            )}
-            
-            {!targetAccount && !loadingAccount && (
-              <Alert severity="warning" sx={{ mb: 1 }}>
-                <Typography variant="body2">
-                  {isRTL 
-                    ? 'لا يوجد حساب مالي مناسب لهذه الطريقة. يرجى إنشاء حساب من إعدادات المالية.'
-                    : 'No suitable account found for this payment method. Please create an account in Finance settings.'
-                  }
-                </Typography>
-              </Alert>
-            )}
+                {availableAccounts.length === 0 && !loadingAccounts && (
+                  <MenuItem disabled>
+                    <Typography variant="body2" color="text.secondary">
+                      {isRTL 
+                        ? 'لا توجد حسابات مالية. يرجى إنشاء حساب من إعدادات المالية.'
+                        : 'No financial accounts. Please create an account in Finance settings.'}
+                    </Typography>
+                  </MenuItem>
+                )}
+                {availableAccounts.map((account) => (
+                  <MenuItem key={account.id} value={account.id}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {account.type === 'cash' && <LocalAtm fontSize="small" />}
+                        {account.type === 'bank' && <AccountBalance fontSize="small" />}
+                        {account.type === 'credit_card' && <CreditCard fontSize="small" />}
+                        {account.type === 'digital_wallet' && <AccountBalanceWallet fontSize="small" />}
+                        <span>{isRTL ? account.nameAr : account.name}</span>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {account.currentBalance?.toFixed(2) || '0.00'} {isRTL ? 'ج.م' : 'EGP'}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Payment Amount Input */}
             <Stack spacing={2}>
@@ -1552,7 +1474,7 @@ const POSPage: React.FC = () => {
                 fullWidth
                 variant="contained"
                 onClick={handleAddPayment}
-                disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+                disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || !selectedAccountId}
               >
                 {isRTL ? 'إضافة دفعة' : 'Add Payment'}
               </Button>
