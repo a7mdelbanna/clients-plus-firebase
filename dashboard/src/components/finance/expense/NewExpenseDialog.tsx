@@ -231,6 +231,33 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
 
       const totalAmount = calculateTotal();
       
+      // Get the selected beneficiary name
+      const selectedBeneficiary = beneficiaries.find(b => b.id === formData.vendorId);
+      const beneficiaryName = selectedBeneficiary?.displayName || 'Unknown';
+      
+      // Get the selected category name
+      const selectedCategory = categories.find(c => c.id === formData.categoryId);
+      const categoryName = selectedCategory?.nameAr || selectedCategory?.name || '';
+      
+      // Create a meaningful description
+      const dateStr = formData.date.toLocaleDateString('ar-EG', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      
+      // Build description: "BeneficiaryName - Description/Items - Date"
+      let description = beneficiaryName;
+      if (formData.description) {
+        description += ` - ${formData.description}`;
+      } else if (items[0]?.description) {
+        // Use first item description if no main description
+        description += ` - ${items[0].description}`;
+      } else if (categoryName) {
+        description += ` - ${categoryName}`;
+      }
+      description += ` - ${dateStr}`;
+      
       // Create expense transaction data in the correct format
       const expenseData = {
         companyId: currentUser.companyId!,
@@ -239,7 +266,7 @@ export default function NewExpenseDialog({ open, onClose, onSuccess }: NewExpens
         type: 'expense' as const,
         status: 'completed' as const,
         date: Timestamp.fromDate(formData.date),
-        description: formData.description || `Expense - ${formData.invoiceNumber || new Date().toLocaleDateString()}`,
+        description: description,
         amount: totalAmount,
         vatAmount: 0, // You can calculate VAT if needed
         totalAmount: totalAmount,
