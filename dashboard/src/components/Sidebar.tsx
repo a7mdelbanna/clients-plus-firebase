@@ -48,6 +48,7 @@ import {
   Paid,
   HelpCenter,
   Star,
+  MoneyOff,
   Work,
   Schedule,
   Category,
@@ -169,6 +170,13 @@ const menuItems: MenuItem[] = [
         path: '/finance/reports',
       },
     ],
+  },
+  {
+    id: 'expenses',
+    title: 'Expenses',
+    titleAr: 'المصروفات',
+    icon: <MoneyOff />,
+    path: '/finance/expenses',
   },
   {
     id: 'payroll',
