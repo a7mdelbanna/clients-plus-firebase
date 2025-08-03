@@ -434,10 +434,8 @@ class ExpenseService {
         await this.createApprovalWorkflow(expense.companyId, transactionId, expense);
       }
       
-      // Update vendor statistics
-      if (expense.expenseDetails.vendorId) {
-        await this.updateVendorStats(expense.companyId, expense.expenseDetails.vendorId, expense.totalAmount);
-      }
+      // Skip vendor statistics update - we're using contacts now, not vendors
+      // Vendor stats can be tracked through transaction history if needed
       
       // Update budget spent amount
       await this.updateBudgetSpent(expense.companyId, expense.expenseDetails.categoryId, expense.totalAmount);
@@ -790,6 +788,75 @@ class ExpenseService {
     }
   }
 
+  // Update budget
+  async updateBudget(companyId: string, budgetId: string, updates: Partial<Budget>): Promise<void> {
+    try {
+      const budgetRef = doc(db, 'companies', companyId, this.budgetsCollection, budgetId);
+      
+      await updateDoc(budgetRef, {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error updating budget:', error);
+      throw error;
+    }
+  }
+
+  // Get all budgets for a branch
+  async getBudgets(
+    companyId: string,
+    branchId?: string
+  ): Promise<Budget[]> {
+    try {
+      // Simple query without ordering to avoid index requirement
+      let q;
+      
+      if (branchId) {
+        // Query with branchId filter only
+        q = query(
+          collection(db, 'companies', companyId, this.budgetsCollection),
+          where('branchId', '==', branchId)
+        );
+      } else {
+        // Query all budgets for the company
+        q = query(
+          collection(db, 'companies', companyId, this.budgetsCollection)
+        );
+      }
+      
+      const snapshot = await getDocs(q);
+      
+      // Sort client-side to avoid index requirement
+      const budgets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Budget));
+      
+      // Sort by createdAt client-side
+      budgets.sort((a, b) => {
+        const aCreatedAt = (a as any).createdAt;
+        const bCreatedAt = (b as any).createdAt;
+        
+        // Convert Firestore timestamps to dates
+        const aDate = aCreatedAt?.toDate ? aCreatedAt.toDate() : 
+                      aCreatedAt?.seconds ? new Date(aCreatedAt.seconds * 1000) :
+                      aCreatedAt instanceof Date ? aCreatedAt : null;
+                      
+        const bDate = bCreatedAt?.toDate ? bCreatedAt.toDate() : 
+                      bCreatedAt?.seconds ? new Date(bCreatedAt.seconds * 1000) :
+                      bCreatedAt instanceof Date ? bCreatedAt : null;
+        
+        if (!aDate || !bDate) return 0;
+        
+        // Sort descending (newest first)
+        return bDate.getTime() - aDate.getTime();
+      });
+      
+      return budgets;
+    } catch (error) {
+      console.error('Error getting budgets:', error);
+      return [];
+    }
+  }
+
   // Get active budget
   async getActiveBudget(
     companyId: string,
@@ -797,22 +864,10 @@ class ExpenseService {
     date: Date = new Date()
   ): Promise<Budget | null> {
     try {
-      const constraints: QueryConstraint[] = [
-        where('status', '==', 'active'),
-        where('startDate', '<=', date),
-        where('endDate', '>=', date),
-      ];
-      
-      if (branchId) {
-        constraints.push(where('branchId', '==', branchId));
-      } else {
-        constraints.push(where('branchId', '==', null));
-      }
-      
+      // Simplified query to avoid index requirements
       const q = query(
         collection(db, 'companies', companyId, this.budgetsCollection),
-        ...constraints,
-        limit(1)
+        where('status', '==', 'active')
       );
       
       const snapshot = await getDocs(q);
@@ -821,10 +876,29 @@ class ExpenseService {
         return null;
       }
       
-      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Budget;
+      // Filter client-side for date range and branch
+      const budgets = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Budget))
+        .filter(budget => {
+          const budgetStartDate = budget.startDate?.toDate ? budget.startDate.toDate() : budget.startDate;
+          const budgetEndDate = budget.endDate?.toDate ? budget.endDate.toDate() : budget.endDate;
+          
+          // Check date range
+          if (budgetStartDate && budgetStartDate > date) return false;
+          if (budgetEndDate && budgetEndDate < date) return false;
+          
+          // Check branch
+          if (branchId && budget.branchId !== branchId) return false;
+          if (!branchId && budget.branchId) return false;
+          
+          return true;
+        });
+      
+      return budgets.length > 0 ? budgets[0] : null;
     } catch (error) {
       console.error('Error getting active budget:', error);
-      throw error;
+      // Don't throw - budget is optional
+      return null;
     }
   }
 
@@ -836,27 +910,39 @@ class ExpenseService {
   ): Promise<void> {
     try {
       const budget = await this.getActiveBudget(companyId);
-      if (!budget) return;
+      if (!budget || !budget.id) return;
+      
+      // Check if this budget has category budgets
+      if (!budget.categoryBudgets || budget.categoryBudgets.length === 0) return;
       
       const categoryBudgetIndex = budget.categoryBudgets.findIndex(cb => cb.categoryId === categoryId);
       if (categoryBudgetIndex === -1) return;
       
       const updatedCategoryBudgets = [...budget.categoryBudgets];
-      updatedCategoryBudgets[categoryBudgetIndex].spentAmount += amount;
-      updatedCategoryBudgets[categoryBudgetIndex].availableAmount -= amount;
-      updatedCategoryBudgets[categoryBudgetIndex].percentageUsed = 
-        (updatedCategoryBudgets[categoryBudgetIndex].spentAmount / updatedCategoryBudgets[categoryBudgetIndex].allocatedAmount) * 100;
+      updatedCategoryBudgets[categoryBudgetIndex].spentAmount = 
+        (updatedCategoryBudgets[categoryBudgetIndex].spentAmount || 0) + amount;
+      updatedCategoryBudgets[categoryBudgetIndex].availableAmount = 
+        (updatedCategoryBudgets[categoryBudgetIndex].allocatedAmount || 0) - 
+        (updatedCategoryBudgets[categoryBudgetIndex].spentAmount || 0);
       
-      // Check if alert should be sent
-      const categoryBudget = updatedCategoryBudgets[categoryBudgetIndex];
-      if (categoryBudget.percentageUsed >= categoryBudget.alertThreshold && !categoryBudget.alertSent) {
-        categoryBudget.alertSent = true;
-        categoryBudget.alertSentAt = Timestamp.now();
-        // TODO: Send alert notification
+      // Calculate percentage only if allocated amount exists
+      if (updatedCategoryBudgets[categoryBudgetIndex].allocatedAmount > 0) {
+        updatedCategoryBudgets[categoryBudgetIndex].percentageUsed = 
+          (updatedCategoryBudgets[categoryBudgetIndex].spentAmount / updatedCategoryBudgets[categoryBudgetIndex].allocatedAmount) * 100;
+        
+        // Check if alert should be sent
+        const categoryBudget = updatedCategoryBudgets[categoryBudgetIndex];
+        if (categoryBudget.alertThreshold && 
+            categoryBudget.percentageUsed >= categoryBudget.alertThreshold && 
+            !categoryBudget.alertSent) {
+          categoryBudget.alertSent = true;
+          categoryBudget.alertSentAt = Timestamp.now();
+          // TODO: Send alert notification
+        }
       }
       
       await updateDoc(
-        doc(db, 'companies', companyId, this.budgetsCollection, budget.id!),
+        doc(db, 'companies', companyId, this.budgetsCollection, budget.id),
         {
           categoryBudgets: updatedCategoryBudgets,
           updatedAt: serverTimestamp(),

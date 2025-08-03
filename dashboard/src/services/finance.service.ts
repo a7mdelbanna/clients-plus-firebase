@@ -345,6 +345,53 @@ class FinanceService {
 
   // ==================== Financial Transactions ====================
 
+  // Helper method to check if a transaction is a real expense (not transfer or system transaction)
+  private isRealExpense(transaction: FinancialTransaction): boolean {
+    // Exclude transfer transactions
+    if (transaction.isTransfer || transaction.category === 'transfer') {
+      return false;
+    }
+    
+    // Exclude system categories that aren't real expenses
+    const systemCategories = ['opening_balance', 'cash_count_opening', 'cash_movement'];
+    if (systemCategories.includes(transaction.category)) {
+      return false;
+    }
+    
+    // Include actual expense transactions
+    return transaction.type === 'expense' || 
+           transaction.category === 'expense' || 
+           !!(transaction as any).expenseDetails ||
+           (!!(transaction as any).metadata && !!(transaction as any).metadata.categoryId);
+  }
+
+  // Get only expense transactions (excluding transfers and system transactions)
+  async getExpenseTransactions(
+    companyId: string,
+    filters?: TransactionFilters,
+    pageSize: number = 50,
+    lastDoc?: DocumentSnapshot
+  ): Promise<{ transactions: FinancialTransaction[]; lastDoc: DocumentSnapshot | null }> {
+    try {
+      // Get all transactions first
+      const result = await this.getTransactions(companyId, filters, pageSize * 2, lastDoc);
+      
+      // Filter for real expenses only
+      const expenseTransactions = result.transactions.filter(t => this.isRealExpense(t));
+      
+      // Limit to requested page size
+      const limitedTransactions = expenseTransactions.slice(0, pageSize);
+      
+      return {
+        transactions: limitedTransactions,
+        lastDoc: result.lastDoc,
+      };
+    } catch (error) {
+      console.error('Error getting expense transactions:', error);
+      throw error;
+    }
+  }
+
   // Create a financial transaction
   async createTransaction(
     transaction: Omit<FinancialTransaction, 'id' | 'createdAt' | 'updatedAt'>
@@ -932,7 +979,7 @@ class FinanceService {
       
       if (movement.fromAccountId && movement.toAccountId) {
         // This is a transfer between accounts
-        transactionId = await this.createTransfer(
+        const transferResult = await this.createTransfer(
           companyId,
           movement.fromAccountId,
           movement.toAccountId,
@@ -941,6 +988,7 @@ class FinanceService {
           performedBy,
           session.branchId
         );
+        transactionId = transferResult.fromTransactionId;
       } else if (movement.fromAccountId) {
         // This is an expense/withdrawal
         transactionId = await this.createTransaction({
@@ -1089,7 +1137,7 @@ class FinanceService {
 
           if (discrepancy > 0) {
             // Cash Over - increase cash account, decrease over/short account
-            discrepancyTransactionId = await this.createTransfer(
+            const transferResult = await this.createTransfer(
               companyId,
               overShortAccountId,
               accountId,
@@ -1098,9 +1146,10 @@ class FinanceService {
               closingUserId,
               session.branchId
             );
+            discrepancyTransactionId = transferResult.fromTransactionId;
           } else {
             // Cash Short - decrease cash account, increase over/short account
-            discrepancyTransactionId = await this.createTransfer(
+            const transferResult = await this.createTransfer(
               companyId,
               accountId,
               overShortAccountId,
@@ -1109,6 +1158,7 @@ class FinanceService {
               closingUserId,
               session.branchId
             );
+            discrepancyTransactionId = transferResult.fromTransactionId;
           }
           
           if (discrepancyTransactionId) {
@@ -1286,6 +1336,7 @@ class FinanceService {
       name: 'Cash Over/Short',
       nameAr: 'فائض/عجز النقدية',
       type: 'cash',
+      currentBalance: 0,
       openingBalance: 0,
       openingDate: Timestamp.now(),
       isDefault: false,
@@ -1769,11 +1820,11 @@ class FinanceService {
       confirmationMethod: 'manual' | 'sms' | 'app_notification' | 'api' | 'qr_scan';
       confirmationScreenshot?: string;
     },
+    createdBy: string,
     reference?: {
       type: 'appointment' | 'product_sale' | 'other';
       id?: string;
-    },
-    createdBy: string
+    }
   ): Promise<string> {
     try {
       const netAmount = payment.grossAmount - (payment.walletFee || 0);

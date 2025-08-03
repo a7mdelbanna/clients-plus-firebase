@@ -70,7 +70,11 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
         }
 
         if (!cId) {
-          console.error('No company ID found for user');
+          console.error('[BranchContext] No company ID found for user', {
+            userId: currentUser.uid,
+            claims: idTokenResult.claims,
+            email: currentUser.email
+          });
           setLoading(false);
           return;
         }
@@ -169,7 +173,12 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
             setLoading(false);
           },
           (error) => {
-            console.error('Error loading branches:', error);
+            console.error('[BranchContext] Error loading branches:', {
+              error: error.message,
+              code: error.code,
+              companyId: cId,
+              userId: currentUser.uid
+            });
             setLoading(false);
           }
         );

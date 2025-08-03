@@ -189,7 +189,7 @@ export default function ExpenseDashboard() {
         setVendors(vendorsData);
         
         // Process data for charts
-        processBudgetData(categoriesData, expenseTransactions);
+        await processBudgetData(categoriesData, expenseTransactions);
         processTrendData(expenseTransactions);
         processVendorData(vendorsData, expenseTransactions);
         processRecentExpenses(expenseTransactions, categoriesData, vendorsData);
@@ -208,22 +208,45 @@ export default function ExpenseDashboard() {
   }, [currentUser, currentBranch]);
   
   // Process budget data for categories
-  const processBudgetData = (categories: ExpenseCategory[], transactions: FinancialTransaction[]) => {
+  const processBudgetData = async (categories: ExpenseCategory[], transactions: FinancialTransaction[]) => {
     const categoryMap = new Map<string, { spent: number; budget: number }>();
+    
+    // Try to get active budget to get real budget amounts
+    let activeBudget = null;
+    if (currentUser?.companyId && currentBranch?.id) {
+      try {
+        activeBudget = await expenseService.getActiveBudget(
+          currentUser.companyId,
+          currentBranch.id,
+          new Date()
+        );
+      } catch (error) {
+        console.error('Error fetching active budget:', error);
+      }
+    }
     
     // Initialize with budgets
     categories.forEach(cat => {
-      const budget = cat.monthlyBudget || cat.budgetLimit || 10000; // Default budget if not set
-      categoryMap.set(cat.id!, { spent: 0, budget });
+      // Try to get budget from active budget first
+      let budget = 0;
+      if (activeBudget && activeBudget.categoryBudgets) {
+        const categoryBudget = activeBudget.categoryBudgets.find(cb => cb.categoryId === cat.id);
+        budget = categoryBudget?.allocatedAmount || 0;
+      }
+      
+      // Only include categories with budget allocated
+      if (budget > 0) {
+        categoryMap.set(cat.id!, { spent: 0, budget });
+      }
     });
     
     // Calculate spent amounts from expense transactions
     transactions.forEach(trans => {
-      // Check if this is an expense transaction (has categoryId in metadata)
-      const categoryId = trans.metadata?.categoryId || trans.categoryId;
+      // Check if this is an expense transaction (has expenseDetails.categoryId)
+      const categoryId = (trans as any).expenseDetails?.categoryId || trans.metadata?.categoryId || trans.categoryId;
       if (categoryId && categoryMap.has(categoryId)) {
         const current = categoryMap.get(categoryId)!;
-        current.spent += trans.amount;
+        current.spent += trans.totalAmount || trans.amount || 0;
       }
     });
     

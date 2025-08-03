@@ -150,8 +150,8 @@ const ExpenseManagementPage: React.FC = () => {
         const startOfMonthDate = startOfMonth(now);
         const endOfMonthDate = endOfMonth(now);
         
-        // Load current month transactions from finance service
-        const result = await financeService.getTransactions(
+        // Load current month expense transactions from finance service
+        const result = await financeService.getExpenseTransactions(
           currentUser.companyId,
           {
             branchId: currentBranch.id,
@@ -160,10 +160,7 @@ const ExpenseManagementPage: React.FC = () => {
           }
         );
         
-        // Filter for expense transactions
-        const transactions = result.transactions.filter(t => 
-          t.type === 'expense' || t.metadata?.categoryId
-        );
+        const transactions = result.transactions;
         
         // Load categories for budget calculation
         const categories = await expenseService.getCategories(currentUser.companyId);
@@ -172,18 +169,35 @@ const ExpenseManagementPage: React.FC = () => {
         const vendors = await expenseService.getVendors(currentUser.companyId);
         
         // Calculate summary metrics
-        const totalExpenses = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalExpenses = transactions.reduce((sum, t) => sum + (t.totalAmount || t.amount || 0), 0);
         const pendingTransactions = transactions.filter(t => 
-          t.categoryId && // Make sure it's an expense transaction
-          t.approvalStatus === 'pending'
+          ((t as any).expenseDetails?.approvalStatus === 'pending' || 
+           t.status === 'pending' || 
+           (t as any).approvalStatus === 'pending')
         );
-        const pendingApprovals = pendingTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const pendingApprovals = pendingTransactions.reduce((sum, t) => sum + (t.totalAmount || t.amount || 0), 0);
         const pendingCount = pendingTransactions.length;
         
-        // Calculate budget
-        const totalBudget = categories.reduce((sum, cat) => sum + (cat.budgetLimit || 0), 0);
-        const budgetRemaining = Math.max(0, totalBudget - totalExpenses);
-        const budgetPercentage = totalBudget > 0 ? (totalExpenses / totalBudget) * 100 : 0;
+        // Try to get active budget for this branch
+        const activeBudget = await expenseService.getActiveBudget(
+          currentUser.companyId,
+          currentBranch.id,
+          new Date()
+        );
+        
+        let budgetRemaining = 0;
+        let budgetPercentage = 0;
+        
+        if (activeBudget && activeBudget.totalBudget) {
+          // Use actual budget from the system
+          const totalSpent = totalExpenses;
+          budgetRemaining = Math.max(0, activeBudget.totalBudget - totalSpent);
+          budgetPercentage = activeBudget.totalBudget > 0 ? (totalSpent / activeBudget.totalBudget) * 100 : 0;
+        } else {
+          // No budget set - show 0
+          budgetRemaining = 0;
+          budgetPercentage = 0;
+        }
         
         // Vendor metrics
         const activeVendors = vendors.filter(v => v.status === 'active').length;

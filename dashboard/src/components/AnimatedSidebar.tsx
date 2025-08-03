@@ -94,7 +94,23 @@ const menuItems: MenuItem[] = [
     title: 'Finance',
     titleAr: 'المالية',
     icon: <AccountBalance />,
-    path: '/finance',
+    // Remove path to make it expandable
+    subItems: [
+      {
+        id: 'finance-dashboard',
+        title: 'Dashboard',
+        titleAr: 'لوحة القيادة',
+        icon: <Dashboard />,
+        path: '/finance',
+      },
+      {
+        id: 'expenses',
+        title: 'Expenses',
+        titleAr: 'المصروفات',
+        icon: <Receipt />,
+        path: '/finance/expenses',
+      },
+    ],
   },
   {
     id: 'payroll',
@@ -242,7 +258,7 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
   const { currentUser, logout } = useAuth();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isRTL = theme.direction === 'rtl';
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['finance']);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const drawerWidth = open ? 240 : 70;

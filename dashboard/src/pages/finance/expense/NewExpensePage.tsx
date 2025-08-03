@@ -91,7 +91,13 @@ const NewExpensePage: React.FC = () => {
   // Load categories, vendors, and accounts
   useEffect(() => {
     const loadData = async () => {
-      if (!currentUser?.companyId) return;
+      if (!currentUser?.companyId) {
+        console.warn('NewExpensePage: Missing companyId', {
+          hasUser: !!currentUser,
+          companyId: currentUser?.companyId
+        });
+        return;
+      }
 
       setLoading(true);
       try {
@@ -125,7 +131,10 @@ const NewExpensePage: React.FC = () => {
   }, [currentUser, isRTL]);
 
   const handleSubmit = async () => {
-    if (!currentUser?.companyId || !currentBranch?.id) return;
+    if (!currentUser?.companyId || !currentBranch?.id) {
+      setError(isRTL ? 'بيانات المستخدم أو الفرع مفقودة' : 'User or branch data missing');
+      return;
+    }
 
     // Validation
     if (!date || !description || !amount || !categoryId || !accountId) {
