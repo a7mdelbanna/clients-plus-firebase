@@ -170,8 +170,8 @@ export default function ExpenseDashboard() {
         const startOfMonthDate = startOfMonth(now);
         const endOfMonthDate = endOfMonth(now);
         
-        // Get all financial transactions and filter expense ones
-        const result = await financeService.getTransactions(
+        // Get expense transactions directly
+        const result = await financeService.getExpenseTransactions(
           currentUser.companyId,
           {
             branchId: currentBranch.id,
@@ -180,10 +180,13 @@ export default function ExpenseDashboard() {
           }
         );
         
-        // Filter for expense transactions (type: 'expense' or has categoryId)
-        const expenseTransactions = result.transactions.filter(t => 
-          t.type === 'expense' || t.metadata?.categoryId
-        );
+        const expenseTransactions = result.transactions;
+        
+        // Debug: Log the structure of the first transaction
+        if (expenseTransactions.length > 0) {
+          console.log('Sample expense transaction:', expenseTransactions[0]);
+          console.log('ExpenseDetails:', (expenseTransactions[0] as any).expenseDetails);
+        }
         
         setTransactions(expenseTransactions);
         
@@ -320,17 +323,26 @@ export default function ExpenseDashboard() {
   const processContactData = (contacts: Contact[], transactions: FinancialTransaction[]) => {
     const contactMap = new Map<string, { spent: number; count: number; lastMonth: number }>();
     
+    console.log('Processing contact data - contacts:', contacts.length, 'transactions:', transactions.length);
+    
     // Calculate current month spending from expense transactions
     transactions.forEach(trans => {
       // Check if this is an expense transaction with vendor/contact
-      const vendorId = trans.metadata?.vendorId || trans.vendorId;
+      // Try multiple possible locations for vendorId
+      const vendorId = (trans as any).expenseDetails?.vendorId || 
+                       trans.metadata?.vendorId || 
+                       (trans as any).vendorId;
+      
       if (vendorId) {
+        console.log('Found transaction with vendorId:', vendorId);
         const current = contactMap.get(vendorId) || { spent: 0, count: 0, lastMonth: 0 };
-        current.spent += trans.amount;
+        current.spent += trans.totalAmount || trans.amount;
         current.count += 1;
         contactMap.set(vendorId, current);
       }
     });
+    
+    console.log('Contact map after processing:', contactMap.size, 'entries');
     
     // Create contact data sorted by spending
     const data = Array.from(contactMap.entries())
@@ -353,6 +365,7 @@ export default function ExpenseDashboard() {
       .sort((a, b) => b!.spent - a!.spent)
       .slice(0, 4);
     
+    console.log('Final contact data:', data);
     setContactData(data as any[]);
   };
   
@@ -366,8 +379,8 @@ export default function ExpenseDashboard() {
       .sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime())
       .slice(0, 4)
       .map(trans => {
-        const categoryId = trans.metadata?.categoryId || trans.categoryId;
-        const vendorId = trans.metadata?.vendorId || trans.vendorId;
+        const categoryId = (trans as any).expenseDetails?.categoryId || trans.metadata?.categoryId || trans.categoryId;
+        const vendorId = (trans as any).expenseDetails?.vendorId || trans.metadata?.vendorId || (trans as any).vendorId;
         const category = categories.find(c => c.id === categoryId);
         const contact = contacts.find(c => c.id === vendorId);
         const transDate = trans.createdAt.toDate();
