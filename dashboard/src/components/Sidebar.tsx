@@ -149,6 +149,13 @@ const menuItems: MenuItem[] = [
         path: '/finance/cash-register',
       },
       {
+        id: 'expenses',
+        title: 'Expenses',
+        titleAr: 'المصروفات',
+        icon: <MoneyOff />,
+        path: '/finance/expenses',
+      },
+      {
         id: 'pos',
         title: 'Point of Sale',
         titleAr: 'نقطة البيع',
