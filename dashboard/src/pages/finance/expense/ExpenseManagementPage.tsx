@@ -464,6 +464,12 @@ const ExpenseManagementPage: React.FC = () => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
+        <MenuItem onClick={() => { navigate('/finance/expense/contacts'); handleMenuClose(); }}>
+          <ListItemIcon>
+            <Store fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{isRTL ? 'إدارة الموردين' : 'Manage Vendors'}</ListItemText>
+        </MenuItem>
         <MenuItem onClick={() => { navigate('/finance/expense/categories'); handleMenuClose(); }}>
           <ListItemIcon>
             <Category fontSize="small" />

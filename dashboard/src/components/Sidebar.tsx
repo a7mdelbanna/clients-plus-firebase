@@ -61,6 +61,7 @@ import {
   WhatsApp,
   ShoppingCart,
   PointOfSale,
+  ContactMail,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -89,6 +90,13 @@ const menuItems: MenuItem[] = [
     titleAr: 'العملاء',
     icon: <People />,
     path: '/clients',
+  },
+  {
+    id: 'contacts',
+    title: 'Contacts',
+    titleAr: 'جهات الاتصال',
+    icon: <ContactMail />,
+    path: '/contacts',
   },
   {
     id: 'booking-links',

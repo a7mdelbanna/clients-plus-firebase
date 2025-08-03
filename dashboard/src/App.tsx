@@ -34,6 +34,8 @@ import AppointmentCalendarSettingsPage from './pages/settings/appointment-calend
 import WhatsAppSettingsPage from './pages/settings/whatsapp/WhatsAppSettingsPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
+import ContactsPage from './pages/contacts/ContactsPage';
+import ExpenseContactsPage from './pages/contacts/ExpenseContactsPage';
 import BookingLinks from './pages/BookingLinks';
 import OnlineBooking from './pages/OnlineBooking';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
@@ -309,6 +311,11 @@ function App() {
                     <Clients />
                   </PageTransition>
                 } />
+                <Route path="/contacts" element={
+                  <PageTransition>
+                    <ContactsPage />
+                  </PageTransition>
+                } />
                 <Route path="/booking-links" element={
                   <PageTransition>
                     <BookingLinks />
@@ -412,6 +419,11 @@ function App() {
                 <Route path="/finance/expense/new" element={
                   <PageTransition>
                     <NewExpensePage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/contacts" element={
+                  <PageTransition>
+                    <ExpenseContactsPage />
                   </PageTransition>
                 } />
                 <Route path="/finance/invoices" element={

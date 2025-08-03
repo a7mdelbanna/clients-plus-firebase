@@ -43,7 +43,10 @@ import { ar, enUS } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { expenseService } from '../../../services/expense.service';
 import { financeService } from '../../../services/finance.service';
-import type { ExpenseCategory, Vendor } from '../../../types/expense.types';
+import type { ExpenseCategory } from '../../../types/expense.types';
+import ContactSelector from '../../../components/ContactSelector';
+import { ContactType } from '../../../types/contact.types';
+import { contactService } from '../../../services/contact.service';
 
 const NewExpensePage: React.FC = () => {
   const theme = useTheme();
@@ -64,7 +67,7 @@ const NewExpensePage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [vendorId, setVendorId] = useState('');
+  const [contactId, setContactId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'card'>('cash');
   const [accountId, setAccountId] = useState('');
   const [reference, setReference] = useState('');
@@ -73,9 +76,7 @@ const NewExpensePage: React.FC = () => {
 
   // Data lists
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [newVendorName, setNewVendorName] = useState('');
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -94,14 +95,12 @@ const NewExpensePage: React.FC = () => {
 
       setLoading(true);
       try {
-        const [categoriesData, vendorsData, accountsData] = await Promise.all([
+        const [categoriesData, accountsData] = await Promise.all([
           expenseService.getCategories(currentUser.companyId),
-          expenseService.getVendors(currentUser.companyId),
           financeService.getAccounts(currentUser.companyId),
         ]);
 
         setCategories(categoriesData.filter(cat => cat.isActive !== false));
-        setVendors(vendorsData.filter(v => v.status === 'active'));
         
         // Filter active accounts and set default
         const activeAccounts = accountsData.filter(acc => acc.status === 'active');
@@ -138,18 +137,7 @@ const NewExpensePage: React.FC = () => {
     setError(null);
 
     try {
-      // Create vendor if new
-      let finalVendorId = vendorId;
-      if (newVendorName && !vendorId) {
-        finalVendorId = await expenseService.createVendor({
-          companyId: currentUser.companyId,
-          name: newVendorName,
-          nameAr: newVendorName,
-          type: 'supplier',
-          status: 'active',
-          contact: {},
-        });
-      }
+      // contactId is already set from ContactSelector
 
       // Create expense transaction
       const expenseData = {
@@ -167,7 +155,8 @@ const NewExpensePage: React.FC = () => {
         notes,
         expenseDetails: {
           categoryId,
-          vendorId: finalVendorId || '',
+          vendorId: contactId || '', // For backward compatibility
+          contactId: contactId || '',
           receipts: [], // TODO: Handle receipt uploads
           approvalStatus: 'approved' as const, // Auto-approve for now
           isRecurring: false,
@@ -384,26 +373,21 @@ const NewExpensePage: React.FC = () => {
 
             {/* Row 5: Vendor and Reference */}
             <Grid item xs={12} sm={6}>
-              <Autocomplete
-                options={vendors}
-                getOptionLabel={(option) => option.name}
-                value={vendors.find(v => v.id === vendorId) || null}
-                onChange={(event, newValue) => {
-                  setVendorId(newValue?.id || '');
-                  setNewVendorName('');
+              <ContactSelector
+                label={isRTL ? 'المورد (اختياري)' : 'Vendor (Optional)'}
+                placeholder={isRTL ? 'اختر أو أضف مورد جديد' : 'Select or add new vendor'}
+                value={contactId}
+                onChange={(id) => setContactId(id || '')}
+                contactTypes={[ContactType.VENDOR, ContactType.SUPPLIER]}
+                onCreateNew={async (name) => {
+                  // Quick create vendor contact
+                  const quickContact = {
+                    displayName: name,
+                    type: ContactType.VENDOR,
+                    companyId: currentUser.companyId,
+                  };
+                  return await contactService.quickCreateContact(quickContact);
                 }}
-                freeSolo
-                onInputChange={(event, newInputValue) => {
-                  setNewVendorName(newInputValue);
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label={isRTL ? 'المورد (اختياري)' : 'Vendor (Optional)'}
-                    placeholder={isRTL ? 'اختر أو أضف مورد جديد' : 'Select or add new vendor'}
-                    variant="outlined"
-                  />
-                )}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
