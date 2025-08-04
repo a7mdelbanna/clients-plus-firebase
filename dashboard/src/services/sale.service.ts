@@ -21,6 +21,8 @@ import { db } from '../config/firebase';
 import type { Sale, SaleFilters, SaleItem, SalePayment, DailySalesSummary } from '../types/sale.types';
 import { productService } from './product.service';
 import { financeService } from './finance.service';
+import { registerService } from './register.service';
+import type { PaymentBreakdown } from '../types/register.types';
 
 class SaleService {
   private salesCollection = 'sales';
@@ -77,8 +79,28 @@ class SaleService {
       const saleNumber = await this.generateSaleNumber(sale.companyId, sale.branchId);
       const receiptNumber = await this.generateReceiptNumber(sale.companyId, sale.branchId);
 
+      // Helper function to deeply clean an object/array of undefined values
+      const cleanObject = (obj: any): any => {
+        if (Array.isArray(obj)) {
+          return obj.map(item => cleanObject(item));
+        } else if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(obj.constructor.name === 'Timestamp')) {
+          const cleaned: any = {};
+          Object.keys(obj).forEach(key => {
+            const value = obj[key];
+            if (value !== undefined) {
+              cleaned[key] = cleanObject(value);
+            }
+          });
+          return cleaned;
+        }
+        return obj;
+      };
+
+      // Clean the sale object to remove undefined values
+      const cleanedSale = cleanObject(sale);
+
       const saleData = {
-        ...sale,
+        ...cleanedSale,
         saleNumber,
         receiptNumber,
         createdAt: serverTimestamp(),
@@ -102,12 +124,13 @@ class SaleService {
     companyId: string,
     saleId: string,
     items: SaleItem[],
-    payments: SalePayment[],
-    cashRegisterId?: string
+    payments: SalePayment[]
   ): Promise<void> {
     try {
       await runTransaction(db, async (transaction) => {
-        // Get the sale document
+        // ===== PHASE 1: ALL READS FIRST =====
+        
+        // Read the sale document
         const saleRef = doc(db, 'companies', companyId, this.salesCollection, saleId);
         const saleDoc = await transaction.get(saleRef);
         
@@ -117,105 +140,102 @@ class SaleService {
 
         const sale = saleDoc.data() as Sale;
 
-        // Update inventory for each item
+        // Read all product documents
+        const productDocs: { ref: any; data: any; item: SaleItem }[] = [];
         for (const item of items) {
           if (item.productId) {
             const productRef = doc(db, 'companies', companyId, 'products', item.productId);
             const productDoc = await transaction.get(productRef);
-            
             if (productDoc.exists()) {
-              const product = productDoc.data();
-              
-              // Update branch stock if inventory tracking is enabled
-              if (product.trackInventory && product.branchStock) {
-                const currentStock = product.branchStock[sale.branchId]?.quantity || 0;
-                const newStock = Math.max(0, currentStock - item.quantity);
-                
-                transaction.update(productRef, {
-                  [`branchStock.${sale.branchId}.quantity`]: newStock,
-                  [`branchStock.${sale.branchId}.lastUpdated`]: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                });
-
-                // Create inventory transaction
-                const inventoryData = {
-                  productId: item.productId,
-                  type: 'sale',
-                  quantity: -item.quantity,
-                  reference: sale.receiptNumber,
-                  referenceId: saleId,
-                  branchId: sale.branchId,
-                  companyId,
-                  createdAt: serverTimestamp(),
-                  createdBy: sale.staffId,
-                  notes: `Sale ${sale.receiptNumber}`,
-                };
-
-                const inventoryRef = doc(collection(db, 'companies', companyId, 'inventoryTransactions'));
-                transaction.set(inventoryRef, inventoryData);
-              }
+              productDocs.push({ ref: productRef, data: productDoc.data(), item });
             }
           }
         }
 
-        // Create financial transactions for each payment
+        // Read all account documents
+        const accountDocs: { ref: any; exists: boolean; payment: SalePayment }[] = [];
         for (const payment of payments) {
           if (payment.accountId) {
-            const transactionData = {
-              accountId: payment.accountId,
-              type: 'income' as const,
-              category: 'sales',
-              amount: payment.amount,
-              description: `Sale ${sale.receiptNumber}`,
-              reference: sale.receiptNumber,
-              referenceId: saleId,
-              paymentMethod: payment.method,
-              date: Timestamp.now(),
-              status: 'completed' as const,
-              companyId,
-              branchId: sale.branchId,
-              createdBy: sale.staffId,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            };
-
-            const financeRef = doc(collection(db, 'companies', companyId, 'transactions'));
-            transaction.set(financeRef, transactionData);
-
-            // Update account balance
             const accountRef = doc(db, 'companies', companyId, 'accounts', payment.accountId);
-            transaction.update(accountRef, {
-              balance: increment(payment.amount),
-              lastTransactionDate: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+            const accountDoc = await transaction.get(accountRef);
+            accountDocs.push({ ref: accountRef, exists: accountDoc.exists(), payment });
           }
         }
 
-        // Update cash register session if provided
-        if (cashRegisterId) {
-          const registerRef = doc(db, 'companies', companyId, 'cashRegisters', cashRegisterId);
-          
-          // Group payments by method
-          const paymentsByMethod = payments.reduce((acc, payment) => {
-            acc[payment.method] = (acc[payment.method] || 0) + payment.amount;
-            return acc;
-          }, {} as Record<string, number>);
 
-          // Update current amounts in cash register
-          const updates: any = {
-            [`currentAmounts.${sale.total > 0 ? 'sales' : 'refunds'}`]: increment(Math.abs(sale.total)),
-            lastActivityAt: serverTimestamp(),
+        // ===== PHASE 2: ALL WRITES =====
+
+        // Update inventory for each product
+        for (const { ref, data: product, item } of productDocs) {
+          // Update branch stock if inventory tracking is enabled
+          if (product.trackInventory && product.branchStock) {
+            const currentStock = product.branchStock[sale.branchId]?.quantity || 0;
+            const newStock = Math.max(0, currentStock - item.quantity);
+            
+            transaction.update(ref, {
+              [`branchStock.${sale.branchId}.quantity`]: newStock,
+              [`branchStock.${sale.branchId}.lastUpdated`]: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+
+            // Create inventory transaction
+            const inventoryData = {
+              productId: item.productId,
+              type: 'sale',
+              quantity: -item.quantity,
+              reference: sale.receiptNumber,
+              referenceId: saleId,
+              branchId: sale.branchId,
+              companyId,
+              createdAt: serverTimestamp(),
+              createdBy: sale.staffId,
+              notes: `Sale ${sale.receiptNumber}`,
+            };
+
+            const inventoryRef = doc(collection(db, 'companies', companyId, 'inventoryTransactions'));
+            transaction.set(inventoryRef, inventoryData);
+          }
+        }
+
+        // Create financial transactions and update account balances
+        for (const { ref, exists, payment } of accountDocs) {
+          // Create financial transaction
+          const transactionData = {
+            accountId: payment.accountId,
+            type: 'income' as const,
+            category: 'sales',
+            amount: payment.amount,
+            description: `Sale ${sale.receiptNumber}`,
+            reference: sale.receiptNumber,
+            referenceId: saleId,
+            paymentMethod: payment.method,
+            date: Timestamp.now(),
+            status: 'completed' as const,
+            companyId,
+            branchId: sale.branchId,
+            createdBy: sale.staffId,
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };
 
-          // Update amounts by payment method
-          Object.entries(paymentsByMethod).forEach(([method, amount]) => {
-            updates[`currentAmounts.${method}`] = increment(amount);
-          });
+          const financeRef = doc(collection(db, 'companies', companyId, 'transactions'));
+          transaction.set(financeRef, transactionData);
 
-          transaction.update(registerRef, updates);
+          // Update account balance if account exists
+          if (exists) {
+            transaction.update(ref, {
+              currentBalance: increment(payment.amount),
+              lastTransactionDate: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            // Only log in development mode
+            if (import.meta.env.DEV) {
+              console.debug(`Account ${payment.accountId} not found, skipping balance update`);
+            }
+          }
         }
+
 
         // Update the sale status
         transaction.update(saleRef, {
@@ -224,9 +244,94 @@ class SaleService {
           updatedAt: serverTimestamp(),
         });
       });
+
+      // After transaction is complete, record in cash register if there's an active shift
+      await this.recordSaleInRegister(companyId, saleId, payments);
     } catch (error) {
       console.error('Error completing sale:', error);
       throw error;
+    }
+  }
+
+  // Record sale in cash register
+  private async recordSaleInRegister(
+    companyId: string,
+    saleId: string,
+    payments: SalePayment[]
+  ): Promise<void> {
+    try {
+      // Get the current user's active shift
+      const userId = payments[0]?.createdBy || 'system'; // Get userId from payment
+      const activeShifts = await registerService.getActiveShiftsForEmployee(companyId, userId);
+      
+      if (activeShifts.length === 0) {
+        // No active shift, skip register recording
+        console.log('No active shift for user, skipping register recording');
+        return;
+      }
+
+      const currentShift = activeShifts[0];
+      
+      // Build payment breakdown
+      const paymentBreakdown: PaymentBreakdown = {
+        cash: 0,
+        card: [],
+        bankTransfer: 0,
+        digitalWallet: [],
+        giftCard: [],
+        loyalty: 0,
+        credit: 0,
+        other: [],
+      };
+
+      let totalAmount = 0;
+      
+      for (const payment of payments) {
+        totalAmount += payment.amount;
+        
+        switch (payment.method) {
+          case 'cash':
+            paymentBreakdown.cash = (paymentBreakdown.cash || 0) + payment.amount;
+            break;
+          case 'card':
+            paymentBreakdown.card?.push({
+              amount: payment.amount,
+              cardType: 'other',
+            });
+            break;
+          case 'bank_transfer':
+            paymentBreakdown.bankTransfer = (paymentBreakdown.bankTransfer || 0) + payment.amount;
+            break;
+          case 'digital_wallet':
+            paymentBreakdown.digitalWallet?.push({
+              amount: payment.amount,
+              walletType: payment.walletType || 'other',
+            });
+            break;
+          default:
+            paymentBreakdown.other?.push({
+              amount: payment.amount,
+              method: payment.method,
+            });
+        }
+      }
+
+      // Record the transaction in the register
+      await registerService.recordTransaction(companyId, currentShift.id!, {
+        registerId: currentShift.registerId,
+        type: 'sale',
+        category: 'product',
+        paymentMethods: paymentBreakdown,
+        subtotal: totalAmount,
+        totalAmount,
+        referenceType: 'sale',
+        referenceId: saleId,
+        performedBy: userId,
+        performedByName: currentShift.employeeName,
+      });
+    } catch (error) {
+      // Log error but don't fail the sale
+      console.error('Error recording sale in register:', error);
     }
   }
 

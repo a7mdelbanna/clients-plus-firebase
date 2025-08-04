@@ -65,7 +65,6 @@ export interface Sale {
   // Staff info
   staffId: string;
   staffName: string;
-  cashRegisterId?: string; // Link to cash register session
   
   // Additional info
   notes?: string;

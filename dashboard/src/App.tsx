@@ -53,7 +53,6 @@ import BarcodePrintPage from './pages/products/BarcodePrintPage';
 import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
 import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
 import TransfersPage from './pages/finance/TransfersPage';
-import CashRegisterPage from './pages/finance/CashRegisterPage';
 import FinanceReportsPage from './pages/finance/FinanceReportsPage';
 import FinanceReportsPageEnhanced from './pages/finance/FinanceReportsPageEnhanced';
 import InvoicesPage from './pages/finance/InvoicesPage';
@@ -62,6 +61,7 @@ import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import POSPage from './pages/pos/POSPage';
+import CashRegisterPage from './pages/register/CashRegisterPage';
 import ExpenseManagementPage from './pages/finance/expense/ExpenseManagementPage';
 import FinanceExpenseCategoriesPage from './pages/finance/expense/ExpenseCategoriesPage';
 import NewExpensePage from './pages/finance/expense/NewExpensePage';
@@ -391,19 +391,27 @@ function App() {
                     <TransfersPage />
                   </PageTransition>
                 } />
-                <Route path="/finance/cash-register" element={
-                  <PageTransition>
-                    <CashRegisterPage />
-                  </PageTransition>
-                } />
                 <Route path="/finance/pos" element={
                   <PageTransition>
                     <POSPage />
                   </PageTransition>
                 } />
+                
+                {/* Cash Register */}
+                <Route path="/register" element={
+                  <PageTransition>
+                    <CashRegisterPage />
+                  </PageTransition>
+                } />
+                
                 <Route path="/finance/reports" element={
                   <PageTransition>
                     <FinanceReportsPageEnhanced />
+                  </PageTransition>
+                } />
+                <Route path="/finance/cash-register" element={
+                  <PageTransition>
+                    <CashRegisterPage />
                   </PageTransition>
                 } />
                 <Route path="/finance/expenses" element={

@@ -142,13 +142,6 @@ const menuItems: MenuItem[] = [
         path: '/finance/transactions',
       },
       {
-        id: 'cash-register',
-        title: 'Cash Register',
-        titleAr: 'الورديه',
-        icon: <Paid />,
-        path: '/finance/cash-register',
-      },
-      {
         id: 'expenses',
         title: 'Expenses',
         titleAr: 'المصروفات',
@@ -161,6 +154,13 @@ const menuItems: MenuItem[] = [
         titleAr: 'نقطة البيع',
         icon: <PointOfSale />,
         path: '/finance/pos',
+      },
+      {
+        id: 'cash-register',
+        title: 'Cash Register',
+        titleAr: 'الصندوق',
+        icon: <AttachMoney />,
+        path: '/register',
       },
       {
         id: 'invoices',

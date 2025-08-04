@@ -117,16 +117,6 @@ const financeModules: FinanceModule[] = [
     path: '/finance/transfers',
     color: '#689f38',
   },
-  {
-    id: 'cash-register',
-    title: 'Cash Register',
-    titleAr: 'الصندوق',
-    description: 'Manage daily cash operations',
-    descriptionAr: 'إدارة العمليات النقدية اليومية',
-    icon: <LocalAtm />,
-    path: '/finance/cash-register',
-    color: '#00796b',
-  },
 ];
 
 const FinanceOverviewPage: React.FC = () => {

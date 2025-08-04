@@ -299,35 +299,51 @@ const POSPage: React.FC = () => {
     setLoading(true);
     try {
       // Prepare sale items
-      const saleItems: SaleItem[] = cart.map(item => ({
-        productId: item.product.id!,
-        productName: item.product.name,
-        productNameAr: item.product.nameAr,
-        sku: item.product.sku,
-        barcode: item.product.barcode,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        discount: item.discount,
-        discountType: item.discountType,
-        subtotal: item.subtotal,
-        cost: item.product.costPrice,
-      }));
+      const saleItems: SaleItem[] = cart.map(item => {
+        const saleItem: SaleItem = {
+          productId: item.product.id!,
+          productName: item.product.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: item.discount,
+          discountType: item.discountType,
+          subtotal: item.subtotal,
+        };
+        
+        // Only add optional fields if they have values
+        if (item.product.nameAr) {
+          saleItem.productNameAr = item.product.nameAr;
+        }
+        if (item.product.sku) {
+          saleItem.sku = item.product.sku;
+        }
+        if (item.product.barcode) {
+          saleItem.barcode = item.product.barcode;
+        }
+        if (item.product.costPrice !== undefined) {
+          saleItem.cost = item.product.costPrice;
+        }
+        
+        return saleItem;
+      });
 
-      // Get cash register session if open
-      const cashRegisterSession = await financeService.getActiveCashRegister(
-        currentUser.companyId,
-        currentBranch.id,
-        currentUser.uid
-      );
 
       // Map payment methods to account IDs - use the account selected by the user
       const salePayments: SalePayment[] = payments.map((payment) => {
-        return {
+        const paymentData: SalePayment = {
           method: payment.method,
           amount: payment.amount,
-          reference: payment.reference,
-          accountId: payment.accountId, // Use the account ID selected by the user
         };
+        
+        // Only add optional fields if they have values
+        if (payment.reference) {
+          paymentData.reference = payment.reference;
+        }
+        if (payment.accountId) {
+          paymentData.accountId = payment.accountId;
+        }
+        
+        return paymentData;
       });
 
       // Calculate totals
@@ -341,14 +357,10 @@ const POSPage: React.FC = () => {
       const userDoc = await financeService.getUserDocument(currentUser.uid);
       const staffName = userDoc?.displayName || userDoc?.email || 'Staff';
 
-      // Create the sale
-      const saleData = {
+      // Create the sale data - only include fields with values to avoid Firebase errors
+      const saleData: any = {
         companyId: currentUser.companyId,
         branchId: currentBranch.id,
-        customerId: selectedClient?.id,
-        customerName: selectedClient?.name,
-        customerPhone: selectedClient?.phoneNumber,
-        customerEmail: selectedClient?.email,
         items: saleItems,
         subtotal,
         totalDiscount,
@@ -360,11 +372,24 @@ const POSPage: React.FC = () => {
         status: 'draft' as const,
         staffId: currentUser.uid,
         staffName,
-        cashRegisterId: cashRegisterSession?.id,
         source: 'pos' as const,
         totalCost: saleItems.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0),
         profitMargin: total - saleItems.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0),
       };
+
+      // Add optional client fields only if they have values
+      if (selectedClient?.id) {
+        saleData.customerId = selectedClient.id;
+      }
+      if (selectedClient?.name) {
+        saleData.customerName = selectedClient.name;
+      }
+      if (selectedClient?.phone) {
+        saleData.customerPhone = selectedClient.phone;
+      }
+      if (selectedClient?.email) {
+        saleData.customerEmail = selectedClient.email;
+      }
 
       const saleId = await saleService.createSale(saleData);
 
@@ -373,8 +398,7 @@ const POSPage: React.FC = () => {
         currentUser.companyId,
         saleId,
         saleItems,
-        salePayments,
-        cashRegisterSession?.id
+        salePayments
       );
 
       // Clear cart and close dialog
@@ -945,15 +969,16 @@ const POSPage: React.FC = () => {
             options={clients}
             value={selectedClient}
             onChange={(_, client) => setSelectedClient(client)}
-            getOptionLabel={(client) => client.name}
+            getOptionLabel={(client) => client.name || `${client.firstName} ${client.lastName}`}
+            getOptionKey={(client) => client.id || client.name}
             renderOption={(props, client) => (
-              <Box component="li" {...props}>
+              <Box component="li" {...props} key={client.id}>
                 <Stack>
                   <Typography variant="body2" fontWeight={500}>
-                    {client.name}
+                    {client.name || `${client.firstName} ${client.lastName}`}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {client.phoneNumber || client.email || (isRTL ? 'لا توجد معلومات اتصال' : 'No contact info')}
+                    {client.phone || client.email || (isRTL ? 'لا توجد معلومات اتصال' : 'No contact info')}
                   </Typography>
                 </Stack>
               </Box>
