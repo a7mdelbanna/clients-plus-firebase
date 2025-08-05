@@ -622,6 +622,103 @@ class RegisterService {
     }
   }
 
+  /**
+   * Record account movement (transfer between accounts)
+   */
+  async recordAccountMovement(
+    companyId: string,
+    shiftId: string,
+    movement: Omit<AccountMovement, 'id' | 'shiftId' | 'timestamp'>
+  ): Promise<string> {
+    try {
+      return await runTransaction(db, async (transaction) => {
+        // Get the shift
+        const shiftRef = doc(db, 'companies', companyId, this.shiftsCollection, shiftId);
+        const shiftDoc = await transaction.get(shiftRef);
+
+        if (!shiftDoc.exists()) {
+          throw new Error('Shift not found');
+        }
+
+        const shift = shiftDoc.data() as ShiftSession;
+
+        if (shift.status !== 'active') {
+          throw new Error('Shift is not active');
+        }
+
+        // Create movement record
+        const movementData: Omit<AccountMovement, 'id'> = {
+          ...movement,
+          shiftId,
+          timestamp: Timestamp.now(),
+        };
+
+        const movementRef = doc(
+          collection(db, 'companies', companyId, 'accountMovements')
+        );
+        transaction.set(movementRef, movementData);
+
+        // Update shift account balances if exists
+        if (shift.accountBalances && shift.accountBalances[movement.accountId]) {
+          const updates: any = {
+            [`accountBalances.${movement.accountId}.currentBalance`]: movement.balanceAfter,
+            [`accountBalances.${movement.accountId}.lastUpdated`]: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          };
+          
+          transaction.update(shiftRef, updates);
+        }
+
+        await this.logAuditAction(
+          companyId,
+          shift.branchId,
+          shift.registerId,
+          shiftId,
+          'account_movement',
+          movement.performedBy,
+          { 
+            accountId: movement.accountId, 
+            movementType: movement.movementType, 
+            amount: movement.amount 
+          }
+        );
+
+        return movementRef.id;
+      });
+    } catch (error) {
+      console.error('Error recording account movement:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get account movements for a shift
+   */
+  async getShiftAccountMovements(
+    companyId: string,
+    shiftId: string
+  ): Promise<AccountMovement[]> {
+    try {
+      const q = query(
+        collection(db, 'companies', companyId, 'accountMovements'),
+        where('shiftId', '==', shiftId),
+        orderBy('timestamp', 'desc')
+      );
+
+      const snapshot = await getDocs(q);
+      const movements: AccountMovement[] = [];
+
+      snapshot.forEach(doc => {
+        movements.push({ id: doc.id, ...doc.data() } as AccountMovement);
+      });
+
+      return movements;
+    } catch (error) {
+      console.error('Error getting account movements:', error);
+      return [];
+    }
+  }
+
   // ==================== Query Methods ====================
 
   /**

@@ -41,12 +41,13 @@ import {
   ArrowUpward,
   Timer,
   Person,
+  SwapHoriz,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBranch } from '../../contexts/BranchContext';
 import { registerService } from '../../services/register.service';
 import { financeService } from '../../services/finance.service';
-import type { ShiftSession, DenominationCount, RegisterTransaction, AccountBalance } from '../../types/register.types';
+import type { ShiftSession, DenominationCount, RegisterTransaction, AccountBalance, AccountMovement } from '../../types/register.types';
 import type { FinancialAccount } from '../../types/finance.types';
 import { format } from 'date-fns';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
@@ -92,6 +93,7 @@ const CashRegisterPage: React.FC = () => {
   const [closeShiftDialog, setCloseShiftDialog] = useState(false);
   const [cashDropDialog, setCashDropDialog] = useState(false);
   const [adjustmentDialog, setAdjustmentDialog] = useState(false);
+  const [transferDialog, setTransferDialog] = useState(false);
   
   // Form states
   const [openingCash, setOpeningCash] = useState<DenominationCount>({
@@ -149,6 +151,15 @@ const CashRegisterPage: React.FC = () => {
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [adjustmentType, setAdjustmentType] = useState<'pay_in' | 'pay_out'>('pay_in');
+  
+  // Transfer form states
+  const [transferFromAccount, setTransferFromAccount] = useState('');
+  const [transferToAccount, setTransferToAccount] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDescription, setTransferDescription] = useState('');
+  
+  // Account movements tracking
+  const [accountMovements, setAccountMovements] = useState<AccountMovement[]>([]);
 
   const registerId = 'main-register'; // TODO: Support multiple registers
   const branchId = currentBranch?.id || 'main'; // Use current branch or default to 'main'
@@ -179,8 +190,9 @@ const CashRegisterPage: React.FC = () => {
           }
         );
         
-        // Load transactions
+        // Load transactions and movements
         loadShiftTransactions();
+        loadAccountMovements();
         
         return unsubscribe;
       };
@@ -310,6 +322,26 @@ const CashRegisterPage: React.FC = () => {
       setRecentTransactions(transactions.slice(0, 10));
     } catch (error) {
       console.error('Error loading transactions:', error);
+    }
+  };
+  
+  const loadAccountMovements = async () => {
+    if (!currentShift?.id) return;
+    
+    const companyId = await getCompanyId();
+    if (!companyId) {
+      console.error('No company ID available for loading movements');
+      return;
+    }
+    
+    try {
+      const movements = await registerService.getShiftAccountMovements(
+        companyId,
+        currentShift.id
+      );
+      setAccountMovements(movements);
+    } catch (error) {
+      console.error('Error loading account movements:', error);
     }
   };
 
@@ -614,6 +646,116 @@ const CashRegisterPage: React.FC = () => {
     }
   };
 
+  const handleTransfer = async () => {
+    if (!currentShift?.id || !currentUser?.uid) {
+      alert('Shift or user information not available');
+      return;
+    }
+    
+    const amount = parseFloat(transferAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    
+    if (!transferFromAccount || !transferToAccount) {
+      alert('Please select both source and destination accounts');
+      return;
+    }
+    
+    if (transferFromAccount === transferToAccount) {
+      alert('Source and destination accounts must be different');
+      return;
+    }
+    
+    try {
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        alert('No company ID found. Please logout and login again.');
+        return;
+      }
+      
+      // Get account details
+      const fromAccount = allAccounts.find(acc => acc.id === transferFromAccount);
+      const toAccount = allAccounts.find(acc => acc.id === transferToAccount);
+      
+      if (!fromAccount || !toAccount) {
+        alert('Invalid account selection');
+        return;
+      }
+      
+      // Check if source account has sufficient balance
+      const currentFromBalance = currentShift.accountBalances?.[transferFromAccount]?.currentBalance || fromAccount.currentBalance || 0;
+      const currentToBalance = currentShift.accountBalances?.[transferToAccount]?.currentBalance || toAccount.currentBalance || 0;
+      
+      if (currentFromBalance < amount) {
+        alert(`Insufficient balance in ${fromAccount.name}. Available: ${formatCurrency(currentFromBalance)}`);
+        return;
+      }
+      
+      // Record movement for source account (debit)
+      await registerService.recordAccountMovement(
+        companyId,
+        currentShift.id,
+        {
+          accountId: transferFromAccount,
+          accountName: fromAccount.name,
+          movementType: 'transfer',
+          amount: -amount, // negative for debit
+          balanceBefore: currentFromBalance,
+          balanceAfter: currentFromBalance - amount,
+          reference: `Transfer to ${toAccount.name}`,
+          description: transferDescription || `Transfer to ${toAccount.name}`,
+          performedBy: currentUser.uid,
+        }
+      );
+      
+      // Record movement for destination account (credit)
+      await registerService.recordAccountMovement(
+        companyId,
+        currentShift.id,
+        {
+          accountId: transferToAccount,
+          accountName: toAccount.name,
+          movementType: 'transfer',
+          amount: amount, // positive for credit
+          balanceBefore: currentToBalance,
+          balanceAfter: currentToBalance + amount,
+          reference: `Transfer from ${fromAccount.name}`,
+          description: transferDescription || `Transfer from ${fromAccount.name}`,
+          performedBy: currentUser.uid,
+        }
+      );
+      
+      // Also update through finance service for consistency
+      await financeService.createTransfer(
+        companyId,
+        transferFromAccount,
+        transferToAccount,
+        amount,
+        transferDescription || 'Cash register transfer',
+        currentUser.uid,
+        branchId
+      );
+      
+      setTransferDialog(false);
+      setTransferFromAccount('');
+      setTransferToAccount('');
+      setTransferAmount('');
+      setTransferDescription('');
+      
+      // Reload shift data and movements
+      const updatedShift = await registerService.getShift(companyId, currentShift.id);
+      setCurrentShift(updatedShift);
+      loadAccountMovements();
+      
+      alert(`Successfully transferred ${formatCurrency(amount)} from ${fromAccount.name} to ${toAccount.name}`);
+    } catch (error: any) {
+      console.error('Error performing transfer:', error);
+      alert(error.message || 'Failed to perform transfer');
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-EG', {
       style: 'currency',
@@ -739,6 +881,15 @@ const CashRegisterPage: React.FC = () => {
                   </Button>
                   <Button
                     variant="outlined"
+                    color="info"
+                    startIcon={isArabic ? null : <SwapHoriz />}
+                    endIcon={isArabic ? <SwapHoriz /> : null}
+                    onClick={() => setTransferDialog(true)}
+                  >
+                    {isArabic ? 'تحويل بين الحسابات' : 'Transfer'}
+                  </Button>
+                  <Button
+                    variant="outlined"
                     startIcon={isArabic ? null : <AttachMoney />}
                     endIcon={isArabic ? <AttachMoney /> : null}
                     onClick={() => setAdjustmentDialog(true)}
@@ -829,6 +980,7 @@ const CashRegisterPage: React.FC = () => {
               <Tab label={isArabic ? 'المعاملات الأخيرة' : 'Recent Transactions'} />
               <Tab label={isArabic ? 'تفاصيل الوردية' : 'Shift Details'} />
               <Tab label={isArabic ? 'حركات النقد' : 'Cash Movements'} />
+              <Tab label={isArabic ? 'حركات الحسابات' : 'Account Movements'} />
             </Tabs>
 
             <TabPanel value={activeTab} index={0}>
@@ -943,6 +1095,61 @@ const CashRegisterPage: React.FC = () => {
                 </ListItem>
                 {/* TODO: Load and display cash drops and adjustments */}
               </List>
+            </TabPanel>
+
+            <TabPanel value={activeTab} index={3}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {isArabic ? 'حركات الحسابات المالية' : 'Financial Account Movements'}
+              </Typography>
+              {accountMovements.length === 0 ? (
+                <Box sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography color="text.secondary">
+                    {isArabic ? 'لا توجد حركات حسابات بعد' : 'No account movements yet'}
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{isArabic ? 'الوقت' : 'Time'}</TableCell>
+                        <TableCell>{isArabic ? 'الحساب' : 'Account'}</TableCell>
+                        <TableCell>{isArabic ? 'النوع' : 'Type'}</TableCell>
+                        <TableCell>{isArabic ? 'المبلغ' : 'Amount'}</TableCell>
+                        <TableCell>{isArabic ? 'الرصيد' : 'Balance'}</TableCell>
+                        <TableCell>{isArabic ? 'الوصف' : 'Description'}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {accountMovements.map((movement) => (
+                        <TableRow key={movement.id}>
+                          <TableCell>
+                            {format(movement.timestamp.toDate(), 'h:mm a')}
+                          </TableCell>
+                          <TableCell>{movement.accountName}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={movement.movementType}
+                              size="small"
+                              color={movement.amount > 0 ? 'success' : 'error'}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography
+                              variant="body2"
+                              color={movement.amount > 0 ? 'success.main' : 'error.main'}
+                            >
+                              {movement.amount > 0 ? '+' : ''}{formatCurrency(movement.amount)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{formatCurrency(movement.balanceAfter)}</TableCell>
+                          <TableCell>{movement.description}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </TabPanel>
           </Paper>
         </>
@@ -1850,6 +2057,95 @@ const CashRegisterPage: React.FC = () => {
             {isArabic 
               ? (adjustmentType === 'pay_in' ? 'تسجيل الإضافة' : 'تسجيل السحب')
               : `Record ${adjustmentType === 'pay_in' ? 'Pay In' : 'Pay Out'}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Transfer Dialog */}
+      <Dialog open={transferDialog} onClose={() => setTransferDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{isArabic ? 'تحويل بين الحسابات' : 'Transfer Between Accounts'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {isArabic ? 'تحويل الأموال بين الحسابات المختلفة' : 'Transfer funds between different accounts'}
+            </Typography>
+            
+            <TextField
+              select
+              fullWidth
+              label={isArabic ? 'من حساب' : 'From Account'}
+              value={transferFromAccount}
+              onChange={(e) => setTransferFromAccount(e.target.value)}
+              margin="normal"
+              SelectProps={{
+                native: true,
+              }}
+            >
+              <option value=""></option>
+              {allAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} - {formatCurrency(currentShift?.accountBalances?.[account.id!]?.currentBalance || account.currentBalance || 0)}
+                </option>
+              ))}
+            </TextField>
+            
+            <TextField
+              select
+              fullWidth
+              label={isArabic ? 'إلى حساب' : 'To Account'}
+              value={transferToAccount}
+              onChange={(e) => setTransferToAccount(e.target.value)}
+              margin="normal"
+              SelectProps={{
+                native: true,
+              }}
+            >
+              <option value=""></option>
+              {allAccounts
+                .filter(account => account.id !== transferFromAccount)
+                .map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+              ))}
+            </TextField>
+            
+            <TextField
+              fullWidth
+              label={isArabic ? 'المبلغ' : 'Amount'}
+              type="number"
+              value={transferAmount}
+              onChange={(e) => setTransferAmount(e.target.value)}
+              margin="normal"
+              InputProps={{
+                startAdornment: <InputAdornment position="start">EGP</InputAdornment>,
+              }}
+              inputProps={{ min: 0, step: 0.01 }}
+            />
+            
+            <TextField
+              fullWidth
+              label={isArabic ? 'الوصف (اختياري)' : 'Description (optional)'}
+              value={transferDescription}
+              onChange={(e) => setTransferDescription(e.target.value)}
+              margin="normal"
+              multiline
+              rows={2}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setTransferDialog(false);
+            setTransferFromAccount('');
+            setTransferToAccount('');
+            setTransferAmount('');
+            setTransferDescription('');
+          }}>
+            {isArabic ? 'إلغاء' : 'Cancel'}
+          </Button>
+          <Button onClick={handleTransfer} variant="contained" color="primary">
+            {isArabic ? 'تنفيذ التحويل' : 'Perform Transfer'}
           </Button>
         </DialogActions>
       </Dialog>
