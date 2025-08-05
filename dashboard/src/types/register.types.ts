@@ -24,6 +24,12 @@ export interface ShiftSession {
   openingCashTotal: number;
   openingNotes?: string;
   
+  // Multi-account balance tracking
+  accountBalances?: {
+    [accountId: string]: AccountBalance;
+  };
+  linkedAccounts?: string[]; // IDs of all accounts tracked in this shift
+  
   // Closing reconciliation
   declaredClosingCash?: DenominationCount;
   closingCashTotal?: number;
@@ -43,6 +49,15 @@ export interface ShiftSession {
   totalCashDrops: number;
   netCashFlow: number;
   
+  // Payment method breakdown
+  paymentMethodTotals?: {
+    cash: number;
+    card: number;
+    bankTransfer: number;
+    digitalWallet: number;
+    other: number;
+  };
+  
   // Status tracking
   status: 'active' | 'closing' | 'closed' | 'suspended' | 'abandoned';
   suspendedAt?: Timestamp;
@@ -59,6 +74,37 @@ export interface ShiftSession {
   // Metadata
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+// Account balance tracking for shifts
+export interface AccountBalance {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  openingExpected: number;
+  openingActual: number;
+  openingVariance: number;
+  currentBalance: number;
+  closingExpected?: number;
+  closingActual?: number;
+  closingVariance?: number;
+  lastUpdated?: Timestamp;
+}
+
+// Account movement tracking
+export interface AccountMovement {
+  id?: string;
+  shiftId: string;
+  accountId: string;
+  accountName: string;
+  movementType: 'sale' | 'refund' | 'transfer' | 'fee' | 'adjustment' | 'cash_drop';
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  reference?: string;
+  description?: string;
+  timestamp: Timestamp;
+  performedBy: string;
 }
 
 // ==================== Cash Denomination Tracking ====================

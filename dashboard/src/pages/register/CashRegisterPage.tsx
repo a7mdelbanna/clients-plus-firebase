@@ -14,7 +14,6 @@ import {
   TextField,
   Alert,
   Chip,
-  IconButton,
   Divider,
   List,
   ListItem,
@@ -23,33 +22,35 @@ import {
   Tab,
   Tabs,
   CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  InputAdornment,
 } from '@mui/material';
 import {
   PointOfSale,
-  AccountBalance,
-  Assessment,
-  Settings,
   PlayArrow,
   Stop,
-  Pause,
   AttachMoney,
   RemoveCircleOutline,
   AddCircleOutline,
-  Receipt,
   ArrowDownward,
   ArrowUpward,
-  Warning,
-  CheckCircle,
   Timer,
   Person,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranch } from '../../contexts/BranchContext';
 import { registerService } from '../../services/register.service';
 import { financeService } from '../../services/finance.service';
-import type { ShiftSession, DenominationCount, RegisterTransaction } from '../../types/register.types';
+import type { ShiftSession, DenominationCount, RegisterTransaction, AccountBalance } from '../../types/register.types';
 import type { FinancialAccount } from '../../types/finance.types';
-import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -74,6 +75,7 @@ function TabPanel(props: TabPanelProps) {
 
 const CashRegisterPage: React.FC = () => {
   const { currentUser, company } = useAuth();
+  const { currentBranch } = useBranch();
   const isArabic = true; // Force Arabic for now
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -100,8 +102,42 @@ const CashRegisterPage: React.FC = () => {
   
   // Track opening balances for each account
   const [accountOpeningBalances, setAccountOpeningBalances] = useState<Record<string, number>>({});
+  const [accountActualBalances, setAccountActualBalances] = useState<Record<string, number>>({});
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
+  const [activeAccountTab, setActiveAccountTab] = useState(0);
+  
+  // Closing balances tracking
+  const [accountClosingBalances, setAccountClosingBalances] = useState<Record<string, number>>({});
+  const [activeClosingTab, setActiveClosingTab] = useState(0);
+  
+  // Show other accounts toggle
   const [showOtherAccounts, setShowOtherAccounts] = useState(false);
+  
+  // Helper function to get company ID with fallbacks
+  const getCompanyId = async (): Promise<string | null> => {
+    if (company?.id) return company.id;
+    
+    if (!currentUser) return null;
+    
+    try {
+      const idTokenResult = await currentUser.getIdTokenResult();
+      const tokenCompanyId = idTokenResult.claims.companyId as string;
+      if (tokenCompanyId) return tokenCompanyId;
+    } catch (error) {
+      console.error('Error getting company ID from token:', error);
+    }
+    
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (userDoc.exists()) {
+        return userDoc.data().companyId || null;
+      }
+    } catch (error) {
+      console.error('Error getting company ID from user doc:', error);
+    }
+    
+    return null;
+  };
   
   const [closingCash, setClosingCash] = useState<DenominationCount>({
     bills: { 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0 },
@@ -115,47 +151,82 @@ const CashRegisterPage: React.FC = () => {
   const [adjustmentType, setAdjustmentType] = useState<'pay_in' | 'pay_out'>('pay_in');
 
   const registerId = 'main-register'; // TODO: Support multiple registers
-  const branchId = 'main'; // Default to 'main' branch
+  const branchId = currentBranch?.id || 'main'; // Use current branch or default to 'main'
 
   useEffect(() => {
-    loadInitialData();
-  }, [company]);
-
-  useEffect(() => {
-    if (currentShift?.id && company?.id) {
-      // Subscribe to shift updates
-      const unsubscribe = registerService.subscribeToShift(
-        company.id,
-        currentShift.id,
-        (shift) => {
-          if (shift) {
-            setCurrentShift(shift);
-          }
-        }
-      );
-      
-      // Load transactions
-      loadShiftTransactions();
-      
-      return () => unsubscribe();
+    if (company?.id && currentUser?.uid) {
+      loadInitialData();
     }
-  }, [currentShift?.id, company?.id]);
+  }, [company?.id, currentUser?.uid]);
+
+  useEffect(() => {
+    if (currentShift?.id) {
+      const setupSubscription = async () => {
+        const companyId = await getCompanyId();
+        if (!companyId) {
+          console.error('No company ID for shift subscription');
+          return;
+        }
+        
+        // Subscribe to shift updates
+        const unsubscribe = registerService.subscribeToShift(
+          companyId,
+          currentShift.id,
+          (shift) => {
+            if (shift) {
+              setCurrentShift(shift);
+            }
+          }
+        );
+        
+        // Load transactions
+        loadShiftTransactions();
+        
+        return unsubscribe;
+      };
+      
+      let unsubscribeFn: (() => void) | undefined;
+      setupSubscription().then(fn => {
+        unsubscribeFn = fn;
+      });
+      
+      return () => {
+        if (unsubscribeFn) {
+          unsubscribeFn();
+        }
+      };
+    }
+  }, [currentShift?.id]);
 
   const loadInitialData = async () => {
-    console.log('Loading initial data...', { company, currentUser });
+    console.log('Loading initial data...', { 
+      company, 
+      companyId: company?.id,
+      currentUser,
+      userId: currentUser?.uid 
+    });
     
-    if (!company?.id || !currentUser?.uid) {
-      console.log('No company or user, skipping load');
+    if (!currentUser?.uid) {
+      console.log('No user, skipping load');
+      setError('User information not available');
       setLoading(false);
       return;
     }
     
     setLoading(true);
+    setError(null);
     try {
+      // Get company ID using helper
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        throw new Error('No company ID found. Please logout and login again.');
+      }
+      console.log('Using company ID:', companyId);
+      
       // Check for active shifts
       console.log('Checking for active shifts...');
       const activeShifts = await registerService.getActiveShiftsForEmployee(
-        company.id,
+        companyId,
         currentUser.uid
       );
       
@@ -165,12 +236,25 @@ const CashRegisterPage: React.FC = () => {
       }
       
       // Load all active financial accounts
-      console.log('Loading all active financial accounts for company:', company.id);
-      const accounts = await financeService.getAccounts(company.id, {
-        status: 'active',
-      });
-      console.log('All accounts loaded:', accounts);
-      console.log('Account details:', accounts.map(a => ({ id: a.id, name: a.name, type: a.type, status: a.status })));
+      console.log('Loading all active financial accounts for company:', companyId);
+      
+      // First try to get all accounts to see what we have
+      const allAccountsDebug = await financeService.getAccounts(companyId);
+      console.log('All accounts (no filter):', allAccountsDebug);
+      console.log('Account statuses:', allAccountsDebug.map(a => ({ 
+        id: a.id, 
+        name: a.name, 
+        type: a.type, 
+        status: a.status,
+        currentBalance: a.currentBalance 
+      })));
+      
+      // Filter for active accounts or accounts without status (backward compatibility)
+      const accounts = allAccountsDebug.filter(acc => 
+        !acc.status || acc.status === 'active'
+      );
+      console.log('Filtered active accounts:', accounts);
+      console.log('Filtered account details:', accounts.map(a => ({ id: a.id, name: a.name, type: a.type, status: a.status })));
       
       // Group accounts by type
       const cashAccs = accounts.filter(acc => acc.type === 'cash');
@@ -190,14 +274,17 @@ const CashRegisterPage: React.FC = () => {
       });
       
       // Initialize opening balances with current balances
-      const initialBalances: Record<string, number> = {};
+      const expectedBalances: Record<string, number> = {};
+      const actualBalances: Record<string, number> = {};
       accounts.forEach(acc => {
         if (acc.id) {
-          initialBalances[acc.id] = acc.currentBalance || 0;
+          expectedBalances[acc.id] = acc.currentBalance || 0;
+          actualBalances[acc.id] = acc.currentBalance || 0; // Default actual to expected
         }
       });
-      setAccountOpeningBalances(initialBalances);
-      console.log('Initialized opening balances:', initialBalances);
+      setAccountOpeningBalances(expectedBalances);
+      setAccountActualBalances(actualBalances);
+      console.log('Initialized balances:', { expected: expectedBalances, actual: actualBalances });
     } catch (error: any) {
       console.error('Error loading initial data:', error);
       setError(error?.message || 'Failed to load data');
@@ -207,11 +294,17 @@ const CashRegisterPage: React.FC = () => {
   };
 
   const loadShiftTransactions = async () => {
-    if (!company?.id || !currentShift?.id) return;
+    if (!currentShift?.id) return;
+    
+    const companyId = await getCompanyId();
+    if (!companyId) {
+      console.error('No company ID available for loading transactions');
+      return;
+    }
     
     try {
       const transactions = await registerService.getShiftTransactions(
-        company.id,
+        companyId,
         currentShift.id
       );
       setRecentTransactions(transactions.slice(0, 10));
@@ -256,44 +349,78 @@ const CashRegisterPage: React.FC = () => {
   };
 
   const handleOpenShift = async () => {
-    if (!company?.id || !currentUser?.uid || !currentUser?.displayName) return;
+    if (!currentUser?.uid || !currentUser?.displayName) {
+      alert('User information not available');
+      return;
+    }
+    
+    // Check if there's already an active shift
+    if (currentShift?.status === 'active') {
+      alert('There is already an active shift. Please close it before opening a new one.');
+      setOpenShiftDialog(false);
+      return;
+    }
     
     try {
-      // Prepare account data with opening balances
-      const accountsData = Object.entries(accountOpeningBalances).map(([accountId, balance]) => {
-        const account = allAccounts.find(a => a.id === accountId);
-        return {
-          accountId,
-          accountName: account?.name || '',
-          accountType: account?.type || '',
-          openingBalance: balance || account?.currentBalance || 0,
-          currentBalance: account?.currentBalance || 0,
-        };
+      // Get company ID using helper
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        alert('No company ID found. Please logout and login again.');
+        return;
+      }
+      
+      // Prepare account balances including physical cash
+      const accountBalances: Record<string, AccountBalance> = {};
+      
+      // Add physical cash as an account
+      accountBalances['physical_cash'] = {
+        accountId: 'physical_cash',
+        accountName: 'Physical Cash',
+        accountType: 'cash',
+        openingExpected: openingCash.total,
+        openingActual: accountActualBalances['physical_cash'] || openingCash.total,
+        openingVariance: (accountActualBalances['physical_cash'] || openingCash.total) - openingCash.total,
+        currentBalance: accountActualBalances['physical_cash'] || openingCash.total,
+      };
+      
+      // Add all financial accounts
+      allAccounts.forEach(account => {
+        if (account.id) {
+          const actualBalance = accountActualBalances[account.id] || account.currentBalance || 0;
+          const expectedBalance = account.currentBalance || 0;
+          
+          accountBalances[account.id] = {
+            accountId: account.id,
+            accountName: account.name,
+            accountType: account.type,
+            openingExpected: expectedBalance,
+            openingActual: actualBalance,
+            openingVariance: actualBalance - expectedBalance,
+            currentBalance: actualBalance,
+          };
+        }
       });
       
+      // Get linked account IDs
+      const linkedAccounts = ['physical_cash', ...allAccounts.map(a => a.id).filter(Boolean)];
+      
       const shiftId = await registerService.openShift(
-        company.id,
+        companyId,
         branchId,
         registerId,
         currentUser.uid,
         currentUser.displayName,
         openingCash,
-        shiftNotes
+        shiftNotes,
+        accountBalances,
+        linkedAccounts
       );
       
-      // TODO: Save account associations with the shift
-      console.log('Shift opened with accounts:', accountsData);
-      console.log('Total across all accounts:', {
-        cashTotal: openingCash.total,
-        accountsTotal: Object.entries(accountOpeningBalances).reduce((sum, [id, val]) => {
-          return sum + (val || allAccounts.find(a => a.id === id)?.currentBalance || 0);
-        }, 0),
-      });
-      
-      const shift = await registerService.getShift(company.id, shiftId);
+      const shift = await registerService.getShift(companyId, shiftId);
       setCurrentShift(shift);
       setOpenShiftDialog(false);
       setShiftNotes('');
+      setAccountActualBalances({});
       setShowOtherAccounts(false);
       
       // Reset opening cash
@@ -306,6 +433,9 @@ const CashRegisterPage: React.FC = () => {
       // Reset account opening balances
       setAccountOpeningBalances({});
       setSelectedAccounts(new Set());
+      
+      // Reload initial data to get the new shift
+      await loadInitialData();
     } catch (error: any) {
       console.error('Error opening shift:', error);
       alert(error.message || 'Failed to open shift');
@@ -313,19 +443,74 @@ const CashRegisterPage: React.FC = () => {
   };
 
   const handleCloseShift = async () => {
-    if (!company?.id || !currentShift?.id) return;
+    if (!currentShift?.id || !currentUser?.uid) {
+      alert('Shift or user information not available');
+      return;
+    }
     
     try {
+      // Get company ID using helper
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        alert('No company ID found. Please logout and login again.');
+        return;
+      }
+      
+      // Prepare closing account balances
+      const closingAccountBalances: Record<string, AccountBalance> = {};
+      
+      // Add physical cash closing data
+      const expectedCash = currentShift.netCashFlow || 0;
+      closingAccountBalances['physical_cash'] = {
+        accountId: 'physical_cash',
+        accountName: 'Physical Cash',
+        accountType: 'cash',
+        openingExpected: currentShift.accountBalances?.['physical_cash']?.openingExpected || currentShift.openingCashTotal || 0,
+        openingActual: currentShift.accountBalances?.['physical_cash']?.openingActual || currentShift.openingCashTotal || 0,
+        openingVariance: currentShift.accountBalances?.['physical_cash']?.openingVariance || 0,
+        currentBalance: closingCash.total,
+        closingExpected: expectedCash,
+        closingActual: closingCash.total,
+        closingVariance: closingCash.total - expectedCash,
+        lastUpdated: Timestamp.now(),
+      };
+      
+      // Add all financial accounts closing data
+      allAccounts.forEach(account => {
+        if (account.id) {
+          const openingData = currentShift.accountBalances?.[account.id];
+          const expectedBalance = openingData?.currentBalance || account.currentBalance || 0;
+          const actualBalance = accountClosingBalances[account.id] || expectedBalance;
+          
+          closingAccountBalances[account.id] = {
+            accountId: account.id,
+            accountName: account.name,
+            accountType: account.type,
+            openingExpected: openingData?.openingExpected || expectedBalance,
+            openingActual: openingData?.openingActual || expectedBalance,
+            openingVariance: openingData?.openingVariance || 0,
+            currentBalance: actualBalance,
+            closingExpected: expectedBalance,
+            closingActual: actualBalance,
+            closingVariance: actualBalance - expectedBalance,
+            lastUpdated: Timestamp.now(),
+          };
+        }
+      });
+      
       await registerService.closeShift(
-        company.id,
+        companyId,
         currentShift.id,
         closingCash,
-        shiftNotes
+        shiftNotes,
+        undefined, // approvedBy - can be added later
+        closingAccountBalances
       );
       
       setCurrentShift(null);
       setCloseShiftDialog(false);
       setShiftNotes('');
+      setAccountClosingBalances({});
       
       // Reset closing cash
       setClosingCash({
@@ -340,7 +525,10 @@ const CashRegisterPage: React.FC = () => {
   };
 
   const handleCashDrop = async () => {
-    if (!company?.id || !currentShift?.id || !currentUser?.uid) return;
+    if (!currentShift?.id || !currentUser?.uid) {
+      alert('Shift or user information not available');
+      return;
+    }
     
     const amount = parseFloat(adjustmentAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -349,8 +537,14 @@ const CashRegisterPage: React.FC = () => {
     }
     
     try {
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        alert('No company ID found. Please logout and login again.');
+        return;
+      }
+      
       await registerService.performCashDrop(
-        company.id,
+        companyId,
         currentShift.id,
         amount,
         {
@@ -368,7 +562,7 @@ const CashRegisterPage: React.FC = () => {
       setAdjustmentReason('');
       
       // Reload shift data
-      const updatedShift = await registerService.getShift(company.id, currentShift.id);
+      const updatedShift = await registerService.getShift(companyId, currentShift.id);
       setCurrentShift(updatedShift);
     } catch (error: any) {
       console.error('Error performing cash drop:', error);
@@ -377,7 +571,10 @@ const CashRegisterPage: React.FC = () => {
   };
 
   const handleAdjustment = async () => {
-    if (!company?.id || !currentShift?.id || !currentUser?.uid) return;
+    if (!currentShift?.id || !currentUser?.uid) {
+      alert('Shift or user information not available');
+      return;
+    }
     
     const amount = parseFloat(adjustmentAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -386,15 +583,21 @@ const CashRegisterPage: React.FC = () => {
     }
     
     try {
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        alert('No company ID found. Please logout and login again.');
+        return;
+      }
+      
       await registerService.recordCashAdjustment(
-        company.id,
+        companyId,
         currentShift.id,
         {
           type: adjustmentType,
           amount,
           reason: adjustmentReason,
-          authorizedBy: user.uid,
-          performedBy: user.uid,
+          authorizedBy: currentUser.uid,
+          performedBy: currentUser.uid,
         }
       );
       
@@ -403,7 +606,7 @@ const CashRegisterPage: React.FC = () => {
       setAdjustmentReason('');
       
       // Reload shift data
-      const updatedShift = await registerService.getShift(company.id, currentShift.id);
+      const updatedShift = await registerService.getShift(companyId, currentShift.id);
       setCurrentShift(updatedShift);
     } catch (error: any) {
       console.error('Error recording adjustment:', error);
@@ -422,6 +625,26 @@ const CashRegisterPage: React.FC = () => {
     if (Math.abs(variance) < 0.01) return 'success';
     if (Math.abs(variance) < 10) return 'warning';
     return 'error';
+  };
+
+  const calculateVariance = (expected: number, actual: number) => {
+    return actual - expected;
+  };
+
+  const getVarianceDisplay = (variance: number) => {
+    const color = getVarianceColor(variance);
+    const prefix = variance > 0 ? '+' : '';
+    return (
+      <Typography 
+        component="span" 
+        sx={{ 
+          color: `${color}.main`,
+          fontWeight: 'bold' 
+        }}
+      >
+        {prefix}{formatCurrency(variance)}
+      </Typography>
+    );
   };
 
   if (loading) {
@@ -496,9 +719,9 @@ const CashRegisterPage: React.FC = () => {
                   color="primary"
                   startIcon={isArabic ? null : <PlayArrow />}
                   endIcon={isArabic ? <PlayArrow /> : null}
-                  onClick={() => {
-                    loadInitialData(); // Reload accounts when opening dialog
+                  onClick={async () => {
                     setOpenShiftDialog(true);
+                    await loadInitialData(); // Reload accounts when opening dialog
                   }}
                 >
                   فتح وردية
@@ -726,16 +949,47 @@ const CashRegisterPage: React.FC = () => {
       )}
 
       {/* Open Shift Dialog */}
-      <Dialog open={openShiftDialog} onClose={() => setOpenShiftDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openShiftDialog} onClose={() => setOpenShiftDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle>{isArabic ? 'فتح وردية جديدة' : 'Open New Shift'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              {isArabic ? 'عد النقد الافتتاحي' : 'Count Opening Cash'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {isArabic ? 'من فضلك قم بعد جميع النقود في الصندوق وأدخل الكميات أدناه' : 'Please count all cash in the register and enter the quantities below'}
-            </Typography>
+            {/* Debug info */}
+            {loading && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {isArabic ? 'جاري تحميل الحسابات...' : 'Loading accounts...'}
+              </Alert>
+            )}
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            {!loading && !error && allAccounts.length === 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {isArabic ? 'لم يتم العثور على أي حسابات مالية. يرجى إضافة حسابات من صفحة الحسابات المالية.' : 'No financial accounts found. Please add accounts from the Finance Accounts page.'}
+              </Alert>
+            )}
+            {/* Account Tabs */}
+            <Tabs 
+              value={activeAccountTab} 
+              onChange={(e, newValue) => setActiveAccountTab(newValue)}
+              sx={{ mb: 3 }}
+            >
+              <Tab label={isArabic ? 'النقد' : 'Cash'} />
+              <Tab label={isArabic ? 'المحافظ الرقمية' : 'Digital Wallets'} />
+              <Tab label={isArabic ? 'الحسابات البنكية' : 'Bank Accounts'} />
+              <Tab label={isArabic ? 'ملخص' : 'Summary'} />
+            </Tabs>
+
+            {/* Cash Tab */}
+            {activeAccountTab === 0 && (
+              <Box>
+                <Typography variant="subtitle1" gutterBottom>
+                  {isArabic ? 'عد النقد الافتتاحي' : 'Count Opening Cash'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {isArabic ? 'من فضلك قم بعد جميع النقود في الصندوق وأدخل الكميات أدناه' : 'Please count all cash in the register and enter the quantities below'}
+                </Typography>
             
             <Box sx={{ mt: 3 }}>
               <Typography variant="subtitle2" gutterBottom>{isArabic ? 'الأوراق النقدية' : 'Bills'}</Typography>
@@ -777,165 +1031,342 @@ const CashRegisterPage: React.FC = () => {
                   {isArabic ? 'إجمالي النقد: ' : 'Cash Total: '}{formatCurrency(openingCash.total)}
                 </Typography>
               </Box>
-              
-              {/* Financial Accounts */}
-              <Box sx={{ mt: 3 }}>
-                <Button 
-                  variant="outlined"
-                  onClick={() => setShowOtherAccounts(!showOtherAccounts)}
-                  sx={{ mb: 2 }}
-                >
-                  {showOtherAccounts 
-                    ? (isArabic ? 'إخفاء الحسابات المالية' : 'Hide Financial Accounts')
-                    : (isArabic ? 'إضافة الحسابات المالية (المحافظ الرقمية، البنوك، إلخ)' : 'Add Financial Accounts (Digital Wallets, Banks, etc.)')}
-                </Button>
+
+              {/* Cash Accounts Table */}
+              {cashAccounts.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {isArabic ? 'حسابات النقد الأخرى' : 'Other Cash Accounts'}
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{isArabic ? 'الحساب' : 'Account'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد المتوقع' : 'Expected'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد الفعلي' : 'Actual'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {cashAccounts.map((account) => {
+                          const expected = accountOpeningBalances[account.id!] || 0;
+                          const actual = accountActualBalances[account.id!] || expected;
+                          const variance = calculateVariance(expected, actual);
+                          return (
+                            <TableRow key={account.id}>
+                              <TableCell>{isArabic ? account.nameAr || account.name : account.name}</TableCell>
+                              <TableCell align="right">{formatCurrency(expected)}</TableCell>
+                              <TableCell align="right">
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={actual}
+                                  onChange={(e) => setAccountActualBalances({
+                                    ...accountActualBalances,
+                                    [account.id!]: parseFloat(e.target.value) || 0
+                                  })}
+                                  InputProps={{
+                                    startAdornment: <InputAdornment position="start">ج.م</InputAdornment>,
+                                    inputProps: { min: 0, step: 0.01 }
+                                  }}
+                                  sx={{ width: 150 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">{getVarianceDisplay(variance)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+            </Box>
+            </Box>
+            )}
+
+            {/* Digital Wallets Tab */}
+            {activeAccountTab === 1 && (
+              <Box>
+                <Typography variant="subtitle1" gutterBottom>
+                  {isArabic ? 'المحافظ الرقمية' : 'Digital Wallets'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {isArabic ? 'تحقق من أرصدة المحافظ الرقمية وأدخل الأرصدة الفعلية' : 'Verify digital wallet balances and enter actual amounts'}
+                </Typography>
                 
-                {showOtherAccounts && (
-                  <Box>
-                    {/* Cash Accounts */}
-                    {cashAccounts.length > 0 && (
-                      <>
-                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                          {isArabic ? 'حسابات النقد' : 'Cash Accounts'}
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-                          {cashAccounts.map((account) => (
-                            <Box key={account.id} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)' } }}>
-                              <TextField
-                                fullWidth
-                                label={isArabic ? account.nameAr || account.name : account.name}
-                                type="number"
-                                value={accountOpeningBalances[account.id!] ?? account.currentBalance}
-                                onChange={(e) => setAccountOpeningBalances({
-                                  ...accountOpeningBalances,
-                                  [account.id!]: parseFloat(e.target.value) || 0
-                                })}
-                                helperText={`${isArabic ? 'الرصيد الحالي: ' : 'Current: '}${formatCurrency(account.currentBalance)}`}
-                                InputProps={{ 
-                                  startAdornment: isArabic ? 'جنيه' : 'EGP',
-                                  inputProps: { min: 0, step: 0.01 }
-                                }}
-                              />
-                            </Box>
-                          ))}
-                        </Box>
-                      </>
-                    )}
-                    
-                    {/* Digital Wallet Accounts */}
-                    {digitalWalletAccounts.length > 0 && (
-                      <>
-                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                          {isArabic ? 'المحافظ الرقمية' : 'Digital Wallets'}
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-                          {digitalWalletAccounts.map((account) => (
-                            <Box key={account.id} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)' } }}>
-                              <TextField
-                                fullWidth
-                                label={isArabic ? account.nameAr || account.name : account.name}
-                                type="number"
-                                value={accountOpeningBalances[account.id!] ?? account.currentBalance}
-                                onChange={(e) => setAccountOpeningBalances({
-                                  ...accountOpeningBalances,
-                                  [account.id!]: parseFloat(e.target.value) || 0
-                                })}
-                                helperText={`${isArabic ? 'الرصيد الحالي: ' : 'Current: '}${formatCurrency(account.currentBalance)}`}
-                                InputProps={{ 
-                                  startAdornment: isArabic ? 'جنيه' : 'EGP',
-                                  inputProps: { min: 0, step: 0.01 }
-                                }}
-                              />
-                            </Box>
-                          ))}
-                        </Box>
-                      </>
-                    )}
-                    
-                    {/* Bank Accounts */}
-                    {bankAccounts.length > 0 && (
-                      <>
-                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                          {isArabic ? 'الحسابات البنكية' : 'Bank Accounts'}
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-                          {bankAccounts.map((account) => (
-                            <Box key={account.id} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)' } }}>
-                              <TextField
-                                fullWidth
-                                label={isArabic ? account.nameAr || account.name : account.name}
-                                type="number"
-                                value={accountOpeningBalances[account.id!] ?? account.currentBalance}
-                                onChange={(e) => setAccountOpeningBalances({
-                                  ...accountOpeningBalances,
-                                  [account.id!]: parseFloat(e.target.value) || 0
-                                })}
-                                helperText={`${isArabic ? 'الرصيد الحالي: ' : 'Current: '}${formatCurrency(account.currentBalance)}`}
-                                InputProps={{ 
-                                  startAdornment: isArabic ? 'جنيه' : 'EGP',
-                                  inputProps: { min: 0, step: 0.01 }
-                                }}
-                              />
-                            </Box>
-                          ))}
-                        </Box>
-                      </>
-                    )}
-                    
-                    {/* No accounts message */}
-                    {allAccounts.length === 0 && (
-                      <Box>
-                        <Alert severity="info" sx={{ mb: 2 }}>
-                          {isArabic 
-                            ? 'لا توجد حسابات مالية نشطة. يرجى إنشاء حسابات من صفحة المالية أولاً.'
-                            : 'No active financial accounts found. Please create accounts from the Finance page first.'}
-                        </Alert>
-                        <Button 
-                          variant="outlined" 
-                          onClick={loadInitialData}
-                          sx={{ mb: 2 }}
-                        >
-                          {isArabic ? 'إعادة تحميل الحسابات' : 'Reload Accounts'}
-                        </Button>
-                      </Box>
-                    )}
-                    
-                    {/* Total for all accounts */}
-                    {allAccounts.length > 0 && (
-                      <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                        <Typography variant="body1">
-                          {isArabic ? 'إجمالي الحسابات المالية: ' : 'Financial Accounts Total: '}
-                          {formatCurrency(
-                            Object.entries(accountOpeningBalances).reduce((sum, [id, val]) => {
-                              return sum + (val || allAccounts.find(a => a.id === id)?.currentBalance || 0);
-                            }, 0)
-                          )}
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 1 }}>
-                          {isArabic ? 'الإجمالي الكلي: ' : 'Grand Total: '}
-                          {formatCurrency(
-                            openingCash.total + 
-                            Object.entries(accountOpeningBalances).reduce((sum, [id, val]) => {
-                              return sum + (val || allAccounts.find(a => a.id === id)?.currentBalance || 0);
-                            }, 0)
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
+                {digitalWalletAccounts.length === 0 ? (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    {isArabic ? 'لا توجد محافظ رقمية نشطة' : 'No active digital wallets found'}
+                  </Alert>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{isArabic ? 'المحفظة' : 'Wallet'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد المتوقع' : 'Expected Balance'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد الفعلي' : 'Actual Balance'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {digitalWalletAccounts.map((account) => {
+                          const expected = accountOpeningBalances[account.id!] || 0;
+                          const actual = accountActualBalances[account.id!] || expected;
+                          const variance = calculateVariance(expected, actual);
+                          return (
+                            <TableRow key={account.id}>
+                              <TableCell>
+                                <Box>
+                                  <Typography>{isArabic ? account.nameAr || account.name : account.name}</Typography>
+                                  {account.digitalWalletDetails?.phoneNumber && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {account.digitalWalletDetails.phoneNumber}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell align="right">{formatCurrency(expected)}</TableCell>
+                              <TableCell align="right">
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={actual}
+                                  onChange={(e) => setAccountActualBalances({
+                                    ...accountActualBalances,
+                                    [account.id!]: parseFloat(e.target.value) || 0
+                                  })}
+                                  InputProps={{
+                                    startAdornment: <InputAdornment position="start">ج.م</InputAdornment>,
+                                    inputProps: { min: 0, step: 0.01 }
+                                  }}
+                                  sx={{ width: 150 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">{getVarianceDisplay(variance)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 )}
               </Box>
-              
-              <TextField
-                fullWidth
-                label={isArabic ? 'ملاحظات (اختياري)' : 'Notes (Optional)'}
-                multiline
-                rows={2}
-                value={shiftNotes}
-                onChange={(e) => setShiftNotes(e.target.value)}
-                sx={{ mt: 2 }}
-              />
-            </Box>
+            )}
+
+            {/* Bank Accounts Tab */}
+            {activeAccountTab === 2 && (
+              <Box>
+                <Typography variant="subtitle1" gutterBottom>
+                  {isArabic ? 'الحسابات البنكية' : 'Bank Accounts'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {isArabic ? 'تحقق من أرصدة الحسابات البنكية' : 'Verify bank account balances'}
+                </Typography>
+                
+                {bankAccounts.length === 0 ? (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    {isArabic ? 'لا توجد حسابات بنكية نشطة' : 'No active bank accounts found'}
+                  </Alert>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{isArabic ? 'البنك' : 'Bank'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد المتوقع' : 'Expected Balance'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الرصيد الفعلي' : 'Actual Balance'}</TableCell>
+                          <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {bankAccounts.map((account) => {
+                          const expected = accountOpeningBalances[account.id!] || 0;
+                          const actual = accountActualBalances[account.id!] || expected;
+                          const variance = calculateVariance(expected, actual);
+                          return (
+                            <TableRow key={account.id}>
+                              <TableCell>
+                                <Box>
+                                  <Typography>{isArabic ? account.nameAr || account.name : account.name}</Typography>
+                                  {account.bankDetails?.accountNumber && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {isArabic ? 'رقم الحساب: ' : 'Account: '}{account.bankDetails.accountNumber}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell align="right">{formatCurrency(expected)}</TableCell>
+                              <TableCell align="right">
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={actual}
+                                  onChange={(e) => setAccountActualBalances({
+                                    ...accountActualBalances,
+                                    [account.id!]: parseFloat(e.target.value) || 0
+                                  })}
+                                  InputProps={{
+                                    startAdornment: <InputAdornment position="start">ج.م</InputAdornment>,
+                                    inputProps: { min: 0, step: 0.01 }
+                                  }}
+                                  sx={{ width: 150 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">{getVarianceDisplay(variance)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            )}
+
+            {/* Summary Tab */}
+            {activeAccountTab === 3 && (
+              <Box>
+                <Typography variant="subtitle1" gutterBottom>
+                  {isArabic ? 'ملخص الافتتاح' : 'Opening Summary'}
+                </Typography>
+                
+                <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{isArabic ? 'نوع الحساب' : 'Account Type'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'المتوقع' : 'Expected'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفعلي' : 'Actual'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {/* Physical Cash */}
+                      <TableRow>
+                        <TableCell>{isArabic ? 'النقد في الصندوق' : 'Cash in Register'}</TableCell>
+                        <TableCell align="right">{formatCurrency(0)}</TableCell>
+                        <TableCell align="right">{formatCurrency(openingCash.total)}</TableCell>
+                        <TableCell align="right">{getVarianceDisplay(openingCash.total)}</TableCell>
+                      </TableRow>
+                      
+                      {/* Cash Accounts */}
+                      {cashAccounts.length > 0 && (
+                        <TableRow>
+                          <TableCell>{isArabic ? 'حسابات نقدية أخرى' : 'Other Cash Accounts'}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(cashAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(cashAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {getVarianceDisplay(
+                              cashAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0) -
+                              cashAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      
+                      {/* Digital Wallets */}
+                      {digitalWalletAccounts.length > 0 && (
+                        <TableRow>
+                          <TableCell>{isArabic ? 'المحافظ الرقمية' : 'Digital Wallets'}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(digitalWalletAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(digitalWalletAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {getVarianceDisplay(
+                              digitalWalletAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0) -
+                              digitalWalletAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      
+                      {/* Bank Accounts */}
+                      {bankAccounts.length > 0 && (
+                        <TableRow>
+                          <TableCell>{isArabic ? 'الحسابات البنكية' : 'Bank Accounts'}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(bankAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(bankAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {getVarianceDisplay(
+                              bankAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0) -
+                              bankAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      
+                      {/* Total */}
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell sx={{ fontWeight: 'bold' }}>
+                          {isArabic ? 'الإجمالي' : 'Total'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {formatCurrency(
+                            allAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0)
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {formatCurrency(
+                            openingCash.total + 
+                            allAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0)
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {getVarianceDisplay(
+                            openingCash.total +
+                            allAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0) -
+                            allAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0)
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {/* Variance Alert */}
+                {(() => {
+                  const totalVariance = openingCash.total +
+                    allAccounts.reduce((sum, acc) => sum + (accountActualBalances[acc.id!] || 0), 0) -
+                    allAccounts.reduce((sum, acc) => sum + (accountOpeningBalances[acc.id!] || 0), 0);
+                  
+                  if (Math.abs(totalVariance) > 0.01) {
+                    return (
+                      <Alert severity={Math.abs(totalVariance) > 10 ? 'warning' : 'info'} sx={{ mt: 2 }}>
+                        {isArabic 
+                          ? `يوجد فرق قدره ${formatCurrency(Math.abs(totalVariance))} ${totalVariance > 0 ? 'زيادة' : 'نقص'}`
+                          : `There is a variance of ${formatCurrency(Math.abs(totalVariance))} ${totalVariance > 0 ? 'over' : 'short'}`}
+                      </Alert>
+                    );
+                  }
+                  return null;
+                })()}
+              </Box>
+            )}
+            
+            {/* Notes field - appears on all tabs */}
+            <TextField
+              fullWidth
+              label={isArabic ? 'ملاحظات (اختياري)' : 'Notes (Optional)'}
+              multiline
+              rows={2}
+              value={shiftNotes}
+              onChange={(e) => setShiftNotes(e.target.value)}
+              sx={{ mt: 3 }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -956,90 +1387,358 @@ const CashRegisterPage: React.FC = () => {
       </Dialog>
 
       {/* Close Shift Dialog */}
-      <Dialog open={closeShiftDialog} onClose={() => setCloseShiftDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={closeShiftDialog} onClose={() => setCloseShiftDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle>{isArabic ? 'إغلاق الوردية' : 'Close Shift'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {currentShift && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                Expected Cash: {formatCurrency(currentShift.netCashFlow)}
+                {isArabic 
+                  ? `وقت فتح الوردية: ${new Date(currentShift.openedAt.toDate()).toLocaleString('ar-EG')}`
+                  : `Shift opened at: ${new Date(currentShift.openedAt.toDate()).toLocaleString()}`}
               </Alert>
             )}
             
             <Typography variant="subtitle1" gutterBottom>
-              Count Closing Cash
+              {isArabic ? 'تسوية الحسابات عند الإغلاق' : 'End of Shift Account Reconciliation'}
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Please count all cash in the register and enter the quantities below
+              {isArabic 
+                ? 'قم بعد النقد وتسجيل الأرصدة الفعلية لجميع الحسابات'
+                : 'Count cash and record actual balances for all accounts'}
             </Typography>
             
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle2" gutterBottom>Bills</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                {Object.keys(closingCash.bills).map((denom) => (
-                  <Box key={denom} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)', md: 'calc(25% - 12px)' } }}>
-                    <TextField
-                      fullWidth
-                      label={`${denom} EGP`}
-                      type="number"
-                      value={closingCash.bills[parseFloat(denom)] || ''}
-                      onChange={(e) => handleDenominationChange('closing', 'bills', denom, e.target.value)}
-                      InputProps={{ inputProps: { min: 0 } }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-              
-              <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>
-                Coins
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                {Object.keys(closingCash.coins).map((denom) => (
-                  <Box key={denom} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)', md: 'calc(25% - 12px)' } }}>
-                    <TextField
-                      fullWidth
-                      label={`${denom} EGP`}
-                      type="number"
-                      value={closingCash.coins[parseFloat(denom)] || ''}
-                      onChange={(e) => handleDenominationChange('closing', 'coins', denom, e.target.value)}
-                      InputProps={{ inputProps: { min: 0 } }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-              
-              <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="h6">
-                  Actual: {formatCurrency(closingCash.total)}
+            {/* Account Type Tabs */}
+            <Tabs 
+              value={activeClosingTab} 
+              onChange={(_, newValue) => setActiveClosingTab(newValue)}
+              sx={{ borderBottom: 1, borderColor: 'divider', mt: 2 }}
+            >
+              <Tab label={isArabic ? 'النقد' : 'Cash'} />
+              {digitalWalletAccounts.length > 0 && (
+                <Tab label={isArabic ? 'المحافظ الإلكترونية' : 'Digital Wallets'} />
+              )}
+              {bankAccounts.length > 0 && (
+                <Tab label={isArabic ? 'الحسابات البنكية' : 'Bank Accounts'} />
+              )}
+              <Tab label={isArabic ? 'الملخص' : 'Summary'} />
+            </Tabs>
+            
+            {/* Cash Tab */}
+            {activeClosingTab === 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {currentShift && (
+                    <>{isArabic ? 'النقد المتوقع: ' : 'Expected Cash: '}{formatCurrency(currentShift.netCashFlow)}</>
+                  )}
+                </Alert>
+                
+                <Typography variant="subtitle2" gutterBottom>{isArabic ? 'الأوراق النقدية' : 'Bills'}</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {Object.keys(closingCash.bills).map((denom) => (
+                    <Box key={denom} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)', md: 'calc(25% - 12px)' } }}>
+                      <TextField
+                        fullWidth
+                        label={`${denom} ${isArabic ? 'جنيه' : 'EGP'}`}
+                        type="number"
+                        value={closingCash.bills[parseFloat(denom)] || ''}
+                        onChange={(e) => handleDenominationChange('closing', 'bills', denom, e.target.value)}
+                        InputProps={{ inputProps: { min: 0 } }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+                
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>
+                  {isArabic ? 'العملات المعدنية' : 'Coins'}
                 </Typography>
-                {currentShift && (
-                  <>
-                    <Typography>
-                      Expected: {formatCurrency(currentShift.netCashFlow)}
-                    </Typography>
-                    <Typography color={getVarianceColor(closingCash.total - currentShift.netCashFlow)}>
-                      Variance: {formatCurrency(closingCash.total - currentShift.netCashFlow)}
-                    </Typography>
-                  </>
-                )}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {Object.keys(closingCash.coins).map((denom) => (
+                    <Box key={denom} sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(33.333% - 10.667px)', md: 'calc(25% - 12px)' } }}>
+                      <TextField
+                        fullWidth
+                        label={`${denom} ${isArabic ? 'جنيه' : 'EGP'}`}
+                        type="number"
+                        value={closingCash.coins[parseFloat(denom)] || ''}
+                        onChange={(e) => handleDenominationChange('closing', 'coins', denom, e.target.value)}
+                        InputProps={{ inputProps: { min: 0 } }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+                
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                  <Typography variant="h6">
+                    {isArabic ? 'الفعلي: ' : 'Actual: '}{formatCurrency(closingCash.total)}
+                  </Typography>
+                  {currentShift && (
+                    <>
+                      <Typography>
+                        {isArabic ? 'المتوقع: ' : 'Expected: '}{formatCurrency(currentShift.netCashFlow)}
+                      </Typography>
+                      <Typography sx={{ color: getVarianceColor(closingCash.total - currentShift.netCashFlow) + '.main', fontWeight: 'bold' }}>
+                        {isArabic ? 'الفرق: ' : 'Variance: '}{formatCurrency(closingCash.total - currentShift.netCashFlow)}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
               </Box>
-              
-              <TextField
-                fullWidth
-                label="Closing Notes (Optional)"
-                multiline
-                rows={2}
-                value={shiftNotes}
-                onChange={(e) => setShiftNotes(e.target.value)}
-                sx={{ mt: 2 }}
-              />
-            </Box>
+            )}
+            
+            {/* Digital Wallets Tab */}
+            {activeClosingTab === 1 && digitalWalletAccounts.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{isArabic ? 'المحفظة' : 'Wallet'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'المتوقع' : 'Expected'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفعلي' : 'Actual'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {digitalWalletAccounts.map(account => {
+                        const expected = currentShift?.accountBalances?.[account.id!]?.currentBalance || account.currentBalance || 0;
+                        const actual = accountClosingBalances[account.id!] || expected;
+                        const variance = actual - expected;
+                        
+                        return (
+                          <TableRow key={account.id}>
+                            <TableCell>{account.name}</TableCell>
+                            <TableCell align="right">{formatCurrency(expected)}</TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={accountClosingBalances[account.id!] || ''}
+                                onChange={(e) => setAccountClosingBalances(prev => ({
+                                  ...prev,
+                                  [account.id!]: parseFloat(e.target.value) || 0
+                                }))}
+                                placeholder={expected.toString()}
+                                InputProps={{ 
+                                  inputProps: { min: 0, step: 0.01 },
+                                  sx: { width: 120 }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              {getVarianceDisplay(variance)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+            
+            {/* Bank Accounts Tab */}
+            {activeClosingTab === (digitalWalletAccounts.length > 0 ? 2 : 1) && bankAccounts.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{isArabic ? 'الحساب البنكي' : 'Bank Account'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'المتوقع' : 'Expected'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفعلي' : 'Actual'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {bankAccounts.map(account => {
+                        const expected = currentShift?.accountBalances?.[account.id!]?.currentBalance || account.currentBalance || 0;
+                        const actual = accountClosingBalances[account.id!] || expected;
+                        const variance = actual - expected;
+                        
+                        return (
+                          <TableRow key={account.id}>
+                            <TableCell>{account.name}</TableCell>
+                            <TableCell align="right">{formatCurrency(expected)}</TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={accountClosingBalances[account.id!] || ''}
+                                onChange={(e) => setAccountClosingBalances(prev => ({
+                                  ...prev,
+                                  [account.id!]: parseFloat(e.target.value) || 0
+                                }))}
+                                placeholder={expected.toString()}
+                                InputProps={{ 
+                                  inputProps: { min: 0, step: 0.01 },
+                                  sx: { width: 120 }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              {getVarianceDisplay(variance)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+            
+            {/* Summary Tab */}
+            {activeClosingTab === (digitalWalletAccounts.length > 0 && bankAccounts.length > 0 ? 3 : 
+                                   digitalWalletAccounts.length > 0 || bankAccounts.length > 0 ? 2 : 1) && (
+              <Box sx={{ mt: 3 }}>
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{isArabic ? 'نوع الحساب' : 'Account Type'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'المتوقع' : 'Expected'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفعلي' : 'Actual'}</TableCell>
+                        <TableCell align="right">{isArabic ? 'الفرق' : 'Variance'}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {/* Physical Cash */}
+                      <TableRow>
+                        <TableCell>{isArabic ? 'النقد' : 'Physical Cash'}</TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(currentShift?.netCashFlow || 0)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(closingCash.total)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {getVarianceDisplay(closingCash.total - (currentShift?.netCashFlow || 0))}
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Digital Wallets Summary */}
+                      {digitalWalletAccounts.length > 0 && (
+                        <TableRow>
+                          <TableCell>{isArabic ? 'المحافظ الإلكترونية' : 'Digital Wallets'}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(digitalWalletAccounts.reduce((sum, acc) => 
+                              sum + (currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(digitalWalletAccounts.reduce((sum, acc) => 
+                              sum + (accountClosingBalances[acc.id!] || currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {getVarianceDisplay(
+                              digitalWalletAccounts.reduce((sum, acc) => {
+                                const expected = currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0;
+                                const actual = accountClosingBalances[acc.id!] || expected;
+                                return sum + (actual - expected);
+                              }, 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      
+                      {/* Bank Accounts Summary */}
+                      {bankAccounts.length > 0 && (
+                        <TableRow>
+                          <TableCell>{isArabic ? 'الحسابات البنكية' : 'Bank Accounts'}</TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(bankAccounts.reduce((sum, acc) => 
+                              sum + (currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(bankAccounts.reduce((sum, acc) => 
+                              sum + (accountClosingBalances[acc.id!] || currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {getVarianceDisplay(
+                              bankAccounts.reduce((sum, acc) => {
+                                const expected = currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0;
+                                const actual = accountClosingBalances[acc.id!] || expected;
+                                return sum + (actual - expected);
+                              }, 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      
+                      {/* Total */}
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell sx={{ fontWeight: 'bold' }}>
+                          {isArabic ? 'الإجمالي' : 'Total'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {formatCurrency(
+                            (currentShift?.netCashFlow || 0) +
+                            allAccounts.reduce((sum, acc) => 
+                              sum + (currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0)
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {formatCurrency(
+                            closingCash.total +
+                            allAccounts.reduce((sum, acc) => 
+                              sum + (accountClosingBalances[acc.id!] || currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0)
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                          {(() => {
+                            const totalExpected = (currentShift?.netCashFlow || 0) +
+                              allAccounts.reduce((sum, acc) => 
+                                sum + (currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0);
+                            const totalActual = closingCash.total +
+                              allAccounts.reduce((sum, acc) => 
+                                sum + (accountClosingBalances[acc.id!] || currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0);
+                            return getVarianceDisplay(totalActual - totalExpected);
+                          })()}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                
+                {/* Variance Alert */}
+                {(() => {
+                  const totalExpected = (currentShift?.netCashFlow || 0) +
+                    allAccounts.reduce((sum, acc) => 
+                      sum + (currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0);
+                  const totalActual = closingCash.total +
+                    allAccounts.reduce((sum, acc) => 
+                      sum + (accountClosingBalances[acc.id!] || currentShift?.accountBalances?.[acc.id!]?.currentBalance || acc.currentBalance || 0), 0);
+                  const totalVariance = totalActual - totalExpected;
+                  
+                  if (Math.abs(totalVariance) > 0.01) {
+                    return (
+                      <Alert severity={Math.abs(totalVariance) > 10 ? 'warning' : 'info'} sx={{ mt: 2 }}>
+                        {isArabic 
+                          ? `يوجد فرق قدره ${formatCurrency(Math.abs(totalVariance))} ${totalVariance > 0 ? 'زيادة' : 'نقص'}`
+                          : `There is a variance of ${formatCurrency(Math.abs(totalVariance))} ${totalVariance > 0 ? 'over' : 'short'}`}
+                      </Alert>
+                    );
+                  }
+                  return null;
+                })()}
+              </Box>
+            )}
+            
+            {/* Notes field - appears on all tabs */}
+            <TextField
+              fullWidth
+              label={isArabic ? 'ملاحظات الإغلاق (اختياري)' : 'Closing Notes (Optional)'}
+              multiline
+              rows={2}
+              value={shiftNotes}
+              onChange={(e) => setShiftNotes(e.target.value)}
+              sx={{ mt: 3 }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCloseShiftDialog(false)}>Cancel</Button>
+          <Button onClick={() => setCloseShiftDialog(false)}>{isArabic ? 'إلغاء' : 'Cancel'}</Button>
           <Button onClick={handleCloseShift} variant="contained" color="error">
-            Close Shift
+            {isArabic ? 'إغلاق الوردية' : 'Close Shift'}
           </Button>
         </DialogActions>
       </Dialog>

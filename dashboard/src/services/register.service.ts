@@ -31,6 +31,7 @@ import type {
   RegisterAction,
   RegisterAnalytics,
   ShiftStatus,
+  AccountBalance,
 } from '../types/register.types';
 
 class RegisterService {
@@ -54,7 +55,9 @@ class RegisterService {
     employeeId: string,
     employeeName: string,
     openingCash: DenominationCount,
-    notes?: string
+    notes?: string,
+    accountBalances?: Record<string, AccountBalance>,
+    linkedAccounts?: string[]
   ): Promise<string> {
     try {
       // Check for existing open shifts for this register
@@ -83,6 +86,8 @@ class RegisterService {
         declaredOpeningCash: openingCash,
         openingCashTotal: openingTotal,
         openingNotes: notes,
+        accountBalances: accountBalances || {},
+        linkedAccounts: linkedAccounts || [],
         status: 'active',
         totalSales: 0,
         totalRefunds: 0,
@@ -125,9 +130,14 @@ class RegisterService {
     shiftId: string,
     closingCash: DenominationCount,
     notes?: string,
-    approvedBy?: string
+    approvedBy?: string,
+    accountBalances?: Record<string, AccountBalance>
   ): Promise<void> {
     try {
+      let shiftData: ShiftSession | null = null;
+      let closingTotal = 0;
+      let variance = 0;
+      
       await runTransaction(db, async (transaction) => {
         const shiftRef = doc(db, 'companies', companyId, this.shiftsCollection, shiftId);
         const shiftDoc = await transaction.get(shiftRef);
@@ -137,13 +147,14 @@ class RegisterService {
         }
 
         const shift = shiftDoc.data() as ShiftSession;
+        shiftData = shift;
 
         if (shift.status !== 'active' && shift.status !== 'closing') {
           throw new Error('Shift is not active');
         }
 
         // Calculate closing total
-        const closingTotal = this.calculateDenominationTotal(closingCash);
+        closingTotal = this.calculateDenominationTotal(closingCash);
 
         // Calculate expected cash (opening + sales - refunds + pay ins - pay outs - drops)
         const expectedCash = shift.openingCashTotal + 
@@ -154,40 +165,71 @@ class RegisterService {
                            shift.totalCashDrops;
 
         // Calculate variance
-        const variance = closingTotal - expectedCash;
+        variance = closingTotal - expectedCash;
         const varianceCategory = variance > 0.01 ? 'over' : 
                                 variance < -0.01 ? 'short' : 'exact';
 
         // Update shift with closing data
-        const updateData = {
+        const updateData: any = {
           closedAt: Timestamp.now(),
           declaredClosingCash: closingCash,
           closingCashTotal: closingTotal,
-          closingNotes: notes,
           expectedCash,
           cashVariance: variance,
           varianceCategory,
-          varianceNotes: notes,
           status: 'closed' as ShiftStatus,
-          closingApprovedBy: approvedBy,
-          closingApprovedAt: approvedBy ? Timestamp.now() : null,
           requiresReview: Math.abs(variance) > 10, // Flag for review if variance > 10 EGP
           updatedAt: Timestamp.now(),
         };
+        
+        // Add optional fields only if they have values
+        if (notes && notes.trim()) {
+          updateData.closingNotes = notes;
+          updateData.varianceNotes = notes;
+        }
+        
+        if (approvedBy) {
+          updateData.closingApprovedBy = approvedBy;
+          updateData.closingApprovedAt = Timestamp.now();
+        }
+        
+        // Update account balances with closing data if provided
+        if (accountBalances && Object.keys(accountBalances).length > 0) {
+          // Ensure all values in accountBalances are defined
+          const cleanedBalances: Record<string, AccountBalance> = {};
+          for (const [key, value] of Object.entries(accountBalances)) {
+            if (value && typeof value === 'object') {
+              cleanedBalances[key] = {
+                ...value,
+                // Ensure all number fields have a value
+                openingExpected: value.openingExpected || 0,
+                openingActual: value.openingActual || 0,
+                openingVariance: value.openingVariance || 0,
+                currentBalance: value.currentBalance || 0,
+                closingExpected: value.closingExpected || 0,
+                closingActual: value.closingActual || 0,
+                closingVariance: value.closingVariance || 0,
+              };
+            }
+          }
+          updateData.accountBalances = cleanedBalances;
+        }
 
         transaction.update(shiftRef, updateData);
       });
 
       // Log the action
-      await this.logAuditAction(
-        companyId,
-        shift.branchId,
-        shift.registerId,
-        shiftId,
-        'shift_close',
-        shift.employeeId,
-        { closingCash: closingTotal, variance: shift.cashVariance }
-      );
+      if (shiftData) {
+        await this.logAuditAction(
+          companyId,
+          shiftData.branchId,
+          shiftData.registerId,
+          shiftId,
+          'shift_close',
+          shiftData.employeeId,
+          { closingCash: closingTotal, variance }
+        );
+      }
     } catch (error) {
       console.error('Error closing shift:', error);
       throw error;
@@ -682,8 +724,39 @@ class RegisterService {
       });
 
       return transactions;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting shift transactions:', error);
+      
+      // If the error is due to missing index, try without ordering
+      if (error.message?.includes('requires an index')) {
+        try {
+          console.log('Retrying without ordering due to missing index...');
+          const q = query(
+            collection(db, 'companies', companyId, this.transactionsCollection),
+            where('shiftId', '==', shiftId)
+          );
+
+          const snapshot = await getDocs(q);
+          const transactions: RegisterTransaction[] = [];
+
+          snapshot.forEach(doc => {
+            transactions.push({ id: doc.id, ...doc.data() } as RegisterTransaction);
+          });
+
+          // Sort client-side
+          transactions.sort((a, b) => {
+            const timeA = a.timestamp?.toDate?.() || new Date(0);
+            const timeB = b.timestamp?.toDate?.() || new Date(0);
+            return timeB.getTime() - timeA.getTime();
+          });
+
+          return transactions;
+        } catch (retryError) {
+          console.error('Error in retry:', retryError);
+          return [];
+        }
+      }
+      
       return [];
     }
   }
