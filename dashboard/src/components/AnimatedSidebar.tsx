@@ -40,6 +40,7 @@ import {
   TrendingUp,
   ExitToApp,
   Assessment,
+  Description,
   AccountBalance,
   Payment,
   BookOnline,
@@ -59,6 +60,8 @@ import {
   Webhook,
   Inventory2Outlined,
   WhatsApp,
+  ShoppingCart,
+  MoneyOff,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -103,6 +106,13 @@ const menuItems: MenuItem[] = [
     path: '/payroll',
   },
   {
+    id: 'products',
+    title: 'Products',
+    titleAr: 'المنتجات',
+    icon: <ShoppingCart />,
+    path: '/products',
+  },
+  {
     id: 'inventory',
     title: 'Inventory',
     titleAr: 'المخزون',
@@ -124,11 +134,11 @@ const menuItems: MenuItem[] = [
     path: '/loyalty',
   },
   {
-    id: 'integrations',
-    title: 'Integrations',
-    titleAr: 'التكاملات',
-    icon: <IntegrationInstructions />,
-    path: '/integrations',
+    id: 'expenses',
+    title: 'Expenses',
+    titleAr: 'المصروفات',
+    icon: <MoneyOff />,
+    path: '/finance/expenses',
   },
 ];
 
@@ -239,6 +249,28 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
 
   const drawerWidth = open ? 240 : 70;
 
+  // Auto-expand parent items based on current path
+  React.useEffect(() => {
+    // Check if we're on a finance page
+    if (location.pathname.startsWith('/finance')) {
+      setExpandedItems(prev => {
+        if (!prev.includes('finance')) {
+          return [...prev, 'finance'];
+        }
+        return prev;
+      });
+    }
+    // Check if we're on a settings page
+    if (location.pathname.startsWith('/settings')) {
+      setExpandedItems(prev => {
+        if (!prev.includes('settings')) {
+          return [...prev, 'settings'];
+        }
+        return prev;
+      });
+    }
+  }, [location.pathname]);
+
   const handleToggleExpand = (itemId: string) => {
     setExpandedItems((prev) =>
       prev.includes(itemId)
@@ -258,6 +290,7 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
 
   const isActive = (path?: string) => {
     if (!path) return false;
+    // Exact match or sub-path match
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
@@ -293,6 +326,9 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
     const isExpanded = expandedItems.includes(item.id);
     const isItemActive = isActive(item.path);
     const isHovered = hoveredItem === item.id;
+    
+    // Check if any child is active
+    const isChildActive = hasSubItems && item.subItems?.some(subItem => isActive(subItem.path));
 
     return (
       <React.Fragment key={item.id}>
@@ -319,7 +355,7 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
               mx: 0.5,
               mb: 0.25,
               position: 'relative',
-              backgroundColor: isItemActive
+              backgroundColor: isItemActive || (isChildActive && depth === 0)
                 ? theme.palette.action.selected
                 : 'transparent',
               '&::before': {
@@ -330,7 +366,7 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: 4,
-                height: isItemActive ? '70%' : 0,
+                height: (isItemActive || (isChildActive && depth === 0)) ? '70%' : 0,
                 backgroundColor: theme.palette.primary.main,
                 borderRadius: '0 4px 4px 0',
                 transition: 'height 0.3s ease',
@@ -340,7 +376,7 @@ const AnimatedSidebar: React.FC<AnimatedSidebarProps> = ({ open, onClose, onOpen
             <ListItemIcon
               sx={{
                 minWidth: 36,
-                color: isItemActive
+                color: (isItemActive || (isChildActive && depth === 0))
                   ? theme.palette.primary.main
                   : theme.palette.text.secondary,
               }}

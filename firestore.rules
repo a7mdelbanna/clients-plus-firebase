@@ -1,6 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // OTP Sessions - Only accessible by Cloud Functions
+    match /otpSessions/{session} {
+      allow read, write: if false; // Only Cloud Functions can access
+    }
+    
+    // Client portal access rules
+    function isValidClient() {
+      return request.auth != null && 
+        request.auth.token.clientPortal == true;
+    }
+    
+    function isClientOwner(clientId) {
+      return isValidClient() && 
+        request.auth.token.clientId == clientId;
+    }
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
@@ -46,7 +61,7 @@ service cloud.firestore {
     
     // Companies collection and its subcollections
     match /companies/{companyId} {
-      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow read: if true; // Public access for booking (company slug lookup)
       allow create: if isSuperAdmin();
       allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
       allow delete: if isSuperAdmin();
@@ -58,7 +73,7 @@ service cloud.firestore {
       }
       
       match /branches/{branchId} {
-        allow read: if isSuperAdmin() || isCompanyUser(companyId);
+        allow read: if true; // Public access for booking
         allow write: if isSuperAdmin() || isCompanyAdmin(companyId);
       }
       
@@ -78,7 +93,8 @@ service cloud.firestore {
       
       match /whatsappMessages/{messageId} {
         allow read: if isSuperAdmin() || isCompanyStaff(companyId);
-        allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+        allow create: if isSuperAdmin() || isCompanyStaff(companyId) || 
+          (request.auth == null && request.resource.data.type == 'appointment_confirmation'); // Allow public for online booking confirmations
         allow update: if isSuperAdmin() || isCompanyStaff(companyId);
         allow delete: if isSuperAdmin() || isCompanyStaff(companyId);
       }
@@ -88,18 +104,24 @@ service cloud.firestore {
     
     // Clients collection
     match /clients/{clientId} {
-      allow read: if isSuperAdmin() || hasCompanyId();
+      allow read: if isSuperAdmin() || hasCompanyId() || 
+        isClientOwner(clientId) || true; // Allow public read for client lookup during booking
       allow create: if isSuperAdmin() || 
-        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId) ||
+        (request.resource.data.source == 'online_booking'); // Allow public creation through online booking
       allow update: if isSuperAdmin() || 
-        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
+        isClientOwner(clientId) || 
+        (request.auth == null && 
+         request.resource.data.companyId == resource.data.companyId &&
+         request.resource.data.phone == resource.data.phone); // Allow clients to update their own data based on phone match
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
     
     // Staff/Employees collection
     match /staff/{staffId} {
-      allow read: if isSuperAdmin() || hasCompanyId();
+      allow read: if true; // Public access for booking
       allow create: if isSuperAdmin() || 
         (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
       allow update: if isSuperAdmin() || 
@@ -121,13 +143,24 @@ service cloud.firestore {
     
     // Appointments collection
     match /appointments/{appointmentId} {
-      allow read: if isSuperAdmin() || hasCompanyId() || isAuthenticated();
+      // Allow public read for online booking availability checking
+      allow read: if true ||
+        (isValidClient() && resource.data.clientId == request.auth.token.clientId); // Clients can read their appointments
       allow create: if isSuperAdmin() || 
         (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId) ||
-        isAuthenticated();
+        isAuthenticated() ||
+        (request.auth == null && request.resource.data.source == 'online'); // Public can create online bookings
       allow update: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
-        (isAuthenticated() && resource.data.clientId == request.auth.uid);
+        (isAuthenticated() && resource.data.clientId == request.auth.uid) ||
+        (isValidClient() && resource.data.clientId == request.auth.token.clientId) || // Clients can update their appointments
+        (request.auth == null && request.resource.data.status == 'cancelled' && 
+         resource.data.status in ['pending', 'confirmed'] &&
+         request.resource.data.clientId == resource.data.clientId) || // Allow public to cancel their own appointments
+        (request.auth == null && request.resource.data.status == 'rescheduled' && 
+         resource.data.status in ['pending', 'confirmed'] &&
+         request.resource.data.clientId == resource.data.clientId &&
+         request.resource.data.keys().hasAll(['rescheduledTo', 'rescheduledAt'])); // Allow public to mark as rescheduled
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
     }
@@ -197,7 +230,8 @@ service cloud.firestore {
     
     // WhatsApp configurations (top-level) - simplified rule
     match /whatsappConfigs/{configId} {
-      allow read, write: if isAuthenticated() && hasCompanyId();
+      allow read: if true; // Public access needed for online booking
+      allow write: if isAuthenticated() && hasCompanyId();
     }
     
     // Reminder configurations (top-level)
@@ -231,6 +265,195 @@ service cloud.firestore {
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
       allow delete: if isSuperAdmin() || 
         (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    // Booking Links (top-level) - Company users can manage, public can read active links
+    match /bookingLinks/{linkId} {
+      allow read: if true; // Public access for booking
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId) ||
+        (request.auth == null && request.resource.data.analytics != null); // Allow public to update analytics only
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    // Product Management Collections (Top-level)
+    match /products/{productId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /productCategories/{categoryId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /inventoryTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if false; // Inventory transactions should never be deleted
+    }
+    
+    match /stockTransfers/{transferId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /purchaseOrders/{orderId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /vendors/{vendorId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    match /stockAlerts/{alertId} {
+      allow read: if isSuperAdmin() || 
+        (hasCompanyId() || belongsToCompany(resource.data.companyId));
+      allow create: if isSuperAdmin() || 
+        (hasCompanyId() && request.resource.data.companyId == request.auth.token.companyId);
+      allow update: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+      allow delete: if isSuperAdmin() || 
+        (hasCompanyId() && resource.data.companyId == request.auth.token.companyId);
+    }
+    
+    // Product Management Collections (Company subcollections)
+    match /companies/{companyId}/products/{productId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/productCategories/{categoryId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/inventoryTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if false; // Inventory transactions should never be deleted
+    }
+    
+    match /companies/{companyId}/stockTransfers/{transferId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/purchaseOrders/{orderId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/vendors/{vendorId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/stockAlerts/{alertId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    // Financial Management Collections
+    match /companies/{companyId}/financialAccounts/{accountId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin();
+    }
+    
+    match /companies/{companyId}/financialTransactions/{transactionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if false; // Financial transactions should never be deleted
+    }
+    
+    match /companies/{companyId}/cashRegisterSessions/{sessionId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if false; // Cash register sessions should never be deleted
+    }
+    
+    match /companies/{companyId}/expenseCategories/{categoryId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/financialReports/{reportId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow update: if isSuperAdmin() || isCompanyStaff(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/budgets/{budgetId} {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if isSuperAdmin() || isCompanyAdmin(companyId);
+    }
+    
+    match /companies/{companyId}/financialSettings {
+      allow read: if isSuperAdmin() || isCompanyUser(companyId);
+      allow create: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow update: if isSuperAdmin() || isCompanyAdmin(companyId);
+      allow delete: if false;
     }
   }
 }

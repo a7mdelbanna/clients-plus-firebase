@@ -3,7 +3,7 @@
 ## Project Overview
 This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform designed for Egyptian businesses to manage their operations, clients, projects, and employees. The application supports both Arabic and English with RTL/LTR layout switching.
 
-## Current Status (Last Updated: 2025-07-22 - Evening)
+## Current Status (Last Updated: 2025-07-23 - Early Morning)
 
 ### Completed Features
 1. **Authentication System**
@@ -64,14 +64,36 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
    - ✅ Notification preferences (UI ready)
    - ✅ Security settings (UI ready)
 
-7. **User Profile Page**
-   - ✅ Profile photo upload to Firebase Storage
-   - ✅ Edit display name
-   - ✅ View account information (email, join date, last login)
-   - ✅ Change password functionality
-   - ✅ Password validation and re-authentication
-   - ✅ Verified account badge
-   - ✅ Profile information form
+7. **Enhanced User Profile System (2025-07-23)**
+   - ✅ **Complete Profile Management**:
+     - Profile photo upload to Firebase Storage with real-time updates
+     - Edit comprehensive profile information (first name, last name, display name)
+     - Contact information management (phone, location, bio)
+     - Email display (non-editable with verification status)
+   - ✅ **Modern UX Design**:
+     - Header section with large avatar (140x140), user info, and quick stats
+     - Organized form sections (Basic Information, Contact Information, About)
+     - Sidebar with Security & Account settings and Account Statistics
+     - Enhanced visual hierarchy with proper spacing and typography
+   - ✅ **Security Features**:
+     - Password change functionality with validation and re-authentication
+     - Two-factor authentication placeholder (Coming Soon)
+     - Password change button clearly visible on separate line
+   - ✅ **User Role Detection**:
+     - Dynamic role identification (Owner, Admin, Manager, Employee, Receptionist)
+     - Company ownership verification from Firestore
+     - Color-coded role chips with Arabic/English support
+     - Automatic role determination with fallback logic
+   - ✅ **Account Statistics**:
+     - Profile completion percentage calculation
+     - Total login count tracking
+     - Account type display with appropriate colors
+     - Member since and last active dates with consistent formatting
+   - ✅ **Data Integration**:
+     - Complete Firestore user document integration
+     - Real-time profile data loading and saving
+     - Proper error handling and toast notifications
+     - RTL/LTR layout support maintained throughout
 
 ### Recent Fixes & Improvements
 - ✅ Fixed Firebase permissions error during company creation
@@ -583,6 +605,11 @@ This is a Firebase-based multi-tenant SaaS dashboard for Clients+, a platform de
 4. **Responsive Design**: Works seamlessly on desktop and mobile
 5. **Theme Customization**: Each company can have its own brand colors
 6. **Security First**: Proper authentication and authorization at all levels
+7. **Consistent Page Layout**: 
+   - All pages should have `mt: 3` (24px) top margin on the main Container element
+   - This creates consistent spacing between the page header and content
+   - Example: `<Container maxWidth="xl" sx={{ mt: 3 }}>`
+   - Applied to all finance pages and should be standard for new pages
 
 ## Important Commands
 ```bash
@@ -1008,6 +1035,90 @@ firebase deploy                          # Deploy everything
       ```
     - **Prevention**: Always add all related routes when creating new pages (list, create, edit)
 
+30. **MUI Menu anchorEl Invalid Warning**:
+    - **Error**: "The `anchorEl` prop provided to the component is invalid. The anchor element should be part of the document layout."
+    - **Root Cause**: Single shared Menu component trying to handle anchor elements from multiple components, causing stale references
+    - **Solution**: Move Menu component inside each component that needs it:
+      ```typescript
+      // Before (causes error - shared menu in parent):
+      const ParentComponent = () => {
+        const [anchorEl, setAnchorEl] = useState(null);
+        return (
+          <>
+            {items.map(item => <Card onClick={(e) => setAnchorEl(e.currentTarget)} />)}
+            <Menu anchorEl={anchorEl} /> {/* Single menu for all cards */}
+          </>
+        );
+      };
+      
+      // After (works - each card has its own menu):
+      const CardComponent = ({ item }) => {
+        const [anchorEl, setAnchorEl] = useState(null);
+        return (
+          <>
+            <Card>
+              <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} />
+            </Card>
+            <Menu anchorEl={anchorEl} /> {/* Menu scoped to this card */}
+          </>
+        );
+      };
+      ```
+    - **Key Points**:
+      - Each component should manage its own menu state
+      - Menu should be rendered in the same component as its anchor
+      - Avoids stale references when components re-render
+    - **Prevention**: Always render Menu components close to their anchor elements
+
+31. **Form Fields with Different Heights (MUI Grid Migration)**:
+    - **Error**: Form fields have inconsistent heights, MUI Grid warnings about deprecated props (item, xs, sm)
+    - **Root Cause**: Using MUI Grid v1 syntax with v2, inconsistent field types in same row
+    - **Solution**: Replace Grid with Box flexbox layout:
+      ```typescript
+      // Before (causes warnings and height issues):
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <TextField />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <Select />  {/* Different height than TextField */}
+        </Grid>
+      </Grid>
+      
+      // After (consistent heights, no warnings):
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+          <TextField fullWidth />
+          <FormControl fullWidth>
+            <Select />
+          </FormControl>
+        </Box>
+      </Box>
+      ```
+    - **Key Points**:
+      - Use Box with flexbox for layouts instead of deprecated Grid
+      - Group similar field types in same row
+      - Ensure all fields in a row are wrapped properly (TextField vs FormControl+Select)
+    - **Prevention**: Always use Box with flexbox for form layouts, avoid mixing Grid v1 syntax
+
+32. **MUI Select Label Not Floating to Top**:
+    - **Error**: Select dropdown label appears inside the field instead of floating above
+    - **Root Cause**: Empty Select with displayEmpty prop causes label positioning issues
+    - **Solution**: Force label to shrink position:
+      ```typescript
+      // Before (label stays inside):
+      <FormControl fullWidth>
+        <InputLabel>Parent Category</InputLabel>
+        <Select value="" displayEmpty>
+          
+      // After (label floats above):
+      <FormControl fullWidth>
+        <InputLabel shrink={true}>Parent Category</InputLabel>
+        <Select value="" displayEmpty notched>
+      ```
+    - **Additional Fix**: Ensure value is controlled: `value={formData.field || ''}`
+    - **Prevention**: Always use shrink={true} on InputLabel when using displayEmpty on Select
+
 ### Superadmin Dashboard (2025-07-22 - Evening & 2025-07-23 - Early Morning)
    - ✅ **Secure Access Architecture**:
      - Random 32-character URL hash (e.g., `/sa-7f8e3b2a9c1d4e5f6789abcdef012345/dashboard`)
@@ -1032,6 +1143,49 @@ firebase deploy                          # Deploy everything
      - Platform analytics showing real metrics: 9 businesses, 9 users, plan distribution
      - Recent businesses table displaying actual company names (including Arabic names)
      - Revenue tracking and growth calculations from real subscription data
+   - ✅ **Business Management Interface (2025-07-23)**:
+     - **BusinessListPage**: Complete business listing with filtering and search
+       - Filter by status (Active, Suspended, Pending, Cancelled)
+       - Search by business name, email, or business name
+       - Paginated results with business cards showing key metrics
+       - Action menu for suspend/activate/view details operations
+       - Route-based filtering (e.g., `/businesses/active` auto-filters)
+     - **BusinessDetailPage**: Comprehensive business management interface
+       - 5-tab layout: Overview, Subscription, Usage & Analytics, Contact Info, Billing
+       - Real-time business data loading with error handling
+       - Business status management (suspend/activate with confirmation dialogs)
+       - Edit mode for contact information and business details
+       - Subscription plan display with billing information
+       - Usage statistics showing appointments, clients, staff, services, storage
+       - Navigation breadcrumbs and back-to-list functionality
+   - ✅ **Pricing Management System (2025-07-23)**:
+     - **PricingManagementPage**: Complete pricing administration interface
+       - 4-tab layout: Pricing Plans, Premium Add-ons, Business Overrides, Promotions
+       - **Pricing Plans Tab**: Visual plan cards with create/edit functionality
+         - Plan configuration: pricing, limits, features, popularity flags
+         - Multi-language support (English/Arabic display names and descriptions)
+         - Plan activation/deactivation controls
+       - **Premium Add-ons Tab**: Table-based add-on management
+         - Setup fees and monthly recurring fees
+         - Category organization (branding, integration, analytics, automation)
+         - Add-on creation and editing with dialog forms
+       - Route-based tab switching (URLs control active tab)
+       - Integration with pricing.service.ts for CRUD operations
+   - ✅ **System Announcements (2025-07-23)**:
+     - **AnnouncementsPage**: Platform-wide communication system
+       - Create and manage system announcements for businesses
+       - Target audience selection (All, Active, Specific Plans, Custom)
+       - Draft/send immediately functionality
+       - Announcement history with status tracking
+       - Rich text messaging with title and description
+       - Integration with superadmin.service.ts sendAnnouncement method
+   - ✅ **Enhanced Navigation & Routing**:
+     - Added all superadmin routes to App.tsx with proper nesting
+     - Business list routes: `/businesses`, `/businesses/active`, `/businesses/suspended`, `/businesses/pending`
+     - Business detail route: `/businesses/:businessId`
+     - Pricing routes: `/pricing/plans`, `/pricing/overrides`, `/pricing/addons`, `/pricing/promotions`
+     - Communications route: `/communications/announcements`
+     - Route-based state management (URL changes automatically set filters/tabs)
    - ✅ **Pricing System Architecture**:
      - Dynamic pricing plans (Starter: 597 EGP, Professional: 1,797 EGP, Business: 3,897 EGP)
      - Premium add-ons (White-label: 10,000 EGP + 1,000/month, Mobile App: 35,000 EGP + 2,500/month)
@@ -1048,23 +1202,171 @@ firebase deploy                          # Deploy everything
      - Audit logging for all superadmin actions
      - Public read access for pricing configs
    - ✅ **Technical Fixes Applied**:
-     - Fixed missing imports and circular dependencies
+     - Fixed missing imports and circular dependencies (Calendar icon → CalendarToday)
      - Simplified analytics queries for better performance
      - Added proper error handling and fallback data
      - Removed external API dependencies that caused connection errors
      - Fixed CompanySubscription interface import issues
+     - Proper TypeScript types and import statements
    - ✅ **Setup Documentation**:
      - Created SUPERADMIN_SETUP.md with detailed instructions
      - Node.js script for creating superadmin users
      - Security best practices and warnings
+   
+   **Note**: Superadmin system is functional but needs UI/UX enhancements and Arabic language support for production use.
 
-## Next Major Features
-- Complete superadmin dashboard implementation (business list, pricing UI, payment integration)
-- Client management system
-- Project tracking
-- Invoice generation
-- Employee management
-- Reports and analytics
-- Calendar integration
-- Notification system
-- File storage
+## Feature Development Roadmap (Prioritized by Business Impact)
+
+### 🔥 Phase 1: Revenue Protection & Growth (CRITICAL - 5-6 weeks)
+**Goal**: Immediate impact on revenue through better financial visibility and customer retention
+
+#### 1.1 Fix & Enhance Financial Analytics (Week 1)
+- **Current Issues**:
+  - FinanceReportsPage transaction filtering errors (FIXED)
+  - Limited financial insights
+  - No profit/loss statements
+- **Deliverables**:
+  - Complete financial dashboard with real metrics
+  - Profit & Loss statements
+  - Cash flow visualization
+  - Expense categorization and tracking
+  - Multi-period comparisons
+- **Dependencies**: finance.service.ts, transaction system, chart libraries
+
+#### 1.2 Customer Retention System (Weeks 2-4)
+- **Business Impact**: 20-30% reduction in no-shows, increased repeat bookings
+- **Features**:
+  - Automated appointment reminders (SMS/WhatsApp/Email)
+  - Service follow-up reminders (e.g., "Time for your monthly facial!")
+  - Birthday and special occasion greetings
+  - Loyalty points system
+  - Missed appointment win-back campaigns
+- **New Services Needed**:
+  - notification.service.ts (SMS/WhatsApp integration)
+  - loyalty.service.ts
+  - automation.service.ts
+- **Dependencies**: client data, appointment system, communication APIs
+
+#### 1.3 Enhanced Business Dashboard (Weeks 5-6)
+- **Current State**: Basic dashboard with placeholder data
+- **Enhancements**:
+  - Real-time KPI dashboard
+  - Staff performance rankings and metrics
+  - Service profitability analysis
+  - Customer lifetime value tracking
+  - Booking trends and peak hour analysis
+  - Revenue forecasting
+- **Dependencies**: All existing services for data aggregation
+
+### 📊 Phase 2: Operational Excellence (MEDIUM - 3-4 weeks)
+
+#### 2.1 Complete POS Transaction Recording
+- **Current Gaps**: Transaction recording might be incomplete
+- **Features**:
+  - Ensure all sales update inventory
+  - Payment method tracking
+  - Cash drawer reconciliation
+  - Daily sales reports
+  - Receipt customization
+- **Dependencies**: sale.service.ts, inventory.service.ts, finance.service.ts
+
+#### 2.2 Inventory Management Enhancements
+- **Current State**: Basic inventory tracking exists
+- **Enhancements**:
+  - Low stock alerts with customizable thresholds
+  - Expiry date tracking for products
+  - Stock movement history and audit trail
+  - Supplier management and purchase orders
+  - Barcode scanning support
+  - Stock take and adjustment features
+- **New Features**: supplier.service.ts, stockAlert.service.ts
+
+### 💰 Phase 3: Staff & Financial Management (MEDIUM - 4-5 weeks)
+
+#### 3.1 Staff Commission & Performance System
+- **Features**:
+  - Commission calculation rules (percentage, fixed, tiered)
+  - Service-based commission tracking
+  - Performance bonuses
+  - Tips tracking and distribution
+  - Monthly commission reports
+- **Dependencies**: staff.service.ts, appointment data, sales data
+
+#### 3.2 Basic Payroll Management
+- **Features**:
+  - Salary calculation with deductions
+  - Commission integration
+  - Leave management
+  - Payslip generation
+  - Export to accounting software
+- **New Services**: payroll.service.ts, leave.service.ts
+
+### 📱 Phase 4: Advanced Features (LOWER PRIORITY)
+
+#### 4.1 Marketing Campaigns
+- Email campaign builder
+- SMS blast messaging
+- Customer segmentation
+- Campaign analytics
+
+#### 4.2 Advanced Analytics
+- Predictive analytics
+- Customer churn prediction
+- Demand forecasting
+- Business intelligence dashboard
+
+#### 4.3 Mobile Applications
+- Staff mobile app (React Native)
+- Customer booking app
+- Owner dashboard app
+
+## Implementation Approach
+
+### Before Starting Each Phase:
+1. **Full System Analysis**
+   - Map all related components and services
+   - Identify dependencies and connections
+   - Review existing code for reusability
+   - Plan database schema changes
+
+2. **Research & Best Practices**
+   - Industry-specific requirements
+   - Compliance and regulations
+   - User experience patterns
+   - Performance considerations
+
+3. **Technical Planning**
+   - API design and endpoints
+   - State management approach
+   - Database indexing needs
+   - Security considerations
+
+### Quality Assurance:
+- Unit tests for critical business logic
+- Integration tests for workflows
+- Performance testing for large datasets
+- Security audit for sensitive features
+
+## Current System Architecture Overview
+
+### Core Services:
+- **Client Management**: client.service.ts, clientVisit.service.ts
+- **Appointment System**: appointment.service.ts, calendar components
+- **Staff Management**: staff.service.ts, schedule management
+- **Financial System**: finance.service.ts, transaction tracking
+- **Inventory**: inventory.service.ts, product management
+- **POS**: sale.service.ts, checkout flow
+
+### Key Integrations:
+- Firebase Auth for user management
+- Firestore for real-time data
+- Firebase Storage for images
+- Branch-based multi-tenancy
+- Role-based access control
+
+### Technical Debt to Address:
+- Standardize error handling across services
+- Implement proper TypeScript types
+- Add loading states consistently
+- Improve offline capabilities
+- Optimize Firestore queries

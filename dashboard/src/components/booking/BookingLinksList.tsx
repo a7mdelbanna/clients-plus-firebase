@@ -28,9 +28,12 @@ import {
   ContentCopy,
   QrCode,
   Analytics,
+  OpenInNew,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import type { BookingLink } from '../../services/bookingLink.service';
+import { useBranch } from '../../contexts/BranchContext';
+import BranchUrlsDialog from './BranchUrlsDialog';
 
 interface BookingLinksListProps {
   links: BookingLink[];
@@ -46,9 +49,11 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
   onDelete,
 }) => {
   const theme = useTheme();
+  const { branches } = useBranch();
   const [searchTerm, setSearchTerm] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedLink, setSelectedLink] = useState<BookingLink | null>(null);
+  const [branchUrlsOpen, setBranchUrlsOpen] = useState(false);
   const isRTL = theme.direction === 'rtl';
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, link: BookingLink) => {
@@ -81,6 +86,17 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
     handleMenuClose();
   };
 
+  // Check for duplicate IDs in development
+  if (process.env.NODE_ENV === 'development') {
+    const ids = links.map(link => link.id).filter(Boolean);
+    const uniqueIds = new Set(ids);
+    if (ids.length !== uniqueIds.size) {
+      console.warn('Duplicate booking link IDs detected:', 
+        ids.filter((id, index) => ids.indexOf(id) !== index)
+      );
+    }
+  }
+
   const filteredLinks = links.filter(link => 
     link.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     link.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,6 +120,45 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
         variant="outlined"
       />
     );
+  };
+
+  const getBranchDisplay = (link: BookingLink) => {
+    if (!link.branchSettings) {
+      // Legacy support - single branch
+      const branch = branches.find(b => b.id === link.branchId);
+      return branch?.name || '-';
+    }
+
+    if (link.branchSettings.mode === 'single') {
+      const branch = branches.find(b => b.id === link.branchSettings?.defaultBranch);
+      return (
+        <Chip
+          label={branch?.name || '-'}
+          size="small"
+          variant="outlined"
+        />
+      );
+    } else {
+      return (
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Chip
+            label={`${link.branchSettings.allowedBranches.length} ${isRTL ? 'فروع' : 'branches'}`}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+          <IconButton 
+            size="small" 
+            onClick={() => {
+              setSelectedLink(link);
+              setBranchUrlsOpen(true);
+            }}
+          >
+            <OpenInNew fontSize="small" />
+          </IconButton>
+        </Box>
+      );
+    }
   };
 
   if (loading) {
@@ -148,6 +203,7 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
             <TableRow>
               <TableCell>{isRTL ? 'الاسم' : 'Name'}</TableCell>
               <TableCell>{isRTL ? 'النوع' : 'Type'}</TableCell>
+              <TableCell>{isRTL ? 'الفروع' : 'Branches'}</TableCell>
               <TableCell>{isRTL ? 'الحالة' : 'Status'}</TableCell>
               <TableCell align="center">{isRTL ? 'المشاهدات' : 'Views'}</TableCell>
               <TableCell align="center">{isRTL ? 'الحجوزات' : 'Bookings'}</TableCell>
@@ -158,7 +214,7 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
           <TableBody>
             {filteredLinks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   <Typography variant="body2" color="textSecondary" sx={{ py: 3 }}>
                     {searchTerm
                       ? isRTL
@@ -171,8 +227,8 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
                 </TableCell>
               </TableRow>
             ) : (
-              filteredLinks.map((link) => (
-                <TableRow key={link.id} hover>
+              filteredLinks.map((link, index) => (
+                <TableRow key={link.id || `link-${index}`} hover>
                   <TableCell>
                     <Box>
                       <Typography variant="body2" fontWeight="medium">
@@ -194,6 +250,7 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
                     </Box>
                   </TableCell>
                   <TableCell>{getTypeChip(link.type)}</TableCell>
+                  <TableCell>{getBranchDisplay(link)}</TableCell>
                   <TableCell>
                     <Chip
                       label={link.isActive ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'غير نشط' : 'Inactive')}
@@ -283,6 +340,12 @@ const BookingLinksList: React.FC<BookingLinksListProps> = ({
           <Typography color="error">{isRTL ? 'حذف' : 'Delete'}</Typography>
         </MenuItem>
       </Menu>
+
+      <BranchUrlsDialog
+        open={branchUrlsOpen}
+        link={selectedLink}
+        onClose={() => setBranchUrlsOpen(false)}
+      />
     </Box>
   );
 };

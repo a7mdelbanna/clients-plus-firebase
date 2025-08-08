@@ -11,8 +11,12 @@ import {
 import type { User } from 'firebase/auth';
 import { ensureUserDocument } from '../utils/fixUserDocument';
 
+interface AuthUser extends User {
+  companyId?: string;
+}
+
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, displayName: string) => Promise<void>;
@@ -35,16 +39,24 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      
-      // Ensure user document exists when user logs in
       if (user) {
+        // Get the ID token to check for claims
+        const idTokenResult = await user.getIdTokenResult();
+        const companyId = idTokenResult.claims.companyId as string | undefined;
+        
+        // Create an extended user object with companyId
+        const authUser: AuthUser = Object.assign(user, { companyId });
+        setCurrentUser(authUser);
+        
+        // Ensure user document exists when user logs in
         await ensureUserDocument();
+      } else {
+        setCurrentUser(null);
       }
       
       setLoading(false);
@@ -59,6 +71,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     await ensureUserDocument();
     // Force token refresh to get updated claims
     await result.user.getIdToken(true);
+    
+    // Get the updated token with claims
+    const idTokenResult = await result.user.getIdTokenResult();
+    const companyId = idTokenResult.claims.companyId as string | undefined;
+    
+    // Update current user with companyId
+    const authUser: AuthUser = Object.assign(result.user, { companyId });
+    setCurrentUser(authUser);
+    
     return result;
   };
 

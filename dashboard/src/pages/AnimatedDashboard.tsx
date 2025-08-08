@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CountUp from 'react-countup';
 import { useInView } from 'react-intersection-observer';
 import { toast } from 'react-toastify';
+import SalesMetricsWidget from '../components/analytics/SalesMetricsWidget';
 import { setupService } from '../services/setup.service';
 import { companyService } from '../services/company.service';
 import type { CompanyStats } from '../services/company.service';
@@ -508,6 +509,11 @@ const AnimatedDashboard: React.FC = () => {
             ))}
           </Box>
 
+          {/* Sales Analytics Widget */}
+          <motion.div variants={itemVariants}>
+            <SalesMetricsWidget />
+          </motion.div>
+
           {/* Action Buttons and Activities */}
           <Box
             sx={{
@@ -657,17 +663,23 @@ const AnimatedDashboard: React.FC = () => {
       </Box>
 
       {/* Floating Action Button */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 24,
+          right: theme.direction === 'rtl' ? 'auto' : { xs: 16, sm: 24 },
+          left: theme.direction === 'rtl' ? { xs: 16, sm: 24 } : 'auto',
+          zIndex: theme.zIndex.speedDial,
+          // Ensure FAB stays within viewport on desktop with sidebar
+          '@media (min-width: 960px)': {
+            right: theme.direction === 'rtl' ? 'auto' : 'calc(24px + 16px)', // Extra margin from edge
+          },
+        }}
+      >
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: theme.direction === 'rtl' ? 'auto' : 24,
-          left: theme.direction === 'rtl' ? 24 : 'auto',
-          zIndex: theme.zIndex.speedDial,
-        }}
       >
         <Tooltip title="إضافة جديد">
           <Fab
@@ -685,6 +697,7 @@ const AnimatedDashboard: React.FC = () => {
           </Fab>
         </Tooltip>
       </motion.div>
+      </Box>
     </Box>
   );
 };

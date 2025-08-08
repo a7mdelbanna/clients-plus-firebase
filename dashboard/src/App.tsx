@@ -26,6 +26,7 @@ import CategoriesPage from './pages/settings/categories/CategoriesPage';
 import ClientCategoriesPage from './pages/settings/categories/ClientCategoriesPage';
 import AppointmentCategoriesPage from './pages/settings/categories/AppointmentCategoriesPage';
 import EventCategoriesPage from './pages/settings/categories/EventCategoriesPage';
+import ExpenseCategoriesPage from './pages/settings/categories/ExpenseCategoriesPage';
 import LocationSettingsPage from './pages/settings/location-settings/LocationSettingsPage';
 import BranchManagementPage from './pages/settings/branches/BranchManagementPage';
 import BranchFormPage from './pages/settings/branches/BranchFormPage';
@@ -33,36 +34,96 @@ import AppointmentCalendarSettingsPage from './pages/settings/appointment-calend
 import WhatsAppSettingsPage from './pages/settings/whatsapp/WhatsAppSettingsPage';
 import Profile from './pages/Profile';
 import Clients from './pages/Clients';
+import ContactsPage from './pages/contacts/ContactsPage';
+import ExpenseContactsPage from './pages/contacts/ExpenseContactsPage';
 import BookingLinks from './pages/BookingLinks';
 import OnlineBooking from './pages/OnlineBooking';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import SetupWizard from './components/SetupWizard/SetupWizard';
 import PrivateRoute from './components/PrivateRoute';
+import { ClientAuthProvider } from './contexts/ClientAuthContext';
+import ClientProtectedRoute from './components/client/ClientProtectedRoute';
+import ClientLogin from './pages/client/ClientLogin';
+import ClientVerify from './pages/client/ClientVerify';
+import ClientDashboard from './pages/client/ClientDashboard';
+import ProductsPage from './pages/products/ProductsPage';
+import ProductFormPage from './pages/products/ProductFormPage';
+import ProductCategoriesPage from './pages/products/ProductCategoriesPage';
+import BarcodePrintPage from './pages/products/BarcodePrintPage';
+import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
+import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
+import TransfersPage from './pages/finance/TransfersPage';
+import FinanceReportsPage from './pages/finance/FinanceReportsPage';
+import FinanceReportsPageEnhanced from './pages/finance/FinanceReportsPageEnhanced';
+import InvoicesPage from './pages/finance/InvoicesPage';
+import InvoiceFormPage from './pages/finance/InvoiceFormPage';
+import InvoiceDetailPage from './pages/finance/InvoiceDetailPage';
+import InventoryPage from './pages/inventory/InventoryPage';
+import AnalyticsPage from './pages/analytics/AnalyticsPage';
+import POSPage from './pages/pos/POSPage';
+import CashRegisterPage from './pages/register/CashRegisterPage';
+import ExpenseManagementPage from './pages/finance/expense/ExpenseManagementPage';
+import FinanceExpenseCategoriesPage from './pages/finance/expense/ExpenseCategoriesPage';
+import NewExpensePage from './pages/finance/expense/NewExpensePage';
+import FinanceOverviewPage from './pages/finance/FinanceOverviewPage';
+
+// Import debug utilities (development only)
+if (process.env.NODE_ENV === 'development') {
+  import('./debug/checkAppointment');
+  import('./debug/checkBranches');
+  import('./debug/checkAppointmentQueries');
+  import('./debug/fixBranchData');
+  import('./debug/debugBranchIssue');
+  import('./debug/checkStaffAssignments');
+  import('./debug/checkAppointmentData');
+}
 import DashboardLayout from './layouts/DashboardLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';
 import SuperadminLogin from './pages/superadmin/SuperadminLogin';
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard';
+import BusinessListPage from './pages/superadmin/BusinessListPage';
+import BusinessDetailPage from './pages/superadmin/BusinessDetailPage';
+import PricingManagementPage from './pages/superadmin/PricingManagementPage';
+import AnnouncementsPage from './pages/superadmin/AnnouncementsPage';
 import SuperadminProtectedRoute from './components/superadmin/SuperadminProtectedRoute';
 import CreateSuperadminTemp from './components/superadmin/CreateSuperadminTemp';
 import PageTransition from './components/PageTransition';
+import PublicBookingWrapper from './pages/public/PublicBookingWrapper';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
+import './styles/sidebar.css';
+import './styles/rtl-layout.css';
 import { initializeUserOnAuth } from './utils/initializeUser';
 import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config/firebase';
 import './utils/clientBranchFix'; // Import for global debugging functions
 import './utils/createSuperadminDev'; // Import for superadmin creation in dev
+import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
+import './utils/debugBookingLinks'; // Import for debugging booking links
+import './utils/syncStaffBranches'; // Import for syncing staff-branch assignments
+import './utils/fixMissingClients'; // Import for fixing missing clients from online booking
+import './utils/debugSidebar'; // Import for debugging sidebar menu items
 
 // Initialize user document creation on auth state change
 initializeUserOnAuth();
 
-// Make createSuperadminDev available globally in development
+// Make utility functions available globally in development
 if (import.meta.env.DEV) {
   import('./utils/createSuperadminDev').then(module => {
     (window as any).createSuperadminDev = module.createSuperadminDev;
     console.log('✅ Superadmin creation tool loaded. Use createSuperadminDev() in console.');
+  });
+  
+  import('./utils/fixBookingLinkUrls').then(module => {
+    (window as any).fixBookingLinkUrls = module.fixBookingLinkUrls;
+    console.log('✅ Booking link URL fix tool loaded. Use fixBookingLinkUrls() in console.');
+  });
+  
+  import('./utils/debugBookingLinks').then(module => {
+    (window as any).debugBookingLinks = module.debugBookingLinks;
+    console.log('✅ Booking link debug tool loaded. Use debugBookingLinks(companyId) in console.');
   });
 }
 
@@ -104,6 +165,38 @@ function App() {
               <BranchProvider>
                 <CssBaseline />
                 <Routes>
+                  {/* Public Booking Routes - No Auth Required */}
+                  <Route path="/book/:companySlug/:linkSlug" element={
+                    <PageTransition>
+                      <PublicBookingWrapper />
+                    </PageTransition>
+                  } />
+                  
+                  {/* Client Portal Routes */}
+                  <Route path="/client/login" element={
+                    <ClientAuthProvider>
+                      <PageTransition>
+                        <ClientLogin />
+                      </PageTransition>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client/verify" element={
+                    <ClientAuthProvider>
+                      <PageTransition>
+                        <ClientVerify />
+                      </PageTransition>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client/dashboard" element={
+                    <ClientAuthProvider>
+                      <ClientProtectedRoute>
+                        <PageTransition>
+                          <ClientDashboard />
+                        </PageTransition>
+                      </ClientProtectedRoute>
+                    </ClientAuthProvider>
+                  } />
+                  <Route path="/client" element={<Navigate to="/client/login" replace />} />
                   {/* Regular Routes */}
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/login" element={
@@ -148,6 +241,56 @@ function App() {
                         <SuperadminDashboard />
                       </PageTransition>
                     } />
+                    <Route path="businesses" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/active" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/suspended" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/pending" element={
+                      <PageTransition>
+                        <BusinessListPage />
+                      </PageTransition>
+                    } />
+                    <Route path="businesses/:businessId" element={
+                      <PageTransition>
+                        <BusinessDetailPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/plans" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/overrides" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/addons" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="pricing/promotions" element={
+                      <PageTransition>
+                        <PricingManagementPage />
+                      </PageTransition>
+                    } />
+                    <Route path="communications/announcements" element={
+                      <PageTransition>
+                        <AnnouncementsPage />
+                      </PageTransition>
+                    } />
                     <Route path="" element={<Navigate to="dashboard" replace />} />
                   </Route>
               <Route
@@ -167,6 +310,11 @@ function App() {
                     <Clients />
                   </PageTransition>
                 } />
+                <Route path="/contacts" element={
+                  <PageTransition>
+                    <ContactsPage />
+                  </PageTransition>
+                } />
                 <Route path="/booking-links" element={
                   <PageTransition>
                     <BookingLinks />
@@ -182,9 +330,127 @@ function App() {
                     <AppointmentsPage />
                   </PageTransition>
                 } />
+                <Route path="/analytics" element={
+                  <PageTransition>
+                    <AnalyticsPage />
+                  </PageTransition>
+                } />
                 <Route path="/projects" element={
                   <PageTransition>
                     <div>Projects Page - Coming Soon</div>
+                  </PageTransition>
+                } />
+                <Route path="/inventory" element={
+                  <PageTransition>
+                    <InventoryPage />
+                  </PageTransition>
+                } />
+                <Route path="/products" element={
+                  <PageTransition>
+                    <ProductsPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/new" element={
+                  <PageTransition>
+                    <ProductFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/:productId/edit" element={
+                  <PageTransition>
+                    <ProductFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/categories" element={
+                  <PageTransition>
+                    <ProductCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/products/barcode-printing" element={
+                  <PageTransition>
+                    <BarcodePrintPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance" element={
+                  <PageTransition>
+                    <FinanceOverviewPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/accounts" element={
+                  <PageTransition>
+                    <FinanceAccountsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/transactions" element={
+                  <PageTransition>
+                    <FinanceTransactionsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/transfers" element={
+                  <PageTransition>
+                    <TransfersPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/pos" element={
+                  <PageTransition>
+                    <POSPage />
+                  </PageTransition>
+                } />
+                
+                {/* Cash Register */}
+                <Route path="/register" element={
+                  <PageTransition>
+                    <CashRegisterPage />
+                  </PageTransition>
+                } />
+                
+                <Route path="/finance/reports" element={
+                  <PageTransition>
+                    <FinanceReportsPageEnhanced />
+                  </PageTransition>
+                } />
+                <Route path="/finance/cash-register" element={
+                  <PageTransition>
+                    <CashRegisterPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expenses" element={
+                  <PageTransition>
+                    <ExpenseManagementPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/categories" element={
+                  <PageTransition>
+                    <FinanceExpenseCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/new" element={
+                  <PageTransition>
+                    <NewExpensePage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/expense/contacts" element={
+                  <PageTransition>
+                    <ExpenseContactsPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices" element={
+                  <PageTransition>
+                    <InvoicesPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/new" element={
+                  <PageTransition>
+                    <InvoiceFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/:invoiceId/edit" element={
+                  <PageTransition>
+                    <InvoiceFormPage />
+                  </PageTransition>
+                } />
+                <Route path="/finance/invoices/:invoiceId" element={
+                  <PageTransition>
+                    <InvoiceDetailPage />
                   </PageTransition>
                 } />
                 <Route path="/settings" element={
@@ -280,6 +546,11 @@ function App() {
                 <Route path="/settings/categories/events" element={
                   <PageTransition>
                     <EventCategoriesPage />
+                  </PageTransition>
+                } />
+                <Route path="/settings/categories/expenses" element={
+                  <PageTransition>
+                    <ExpenseCategoriesPage />
                   </PageTransition>
                 } />
                 <Route path="/settings/location-settings" element={

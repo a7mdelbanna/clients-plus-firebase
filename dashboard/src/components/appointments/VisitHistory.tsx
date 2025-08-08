@@ -26,11 +26,13 @@ import type { Appointment } from '../../services/appointment.service';
 interface VisitHistoryProps {
   clientId: string;
   companyId: string;
+  branchId?: string;
 }
 
 const VisitHistory: React.FC<VisitHistoryProps> = ({
   clientId,
   companyId,
+  branchId,
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
@@ -47,14 +49,16 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
       // If no clientId, set loading to false immediately
       setLoading(false);
     }
-  }, [clientId, companyId]);
+  }, [clientId, companyId, branchId]);
 
   const loadClientAppointments = async () => {
     try {
       setLoading(true);
       const clientAppointments = await appointmentService.getClientAppointments(
         companyId,
-        clientId
+        clientId,
+        undefined, // maxResults
+        branchId
       );
       setAppointments(clientAppointments);
     } catch (error) {
@@ -88,6 +92,36 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
       no_show: { en: 'No-show', ar: 'لم يحضر' },
     };
     return isRTL ? labels[status]?.ar : labels[status]?.en;
+  };
+
+  // Helper function to safely get Date from various date formats
+  const getDateFromAppointment = (dateField: any): Date => {
+    // If it's already a Date object
+    if (dateField instanceof Date) {
+      return dateField;
+    }
+    
+    // If it's a Firestore Timestamp with toDate method
+    if (dateField && typeof dateField.toDate === 'function') {
+      return dateField.toDate();
+    }
+    
+    // If it's a Firestore Timestamp-like object with seconds
+    if (dateField && typeof dateField.seconds === 'number') {
+      return new Date(dateField.seconds * 1000);
+    }
+    
+    // If it's a string or number, try to parse it
+    if (dateField) {
+      const parsed = new Date(dateField);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    
+    // Default to current date if all else fails
+    console.warn('Unknown date format:', dateField);
+    return new Date();
   };
 
   const filteredAppointments = appointments.filter(appointment => {
@@ -171,10 +205,10 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                   <TableCell>
                     <Box>
                       <Typography variant="body2">
-                        {format(appointment.date.toDate(), 'dd MMM yyyy', { locale })}
+                        {format(getDateFromAppointment(appointment.date), 'dd MMM yyyy', { locale })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {appointment.startTime}
+                        {appointment.startTime || ''}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -194,14 +228,14 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                           fontWeight: 600,
                         }}
                       >
-                        {appointment.staffName.charAt(0)}
+                        {appointment.staffName?.charAt(0) || '?'}
                       </Box>
                       <Box>
                         <Typography variant="body2">
-                          {appointment.staffName}
+                          {appointment.staffName || 'Unknown Staff'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {appointment.startTime} {isRTL ? 'تعلم المزيد' : 'Learn More'} →
+                          {appointment.branchName || ''}
                         </Typography>
                       </Box>
                     </Box>
@@ -221,7 +255,7 @@ const VisitHistory: React.FC<VisitHistoryProps> = ({
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2">
-                      {appointment.totalPrice} {isRTL ? 'ج.م' : 'EGP'}
+                      {appointment.totalPrice || 0} {isRTL ? 'ج.م' : 'EGP'}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">

@@ -107,6 +107,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Create theme based on current theme config and dark mode
   const theme = createBusinessTheme(currentTheme, isDarkMode ? 'dark' : 'light');
 
+  // Set document direction
+  useEffect(() => {
+    document.documentElement.dir = 'rtl';
+    document.documentElement.lang = 'ar';
+  }, []);
+
   // Always provide the context, even while loading
   const contextValue = {
     isDarkMode,

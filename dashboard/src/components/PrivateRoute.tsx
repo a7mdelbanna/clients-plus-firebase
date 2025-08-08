@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AnimatedLoader from './AnimatedLoader';
-import { ensureUserDocument } from '../utils/fixUserDocument';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -10,20 +9,8 @@ interface PrivateRouteProps {
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
-  const [checkingUser, setCheckingUser] = useState(true);
 
-  useEffect(() => {
-    const checkUserDocument = async () => {
-      if (currentUser && !loading) {
-        await ensureUserDocument();
-      }
-      setCheckingUser(false);
-    };
-    
-    checkUserDocument();
-  }, [currentUser, loading]);
-
-  if (loading || checkingUser) {
+  if (loading) {
     return <AnimatedLoader text="جاري التحقق من الصلاحيات..." />;
   }
 

@@ -48,6 +48,7 @@ import {
   Paid,
   HelpCenter,
   Star,
+  MoneyOff,
   Work,
   Schedule,
   Category,
@@ -59,6 +60,9 @@ import {
   Webhook,
   Inventory2Outlined,
   WhatsApp,
+  ShoppingCart,
+  PointOfSale,
+  ContactMail,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -89,6 +93,13 @@ const menuItems: MenuItem[] = [
     path: '/clients',
   },
   {
+    id: 'contacts',
+    title: 'Contacts',
+    titleAr: 'جهات الاتصال',
+    icon: <ContactMail />,
+    path: '/contacts',
+  },
+  {
     id: 'booking-links',
     title: 'Booking Links',
     titleAr: 'روابط الحجز',
@@ -115,6 +126,57 @@ const menuItems: MenuItem[] = [
     titleAr: 'المالية',
     icon: <AccountBalance />,
     path: '/finance',
+    subItems: [
+      {
+        id: 'accounts',
+        title: 'Accounts',
+        titleAr: 'الحسابات',
+        icon: <AccountBalance />,
+        path: '/finance/accounts',
+      },
+      {
+        id: 'transactions',
+        title: 'Transactions',
+        titleAr: 'المعاملات',
+        icon: <Payment />,
+        path: '/finance/transactions',
+      },
+      {
+        id: 'expenses',
+        title: 'Expenses',
+        titleAr: 'المصروفات',
+        icon: <MoneyOff />,
+        path: '/finance/expenses',
+      },
+      {
+        id: 'pos',
+        title: 'Point of Sale',
+        titleAr: 'نقطة البيع',
+        icon: <PointOfSale />,
+        path: '/finance/pos',
+      },
+      {
+        id: 'cash-register',
+        title: 'Cash Register',
+        titleAr: 'الصندوق',
+        icon: <AttachMoney />,
+        path: '/register',
+      },
+      {
+        id: 'invoices',
+        title: 'Invoices',
+        titleAr: 'الفواتير',
+        icon: <Receipt />,
+        path: '/finance/invoices',
+      },
+      {
+        id: 'reports',
+        title: 'Reports',
+        titleAr: 'التقارير',
+        icon: <Assessment />,
+        path: '/finance/reports',
+      },
+    ],
   },
   {
     id: 'payroll',
@@ -122,6 +184,13 @@ const menuItems: MenuItem[] = [
     titleAr: 'الرواتب',
     icon: <Payment />,
     path: '/payroll',
+  },
+  {
+    id: 'products',
+    title: 'Products',
+    titleAr: 'المنتجات',
+    icon: <ShoppingCart />,
+    path: '/products',
   },
   {
     id: 'inventory',
@@ -257,6 +326,12 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, onOpen }) => {
   const isRTL = theme.direction === 'rtl';
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+
+  // Debug: Log menu items to console
+  React.useEffect(() => {
+    console.log('Sidebar menuItems:', menuItems);
+    console.log('Products menu item:', menuItems.find(item => item.id === 'products'));
+  }, []);
 
   const drawerWidth = open ? 240 : 70;
 
@@ -606,6 +681,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, onOpen }) => {
               height: '100%',
               borderRight: `1px solid ${theme.palette.divider}`,
               transition: 'width 0.3s',
+              backgroundColor: theme.palette.background.paper,
             }}
           >
             {drawerContent}

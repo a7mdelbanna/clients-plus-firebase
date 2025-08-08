@@ -132,6 +132,16 @@ const InformationTab: React.FC<InformationTabProps> = ({
 
       await staffService.updateStaff(employee.id!, updates);
       
+      // Sync branch staff arrays if branch assignment changed
+      const oldBranches = new Set(employee.branchIds || [employee.branchId].filter(Boolean));
+      const newBranches = new Set(selectedBranches);
+      const hasChanges = oldBranches.size !== newBranches.size || 
+        [...oldBranches].some(id => !newBranches.has(id));
+      
+      if (hasChanges) {
+        await staffService.syncStaffBranchAssignments(companyId, employee.id!, selectedBranches);
+      }
+      
       // Update local state
       onUpdate({
         ...employee,

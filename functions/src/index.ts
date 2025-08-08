@@ -8,3 +8,6 @@ export * from "./auth";
 export * from "./users";
 export * from "./companies";
 export * from "./whatsapp";
+export * from "./appointments";
+export * from "./test-whatsapp";
+export * from "./client-auth";

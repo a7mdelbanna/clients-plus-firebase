@@ -206,17 +206,24 @@ export const branchService = {
   async getBranches(companyId: string, includeInactive = false): Promise<Branch[]> {
     try {
       const branchesRef = collection(db, 'companies', companyId, 'branches');
-      let q = query(branchesRef, orderBy('createdAt', 'asc'));
       
-      if (!includeInactive) {
-        q = query(branchesRef, where('active', '==', true), orderBy('createdAt', 'asc'));
-      }
-      
-      const snapshot = await getDocs(q);
+      // Temporary workaround: Get all docs and filter client-side until index is created
+      // TODO: Once the branches index is created (active + createdAt), revert to using Firestore queries:
+      // let q = query(branchesRef, orderBy('createdAt', 'asc'));
+      // if (!includeInactive) {
+      //   q = query(branchesRef, where('active', '==', true), orderBy('createdAt', 'asc'));
+      // }
+      const snapshot = await getDocs(branchesRef);
       const branches: Branch[] = [];
       
       snapshot.forEach((doc) => {
         const data = doc.data();
+        
+        // Filter inactive branches if needed
+        if (!includeInactive && data.active === false) {
+          return;
+        }
+        
         branches.push({
           id: doc.id,
           ...data,
@@ -226,11 +233,16 @@ export const branchService = {
         } as Branch);
       });
       
-      // Sort so main branch is first
+      // Sort branches: main branch first, then by createdAt
       branches.sort((a, b) => {
+        // Main branch always comes first
         if (a.type === 'main' || a.isMain) return -1;
         if (b.type === 'main' || b.isMain) return 1;
-        return 0;
+        
+        // Sort by createdAt (ascending)
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return aTime - bTime;
       });
       
       return branches;

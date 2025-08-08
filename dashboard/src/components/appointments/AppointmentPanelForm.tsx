@@ -74,6 +74,7 @@ interface AppointmentPanelFormProps {
   onSave: (appointment: Partial<Appointment>) => Promise<void>;
   onDelete?: (appointmentId: string) => Promise<void>;
   onClose: () => void;
+  onLoadAppointment?: (appointmentId: string) => Promise<void>;
 }
 
 const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
@@ -85,6 +86,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   onSave,
   onDelete,
   onClose,
+  onLoadAppointment,
 }) => {
   const theme = useTheme();
   const isRTL = theme.direction === 'rtl';
@@ -181,8 +183,11 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
   // Load initial data
   useEffect(() => {
     loadStaff();
-    if (appointment?.clientId) {
+    if (appointment?.clientId && appointment.clientId !== 'guest') {
       loadClientById(appointment.clientId);
+    } else if (appointment?.clientId === 'guest' && appointment?.clientPhone) {
+      // For guest appointments, try to find client by phone
+      handleClientSearch(appointment.clientPhone);
     }
   }, []);
 
@@ -223,6 +228,20 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
       }
     } catch (error) {
       console.error('Error loading client:', error);
+      // If client not found but we have client info in appointment, use that
+      if (appointment?.clientName && appointment?.clientPhone) {
+        // Try to find by phone
+        const normalizedPhone = appointment.clientPhone.replace(/[\s\-\(\)]/g, '').replace(/^\+20/, '');
+        const filter: ClientsFilter = {
+          searchTerm: normalizedPhone,
+          status: 'active'
+        };
+        const result = await clientService.getClients(companyId, filter, undefined, currentBranch?.id);
+        const clientsArray = result?.clients || [];
+        if (clientsArray.length > 0) {
+          setSelectedClient(clientsArray[0]);
+        }
+      }
     }
   };
 
@@ -701,6 +720,35 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           </Alert>
         )}
 
+        {/* Rescheduled Appointment Indicator */}
+        {appointment?.status === 'rescheduled' && (
+          <Alert 
+            severity="info" 
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="body2">
+              {isRTL ? 'تمت إعادة جدولة هذا الموعد' : 'This appointment has been rescheduled'}
+              {appointment.rescheduledTo && (
+                <>
+                  {' '}
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      if (appointment.rescheduledTo && onLoadAppointment) {
+                        onClose(); // Close current panel
+                        await onLoadAppointment(appointment.rescheduledTo);
+                      }
+                    }}
+                    sx={{ ml: 1 }}
+                  >
+                    {isRTL ? 'عرض الموعد الجديد' : 'View New Appointment'}
+                  </Button>
+                </>
+              )}
+            </Typography>
+          </Alert>
+        )}
+
         {/* Client Info Display */}
         {(selectedClient || (isNewClient && newClientData.name)) && (
           <Box sx={{ 
@@ -841,6 +889,7 @@ const AppointmentPanelForm: React.FC<AppointmentPanelFormProps> = ({
           <VisitHistory
             clientId={selectedClient?.id || appointment?.clientId || ''}
             companyId={companyId}
+            branchId={currentBranch?.id}
           />
         )}
       </Box>

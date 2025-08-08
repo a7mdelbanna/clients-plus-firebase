@@ -31,7 +31,7 @@ import { serviceService } from './service.service';
 import { companyService } from './company.service';
 
 // Appointment Types
-export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
 export type AppointmentSource = 'dashboard' | 'online' | 'phone' | 'walk_in';
 export type PaymentStatus = 'none' | 'partial' | 'full' | 'refunded';
 export type RepeatType = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -105,6 +105,15 @@ export interface Appointment {
   color?: string; // for calendar display
   source: AppointmentSource;
   bookingLinkId?: string; // if booked online
+  
+  // Cancellation Info
+  cancelledBy?: 'client' | 'staff' | 'system';
+  cancelledAt?: Timestamp;
+  cancellationReason?: string;
+  
+  // Reschedule Info
+  rescheduledTo?: string; // ID of the new appointment
+  rescheduledAt?: Timestamp;
   
   // Notifications
   notifications?: AppointmentNotification[];
@@ -255,6 +264,7 @@ class AppointmentService {
     branchId?: string
   ): Promise<Appointment[]> {
     try {
+      
       // Build constraints - all where clauses must come before orderBy
       const constraints: QueryConstraint[] = [
         where('companyId', '==', companyId),
@@ -284,6 +294,7 @@ class AppointmentService {
         id: doc.id,
         ...doc.data()
       } as Appointment));
+
 
       // Sort by startTime in JavaScript while index is building
       appointments.sort((a, b) => {
@@ -396,6 +407,11 @@ class AppointmentService {
       console.error('Error getting appointment:', error);
       throw error;
     }
+  }
+
+  // Alias for getAppointment for clarity
+  async getAppointmentById(appointmentId: string): Promise<Appointment | null> {
+    return this.getAppointment(appointmentId);
   }
 
   // Update appointment
@@ -1095,14 +1111,21 @@ class AppointmentService {
   async getClientAppointments(
     companyId: string,
     clientId: string,
-    maxResults?: number
+    maxResults?: number,
+    branchId?: string
   ): Promise<Appointment[]> {
     try {
       const constraints: QueryConstraint[] = [
         where('companyId', '==', companyId),
-        where('clientId', '==', clientId),
-        orderBy('date', 'desc')
+        where('clientId', '==', clientId)
       ];
+
+      // Filter by branch if provided
+      if (branchId) {
+        constraints.push(where('branchId', '==', branchId));
+      }
+
+      constraints.push(orderBy('date', 'desc'));
 
       if (maxResults) {
         constraints.push(limit(maxResults));
@@ -1519,19 +1542,37 @@ class AppointmentService {
         console.error('Error loading branch:', error);
       }
       
-      // Use business name first, then location name as fallback
-      const businessName = locationSettings?.basic?.businessName || 
+      // Use branch name for the appointment, fallback to business name
+      const businessName = branchData?.name || 
                           locationSettings?.basic?.locationName || 
+                          locationSettings?.basic?.businessName || 
                           company?.businessName || 
                           company?.name || 
                           'Our Business';
       
-      const businessAddress = branchData?.address || 
-                             locationSettings?.contact?.address || '';
+      // Format address properly from branch data
+      let businessAddress = '';
+      if (branchData?.address) {
+        if (typeof branchData.address === 'string') {
+          businessAddress = branchData.address;
+        } else if (branchData.address.street || branchData.address.city) {
+          businessAddress = [branchData.address.street, branchData.address.city]
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
+      if (!businessAddress && locationSettings?.contact?.address) {
+        businessAddress = locationSettings.contact.address;
+      }
                              
       // Get phone number with proper formatting
       let businessPhone = '';
-      if (branchData?.phone) {
+      if (branchData?.contact?.phones && branchData.contact.phones.length > 0) {
+        // Use branch phone if available
+        const phone = branchData.contact.phones.find((p: any) => p.isPrimary) || branchData.contact.phones[0];
+        businessPhone = phone.number || '';
+      } else if (branchData?.phone) {
+        // Legacy single phone field
         businessPhone = branchData.phone;
       } else if (locationSettings?.contact?.phones && locationSettings.contact.phones.length > 0) {
         const phone = locationSettings.contact.phones[0];
@@ -1541,12 +1582,18 @@ class AppointmentService {
       
       // Create Google Maps link if we have coordinates
       let googleMapsLink = '';
-      if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+      // First try branch coordinates
+      if (branchData?.coordinates?.lat && branchData?.coordinates?.lng) {
+        const { lat, lng } = branchData.coordinates;
+        googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        console.log('Google Maps link created from branch:', googleMapsLink);
+      } else if (locationSettings?.contact?.coordinates?.lat && locationSettings?.contact?.coordinates?.lng) {
+        // Fallback to location settings coordinates
         const { lat, lng } = locationSettings.contact.coordinates;
         googleMapsLink = `https://maps.google.com/?q=${lat},${lng}`;
-        console.log('Google Maps link created:', googleMapsLink);
+        console.log('Google Maps link created from location settings:', googleMapsLink);
       } else {
-        console.log('No map coordinates found in locationSettings.contact.coordinates');
+        console.log('No map coordinates found in branch or location settings');
       }
 
       // Send WhatsApp notification

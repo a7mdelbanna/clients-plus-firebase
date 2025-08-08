@@ -18,6 +18,8 @@ import {
   People,
   CalendarToday,
   Event,
+  Inventory,
+  Receipt,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -26,7 +28,7 @@ import { categoryService } from '../../../services/category.service';
 import { setupService } from '../../../services/setup.service';
 
 interface CategoryTypeCard {
-  type: 'client' | 'appointment' | 'event';
+  type: 'client' | 'appointment' | 'event' | 'product' | 'expense';
   title: string;
   titleAr: string;
   description: string;
@@ -47,6 +49,8 @@ const CategoriesPage: React.FC = () => {
     client: 0,
     appointment: 0,
     event: 0,
+    product: 0,
+    expense: 0,
   });
   const [companyId, setCompanyId] = useState<string>('');
 
@@ -75,7 +79,29 @@ const CategoriesPage: React.FC = () => {
 
       // Get category counts
       const counts = await categoryService.getCategoryCounts(cId);
-      setCategoryCounts(counts);
+      
+      // Get product category count separately
+      try {
+        const { productService } = await import('../../../services/product.service');
+        const productCategories = await productService.getCategories(cId);
+        
+        // Get expense category count
+        const { expenseService } = await import('../../../services/expense.service');
+        const expenseCategories = await expenseService.getCategories(cId);
+        
+        setCategoryCounts({
+          ...counts,
+          product: productCategories?.length || 0,
+          expense: expenseCategories?.length || 0,
+        });
+      } catch (error) {
+        console.error('Error loading product/expense categories:', error);
+        setCategoryCounts({
+          ...counts,
+          product: 0,
+          expense: 0,
+        });
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('حدث خطأ في تحميل البيانات');
@@ -117,6 +143,28 @@ const CategoriesPage: React.FC = () => {
       color: '#8B5CF6', // Purple
       route: '/settings/categories/events',
       count: categoryCounts.event,
+    },
+    {
+      type: 'product',
+      title: 'Product Categories',
+      titleAr: 'فئات المنتجات',
+      description: 'Organize products into categories',
+      descriptionAr: 'تنظيم المنتجات في فئات',
+      icon: <Inventory sx={{ fontSize: 48 }} />,
+      color: '#10B981', // Green
+      route: '/products/categories',
+      count: categoryCounts.product,
+    },
+    {
+      type: 'expense',
+      title: 'Expense Categories',
+      titleAr: 'فئات المصروفات',
+      description: 'Manage expense types and budgets',
+      descriptionAr: 'إدارة أنواع المصروفات والميزانيات',
+      icon: <Receipt sx={{ fontSize: 48 }} />,
+      color: '#EF4444', // Red
+      route: '/settings/categories/expenses',
+      count: categoryCounts.expense,
     },
   ];
 
@@ -161,7 +209,7 @@ const CategoriesPage: React.FC = () => {
         ) : (
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
             gap: 3,
           }}>
             {categoryTypes.map((categoryType) => (
