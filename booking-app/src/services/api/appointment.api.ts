@@ -5,6 +5,14 @@ interface APIResponse<T> {
   success: boolean;
   data: T;
   message?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
 }
 
 interface AppointmentAPIResponse {
@@ -13,6 +21,7 @@ interface AppointmentAPIResponse {
   clientId: string;
   clientName: string;
   clientPhone: string;
+  clientEmail?: string;
   date: string; // ISO string from API
   startTime: string;
   endTime: string;
@@ -21,14 +30,21 @@ interface AppointmentAPIResponse {
     serviceName: string;
     duration: number;
     price: number;
+    staffId?: string;
+    staffName?: string;
   }>;
   staffId: string;
   staffName: string;
-  status: string;
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
   totalPrice: number;
   totalDuration: number;
   branchId?: string;
   branchName?: string;
+  notes?: string;
+  privateNotes?: string;
+  reminderSent: boolean;
+  paymentStatus?: 'UNPAID' | 'PAID' | 'PARTIALLY_PAID' | 'REFUNDED';
+  depositAmount?: number;
   createdAt?: string;
   updatedAt?: string;
   cancellationReason?: string;
@@ -39,9 +55,52 @@ interface AppointmentAPIResponse {
 }
 
 interface TimeSlotAPIResponse {
-  time: string;
+  start: string;
+  end: string;
   available: boolean;
   staffId?: string;
+  duration: number;
+}
+
+// Enhanced availability interfaces
+interface AvailabilityParams {
+  companyId: string;
+  branchId?: string;
+  serviceIds: string[];
+  staffId?: string;
+  date: Date;
+  duration?: number;
+  preferredTime?: string;
+}
+
+interface AvailabilitySlot {
+  start: string;
+  end: string;
+  staffId: string;
+  staffName: string;
+  available: boolean;
+  price?: number;
+  duration: number;
+}
+
+// Booking interfaces
+interface CreateBookingDto {
+  companyId: string;
+  branchId?: string;
+  clientId?: string;
+  clientInfo: {
+    name: string;
+    phone: string;
+    email?: string;
+  };
+  serviceIds: string[];
+  staffId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  notes?: string;
+  depositAmount?: number;
+  source?: 'online' | 'phone' | 'walkin' | 'admin';
 }
 
 // Firebase-compatible interfaces for existing components
@@ -70,13 +129,228 @@ export interface Appointment {
 }
 
 export interface TimeSlot {
-  time: string;
+  time: string; // For backward compatibility
+  start?: string; // New format
+  end?: string;   // New format
   available: boolean;
   staffId?: string;
+  duration?: number;
 }
 
 class AppointmentAPIService {
   private readonly BASE_PATH = '/appointments';
+
+  // ==================== Wave 2 Enhanced API Methods ====================
+
+  /**
+   * Get available time slots with enhanced parameters (Wave 2)
+   */
+  async getAvailableSlots(params: AvailabilityParams): Promise<AvailabilitySlot[]> {
+    const cacheKey = `enhanced-availability:${JSON.stringify(params)}`;
+    
+    // Check cache first
+    if (shouldUseCache(cacheKey)) {
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        console.log('Returning cached enhanced availability slots');
+        return cached;
+      }
+    }
+
+    try {
+      console.log('=== getAvailableSlots (Enhanced) START ===');
+      console.log('Parameters:', params);
+
+      const response = await api.post<APIResponse<AvailabilitySlot[]>>(
+        `${this.BASE_PATH}/availability/enhanced`,
+        {
+          companyId: params.companyId,
+          branchId: params.branchId,
+          serviceIds: params.serviceIds,
+          staffId: params.staffId,
+          date: params.date.toISOString(),
+          duration: params.duration,
+          preferredTime: params.preferredTime,
+        }
+      );
+
+      if (response.data.success && response.data.data) {
+        // Cache for 3 minutes
+        apiCache.set(cacheKey, response.data.data, 180000);
+        
+        console.log(`Found ${response.data.data.length} enhanced availability slots`);
+        console.log('=== getAvailableSlots (Enhanced) END ===');
+        
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error('Error getting enhanced availability slots:', error);
+      
+      // Try to return cached data on error
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        console.log('API error, returning cached enhanced availability slots');
+        return cached;
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Check if a specific slot is still available before booking
+   */
+  async checkSlotAvailability(slot: { 
+    companyId: string; 
+    staffId: string; 
+    date: Date; 
+    startTime: string; 
+    endTime: string; 
+  }): Promise<boolean> {
+    try {
+      console.log('=== checkSlotAvailability (Enhanced) START ===');
+      console.log('Slot:', slot);
+
+      const response = await api.post<APIResponse<{ available: boolean }>>(
+        `${this.BASE_PATH}/availability/check-slot`,
+        {
+          companyId: slot.companyId,
+          staffId: slot.staffId,
+          date: slot.date.toISOString(),
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+        }
+      );
+
+      if (response.data.success && response.data.data) {
+        const isAvailable = response.data.data.available;
+        console.log('Slot availability:', isAvailable);
+        console.log('=== checkSlotAvailability (Enhanced) END ===');
+        return isAvailable;
+      }
+
+      return false;
+    } catch (error: any) {
+      console.error('Error checking slot availability:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Create a new booking (Wave 2)
+   */
+  async createBooking(data: CreateBookingDto): Promise<AppointmentAPIResponse> {
+    try {
+      console.log('=== createBooking START ===');
+      console.log('Booking data:', data);
+
+      const response = await api.post<APIResponse<AppointmentAPIResponse>>(
+        `${this.BASE_PATH}`,
+        data
+      );
+
+      if (response.data.success && response.data.data) {
+        // Clear availability caches as they may have changed
+        this.clearAvailabilityCaches();
+        
+        console.log('Booking created successfully');
+        console.log('=== createBooking END ===');
+        
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to create booking');
+      }
+    } catch (error: any) {
+      console.error('Error creating booking:', error);
+      
+      // Handle specific API errors
+      if (error.response?.status === 409) {
+        throw new Error('Time slot is no longer available');
+      }
+      
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data.message || 'Invalid booking data');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Get appointments for the current user (authenticated booking app users)
+   */
+  async getMyAppointments(): Promise<Appointment[]> {
+    const cacheKey = 'my-appointments';
+    
+    // Check cache first
+    if (shouldUseCache(cacheKey)) {
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        console.log('Returning cached my appointments');
+        return cached.map(this.mapAppointmentResponse.bind(this));
+      }
+    }
+
+    try {
+      console.log('=== getMyAppointments START ===');
+
+      const response = await api.get<APIResponse<AppointmentAPIResponse[]>>(
+        `${this.BASE_PATH}/my-appointments`
+      );
+
+      if (response.data.success && response.data.data) {
+        const appointments = response.data.data.map(this.mapAppointmentResponse.bind(this));
+        
+        // Cache for 5 minutes
+        apiCache.set(cacheKey, response.data.data, 300000);
+        
+        console.log(`Found ${appointments.length} appointments`);
+        console.log('=== getMyAppointments END ===');
+        
+        return appointments;
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error('Error getting my appointments:', error);
+      
+      // Try to return cached data on error
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        console.log('API error, returning cached my appointments');
+        return cached.map(this.mapAppointmentResponse.bind(this));
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Subscribe to real-time appointment updates (WebSocket)
+   * This method sets up the WebSocket connection for real-time updates
+   */
+  subscribeToAppointmentUpdates(callback: (appointment: Appointment) => void): void {
+    // This will be implemented when WebSocket service is ready
+    console.log('WebSocket subscription for appointment updates - to be implemented');
+    
+    // For now, we can implement polling as a fallback
+    const pollInterval = setInterval(async () => {
+      try {
+        const appointments = await this.getMyAppointments();
+        // This is a basic implementation - in reality we'd track changes
+        appointments.forEach(callback);
+      } catch (error) {
+        console.error('Error polling for appointment updates:', error);
+      }
+    }, 30000); // Poll every 30 seconds
+    
+    // Return cleanup function
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }
 
   /**
    * Cancel an appointment (for authenticated clients)
@@ -529,10 +803,22 @@ class AppointmentAPIService {
 
   private mapTimeSlotResponse(apiTimeSlot: TimeSlotAPIResponse): TimeSlot {
     return {
-      time: apiTimeSlot.time,
+      time: apiTimeSlot.start || apiTimeSlot.start, // Fallback for backward compatibility
+      start: apiTimeSlot.start,
+      end: apiTimeSlot.end,
       available: apiTimeSlot.available,
-      staffId: apiTimeSlot.staffId
+      staffId: apiTimeSlot.staffId,
+      duration: apiTimeSlot.duration
     };
+  }
+
+  private clearAvailabilityCaches(): void {
+    // Clear availability-related caches
+    Object.keys(apiCache.cache || {}).forEach(key => {
+      if (key.includes('availability') || key.includes('timeslots')) {
+        apiCache.delete(key);
+      }
+    });
   }
 
   private clearAppointmentCaches(clientId?: string): void {
@@ -550,3 +836,11 @@ class AppointmentAPIService {
 }
 
 export const appointmentAPI = new AppointmentAPIService();
+
+// Export additional Wave 2 interfaces for components to use
+export type { 
+  AvailabilityParams, 
+  AvailabilitySlot, 
+  CreateBookingDto,
+  AppointmentAPIResponse 
+};

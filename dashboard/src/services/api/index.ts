@@ -44,6 +44,32 @@ export type {
 // Adapter for Firebase compatibility
 export { default as clientApiAdapter } from './adapter';
 
+// Wave 1 & Wave 2 API Services
+export { default as serviceAPI } from './service.api';
+export { default as staffAPI } from './staff.api';
+export { default as branchAPI } from './branch.api';
+export { default as productAPI } from './product.api';
+
+// Comprehensive Service Adapter Factory
+export {
+  serviceAdapterFactory,
+  getServiceAPI,
+  getStaffAPI,
+  getBranchAPI,
+  getProductAPI,
+  getClientAPI,
+  ServiceAdapterFactory,
+} from './service-adapter';
+
+export type {
+  ServiceMigrationFlags,
+  IServiceAPI,
+  IStaffAPI,
+  IBranchAPI,
+  IProductAPI,
+  IClientAPI,
+} from './service-adapter';
+
 // Type exports for common API responses
 export type {
   ApiResponse,
