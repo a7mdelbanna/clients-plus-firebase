@@ -86,4 +86,4 @@ dashboard/yarn-error.log*
 .dynamodb/
 .tern-port
 .vscode-test/
-*.tsbuildinfo
+*.tsbuildinfoclients-plus-backend/
