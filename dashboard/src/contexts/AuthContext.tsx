@@ -1,27 +1,32 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { auth } from '../config/firebase';
-import { 
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  updateProfile
-} from 'firebase/auth';
-import type { User } from 'firebase/auth';
-import { ensureUserDocument } from '../utils/fixUserDocument';
+import { authAPI, tokenUtils } from '../config/api';
+import { AxiosError } from 'axios';
 
-interface AuthUser extends User {
+interface AuthUser {
+  id: string;
+  email: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+  emailVerified: boolean;
   companyId?: string;
+  role?: string;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  signup: (email: string, password: string, displayName: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateProfile: (profileData: Partial<AuthUser>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,57 +48,145 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Get the ID token to check for claims
-        const idTokenResult = await user.getIdTokenResult();
-        const companyId = idTokenResult.claims.companyId as string | undefined;
-        
-        // Create an extended user object with companyId
-        const authUser: AuthUser = Object.assign(user, { companyId });
-        setCurrentUser(authUser);
-        
-        // Ensure user document exists when user logs in
-        await ensureUserDocument();
-      } else {
+    const initializeAuth = async () => {
+      try {
+        if (tokenUtils.isTokenValid()) {
+          // Get current user data from API
+          const response = await authAPI.me();
+          setCurrentUser(response.data.user);
+        } else {
+          // Try to refresh token if available
+          const refreshToken = tokenUtils.getRefreshToken();
+          if (refreshToken) {
+            try {
+              const response = await authAPI.refreshToken(refreshToken);
+              const { accessToken, refreshToken: newRefreshToken, expiresIn, user } = response.data;
+              const rememberMe = tokenUtils.getRememberMe();
+              tokenUtils.setTokens(accessToken, newRefreshToken, expiresIn, rememberMe);
+              setCurrentUser(user);
+            } catch (refreshError) {
+              // Refresh failed, clear tokens
+              tokenUtils.clearTokens();
+              setCurrentUser(null);
+            }
+          } else {
+            setCurrentUser(null);
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        tokenUtils.clearTokens();
         setCurrentUser(null);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
-    });
+    };
 
-    return unsubscribe;
+    initializeAuth();
+
+    // Listen for token expiration events
+    const handleTokenExpired = () => {
+      setCurrentUser(null);
+      tokenUtils.clearTokens();
+    };
+
+    window.addEventListener('auth:token-expired', handleTokenExpired);
+
+    return () => {
+      window.removeEventListener('auth:token-expired', handleTokenExpired);
+    };
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const result = await signInWithEmailAndPassword(auth, email, password);
-    // Ensure user document exists after login
-    await ensureUserDocument();
-    // Force token refresh to get updated claims
-    await result.user.getIdToken(true);
-    
-    // Get the updated token with claims
-    const idTokenResult = await result.user.getIdTokenResult();
-    const companyId = idTokenResult.claims.companyId as string | undefined;
-    
-    // Update current user with companyId
-    const authUser: AuthUser = Object.assign(result.user, { companyId });
-    setCurrentUser(authUser);
-    
-    return result;
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
+    try {
+      const response = await authAPI.login({ email, password, rememberMe });
+      const { accessToken, refreshToken, expiresIn, user } = response.data;
+      
+      // Store tokens
+      tokenUtils.setTokens(accessToken, refreshToken, expiresIn, rememberMe);
+      
+      // Set current user
+      setCurrentUser(user);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
-  const signup = async (email: string, password: string, displayName: string) => {
-    const { user } = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(user, { displayName });
+  const signup = async (
+    email: string, 
+    password: string, 
+    displayName: string, 
+    firstName?: string, 
+    lastName?: string
+  ) => {
+    try {
+      const response = await authAPI.register({
+        email,
+        password,
+        displayName,
+        firstName,
+        lastName
+      });
+      
+      const { accessToken, refreshToken, expiresIn, user } = response.data;
+      
+      // Store tokens
+      tokenUtils.setTokens(accessToken, refreshToken, expiresIn, false);
+      
+      // Set current user
+      setCurrentUser(user);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   };
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      // Call logout API to invalidate tokens on server
+      await authAPI.logout();
+    } catch (error) {
+      // Even if API call fails, clear local tokens
+      console.error('Logout API error:', error);
+    } finally {
+      // Clear tokens and user state
+      tokenUtils.clearTokens();
+      setCurrentUser(null);
+    }
   };
 
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    try {
+      await authAPI.forgotPassword(email);
+    } catch (error) {
+      console.error('Reset password error:', error);
+      throw error;
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await authAPI.me();
+      setCurrentUser(response.data.user);
+    } catch (error) {
+      console.error('Refresh user error:', error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (profileData: Partial<AuthUser>) => {
+    try {
+      const response = await authAPI.updateProfile(profileData);
+      setCurrentUser(response.data.user);
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
   };
 
   const value: AuthContextType = {
@@ -102,7 +195,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     signup,
     logout,
-    resetPassword
+    resetPassword,
+    refreshUser,
+    updateProfile
   };
 
   return (

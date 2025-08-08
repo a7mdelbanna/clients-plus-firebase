@@ -41,11 +41,26 @@ const ForgotPassword: React.FC = () => {
         position: 'top-center',
       });
     } catch (error: any) {
-      const errorMessage = error.code === 'auth/user-not-found'
-        ? 'البريد الإلكتروني غير مسجل'
-        : error.code === 'auth/invalid-email'
-        ? 'البريد الإلكتروني غير صالح'
-        : 'فشل إرسال رابط إعادة التعيين';
+      let errorMessage = 'فشل إرسال رابط إعادة التعيين';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        switch (status) {
+          case 404:
+            errorMessage = 'البريد الإلكتروني غير مسجل';
+            break;
+          case 400:
+            errorMessage = 'البريد الإلكتروني غير صالح';
+            break;
+          case 429:
+            errorMessage = 'تم تجاوز عدد المحاولات المسموح بها. الرجاء المحاولة بعد بضع دقائق';
+            break;
+          default:
+            errorMessage = errorData.message || 'فشل إرسال رابط إعادة التعيين';
+        }
+      }
       
       toast.error(errorMessage, {
         position: 'top-center',

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
   Typography,
   Box,
-  Grid,
+  Grid2 as Grid,
   Chip,
   Button,
   useTheme,
@@ -32,7 +32,7 @@ interface DashboardMetrics {
 }
 
 export default function SalesMetricsWidget() {
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const { currentBranch } = useBranch();
   const theme = useTheme();
   const navigate = useNavigate();
@@ -42,18 +42,18 @@ export default function SalesMetricsWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.companyId) {
+    if (currentUser?.companyId) {
       loadMetrics();
     }
-  }, [user, currentBranch]);
+  }, [currentUser, currentBranch]);
 
   const loadMetrics = async () => {
-    if (!user?.companyId) return;
+    if (!currentUser?.companyId) return;
 
     try {
       setLoading(true);
       const dashboardMetrics = await analyticsService.getDashboardMetrics(
-        user.companyId,
+        currentUser.companyId,
         currentBranch?.id
       );
       setMetrics(dashboardMetrics);
@@ -89,7 +89,7 @@ export default function SalesMetricsWidget() {
           </Typography>
           <Grid container spacing={2}>
             {[1, 2, 3].map((item) => (
-              <Grid item xs={12} sm={4} key={item}>
+              <Grid key={item} xs={12} sm={4}>
                 <Skeleton variant="rectangular" height={80} />
               </Grid>
             ))}
@@ -122,7 +122,7 @@ export default function SalesMetricsWidget() {
 
         <Grid container spacing={2}>
           {/* Today's Metrics */}
-          <Grid item xs={12} sm={4}>
+          <Grid xs={12} sm={4}>
             <Box
               sx={{
                 p: 2,
@@ -158,7 +158,7 @@ export default function SalesMetricsWidget() {
           </Grid>
 
           {/* This Week's Metrics */}
-          <Grid item xs={12} sm={4}>
+          <Grid xs={12} sm={4}>
             <Box
               sx={{
                 p: 2,
@@ -187,7 +187,7 @@ export default function SalesMetricsWidget() {
           </Grid>
 
           {/* This Month's Metrics */}
-          <Grid item xs={12} sm={4}>
+          <Grid xs={12} sm={4}>
             <Box
               sx={{
                 p: 2,

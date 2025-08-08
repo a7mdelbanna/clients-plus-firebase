@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { AxiosError } from 'axios';
 import {
   Container,
   Box,
@@ -18,13 +19,16 @@ import {
   useTheme,
   useMediaQuery,
   Alert,
-  Collapse
+  Collapse,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { Visibility, VisibilityOff, Email, Lock, Error as ErrorIcon } from '@mui/icons-material';
 
 interface LoginFormData {
   email: string;
   password: string;
+  rememberMe: boolean;
 }
 
 const Login: React.FC = () => {
@@ -40,14 +44,18 @@ const Login: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors }
-  } = useForm<LoginFormData>();
+  } = useForm<LoginFormData>({
+    defaultValues: {
+      rememberMe: false
+    }
+  });
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       setLoading(true);
       setShowError(false);
       setErrorMessage('');
-      await login(data.email, data.password);
+      await login(data.email, data.password, data.rememberMe);
       toast.success('تم تسجيل الدخول بنجاح!', {
         position: 'top-center',
       });
@@ -57,31 +65,46 @@ const Login: React.FC = () => {
       
       let message = '';
       
-      // Firebase Auth Error Codes
-      switch (error.code) {
-        case 'auth/user-not-found':
-          message = 'البريد الإلكتروني غير مسجل. تحقق من البريد الإلكتروني أو قم بإنشاء حساب جديد.';
-          break;
-        case 'auth/wrong-password':
-          message = 'كلمة المرور غير صحيحة. تحقق من كلمة المرور وحاول مرة أخرى.';
-          break;
-        case 'auth/invalid-email':
-          message = 'البريد الإلكتروني غير صالح. تحقق من صيغة البريد الإلكتروني.';
-          break;
-        case 'auth/user-disabled':
-          message = 'هذا الحساب معطل. اتصل بالدعم الفني للمساعدة.';
-          break;
-        case 'auth/too-many-requests':
-          message = 'تم تجاوز عدد المحاولات المسموح بها. الرجاء المحاولة بعد بضع دقائق.';
-          break;
-        case 'auth/network-request-failed':
-          message = 'خطأ في الاتصال بالشبكة. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.';
-          break;
-        case 'auth/invalid-credential':
-          message = 'بيانات الدخول غير صحيحة. تحقق من البريد الإلكتروني وكلمة المرور.';
-          break;
-        default:
-          message = error.message || 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
+      // Handle API error responses
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        switch (status) {
+          case 400:
+            if (errorData.code === 'INVALID_CREDENTIALS') {
+              message = 'بيانات الدخول غير صحيحة. تحقق من البريد الإلكتروني وكلمة المرور.';
+            } else if (errorData.code === 'ACCOUNT_NOT_VERIFIED') {
+              message = 'حسابك غير مفعل. يرجى تفعيل حسابك من خلال الرابط المرسل إلى بريدك الإلكتروني.';
+            } else {
+              message = errorData.message || 'بيانات غير صحيحة.';
+            }
+            break;
+          case 401:
+            message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+            break;
+          case 403:
+            if (errorData.code === 'ACCOUNT_SUSPENDED') {
+              message = 'هذا الحساب معطل. اتصل بالدعم الفني للمساعدة.';
+            } else {
+              message = 'ليس لديك صلاحية للوصول.';
+            }
+            break;
+          case 429:
+            message = 'تم تجاوز عدد المحاولات المسموح بها. الرجاء المحاولة بعد بضع دقائق.';
+            break;
+          case 500:
+            message = 'خطأ في الخادم. يرجى المحاولة لاحقاً.';
+            break;
+          default:
+            message = errorData.message || 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
+        }
+      } else if (error.code === 'ECONNABORTED') {
+        message = 'انتهت مهلة الاتصال. يرجى المحاولة مرة أخرى.';
+      } else if (!error.response) {
+        message = 'خطأ في الاتصال بالشبكة. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.';
+      } else {
+        message = error.message || 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
       }
       
       setErrorMessage(message);
@@ -267,6 +290,20 @@ const Login: React.FC = () => {
                       </InputAdornment>
                     )
                   }}
+                />
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      {...register('rememberMe')}
+                      color="primary"
+                      disabled={loading}
+                    />
+                  }
+                  label="تذكرني"
+                  sx={{ mt: 1, mb: 1 }}
                 />
               </motion.div>
 

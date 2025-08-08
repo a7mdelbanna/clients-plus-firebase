@@ -53,7 +53,6 @@ import BarcodePrintPage from './pages/products/BarcodePrintPage';
 import FinanceAccountsPage from './pages/finance/FinanceAccountsPage';
 import FinanceTransactionsPage from './pages/finance/FinanceTransactionsPage';
 import TransfersPage from './pages/finance/TransfersPage';
-import FinanceReportsPage from './pages/finance/FinanceReportsPage';
 import FinanceReportsPageEnhanced from './pages/finance/FinanceReportsPageEnhanced';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import InvoiceFormPage from './pages/finance/InvoiceFormPage';
@@ -94,10 +93,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import './styles/toastify-rtl.css';
 import './styles/sidebar.css';
 import './styles/rtl-layout.css';
-import { initializeUserOnAuth } from './utils/initializeUser';
-import { checkAndMigrateUserClaims } from './utils/migrateUserClaims';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './config/firebase';
+import SessionTimeoutWarning from './components/SessionTimeoutWarning';
 import './utils/clientBranchFix'; // Import for global debugging functions
 import './utils/createSuperadminDev'; // Import for superadmin creation in dev
 import './utils/fixBookingLinkUrls'; // Import for fixing booking link URLs
@@ -105,9 +101,6 @@ import './utils/debugBookingLinks'; // Import for debugging booking links
 import './utils/syncStaffBranches'; // Import for syncing staff-branch assignments
 import './utils/fixMissingClients'; // Import for fixing missing clients from online booking
 import './utils/debugSidebar'; // Import for debugging sidebar menu items
-
-// Initialize user document creation on auth state change
-initializeUserOnAuth();
 
 // Make utility functions available globally in development
 if (import.meta.env.DEV) {
@@ -126,19 +119,6 @@ if (import.meta.env.DEV) {
     console.log('✅ Booking link debug tool loaded. Use debugBookingLinks(companyId) in console.');
   });
 }
-
-// Check and migrate claims for existing users
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    // Wait a moment for auth to stabilize
-    setTimeout(async () => {
-      const migrated = await checkAndMigrateUserClaims();
-      if (migrated) {
-        console.log('User claims migrated successfully');
-      }
-    }, 1000);
-  }
-});
 
 // RTL support
 import rtlPlugin from 'stylis-plugin-rtl';
@@ -164,6 +144,7 @@ function App() {
             <ThemeProvider>
               <BranchProvider>
                 <CssBaseline />
+                <SessionTimeoutWarning />
                 <Routes>
                   {/* Public Booking Routes - No Auth Required */}
                   <Route path="/book/:companySlug/:linkSlug" element={
