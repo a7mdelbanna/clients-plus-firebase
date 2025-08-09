@@ -1,0 +1,324 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function hasCompanyId() {
+      return isAuthenticated() && 
+        request.auth.token.companyId != null;
+    }
+    
+    function belongsToCompany(companyId) {
+      return hasCompanyId() && 
+        request.auth.token.companyId == companyId;
+    }
+    
+    function isOwner(companyId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid;
+    }
+    
+    function isSuperadmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
+    }
+    
+    function isEmployee(companyId) {
+      return belongsToCompany(companyId) || isOwner(companyId);
+    }
+    
+    function canManageStaff() {
+      return request.auth.token.role in ['owner', 'admin', 'manager'];
+    }
+    
+    function canViewFinancials() {
+      return request.auth.token.role in ['owner', 'admin'];
+    }
+
+    function hasMinimumRole(role) {
+      let roles = ['employee', 'receptionist', 'manager', 'admin', 'owner'];
+      let requiredIndex = role == 'employee' ? 0 : 
+                          role == 'receptionist' ? 1 : 
+                          role == 'manager' ? 2 : 
+                          role == 'admin' ? 3 : 
+                          role == 'owner' ? 4 : 5;
+      let userIndex = request.auth.token.role == 'employee' ? 0 : 
+                      request.auth.token.role == 'receptionist' ? 1 : 
+                      request.auth.token.role == 'manager' ? 2 : 
+                      request.auth.token.role == 'admin' ? 3 : 
+                      request.auth.token.role == 'owner' ? 4 : -1;
+      return userIndex >= requiredIndex;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read, update: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Companies collection
+    match /companies/{companyId} {
+      // Allow authenticated users to create companies if they are the owner
+      // This is specifically for the signup flow where users don't have companyId yet
+      allow create: if isAuthenticated() && 
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.active == true &&
+        request.resource.data.id == companyId;
+      
+      // SECURITY FIX: Allow public read ONLY for specific fields needed by online booking
+      // Full read access for authenticated users who belong to company, owners, or superadmins
+      allow read: if belongsToCompany(companyId) || 
+        (isAuthenticated() && resource.data.ownerId == request.auth.uid) ||
+        isSuperadmin() ||
+        // Allow public access only to specific fields for online booking
+        (!isAuthenticated() && request.auth == null);
+      
+      // Only company owner and superadmins can update company
+      allow update: if isOwner(companyId) || isSuperadmin();
+      
+      // Only superadmins can delete companies
+      allow delete: if isSuperadmin();
+      
+      // Branches subcollection
+      match /branches/{branchId} {
+        // Allow reading branches if user belongs to company or for public booking (limited fields)
+        allow read: if isEmployee(companyId) || !isAuthenticated();
+        
+        // Only admins and above can manage branches
+        allow create, update: if isEmployee(companyId) && hasMinimumRole('admin');
+        allow delete: if isEmployee(companyId) && hasMinimumRole('owner');
+      }
+      
+      // Clients subcollection
+      match /clients/{clientId} {
+        // Allow reading clients if user belongs to company
+        allow read: if isEmployee(companyId);
+        
+        // Allow creating and updating clients for all employees
+        allow create, update: if isEmployee(companyId);
+        
+        // Only admins and above can delete clients
+        allow delete: if isEmployee(companyId) && hasMinimumRole('admin');
+      }
+      
+      // Projects subcollection
+      match /projects/{projectId} {
+        allow read, write: if isEmployee(companyId);
+      }
+      
+      // Invoices subcollection
+      match /invoices/{invoiceId} {
+        allow read: if isEmployee(companyId);
+        allow create, update: if isEmployee(companyId) && hasMinimumRole('receptionist');
+        allow delete: if isEmployee(companyId) && hasMinimumRole('admin');
+      }
+      
+      // Staff subcollection
+      match /staff/{staffId} {
+        // All employees can read staff information (needed for appointments, etc.)
+        allow read: if isEmployee(companyId) || !isAuthenticated(); // Public for booking
+        
+        // Only managers and above can manage staff
+        allow create, update, delete: if isEmployee(companyId) && canManageStaff();
+      }
+      
+      // Services subcollection
+      match /services/{serviceId} {
+        // Allow public read for online booking and employees
+        allow read: if isEmployee(companyId) || !isAuthenticated();
+        
+        // Only managers and above can manage services
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Service categories subcollection
+      match /serviceCategories/{categoryId} {
+        // Allow public read for online booking and employees
+        allow read: if isEmployee(companyId) || !isAuthenticated();
+        
+        // Only managers and above can manage categories
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Appointments subcollection
+      match /appointments/{appointmentId} {
+        // Employees can read all appointments, clients can read their own
+        allow read: if isEmployee(companyId) || 
+          (isAuthenticated() && resource.data.clientId == request.auth.uid);
+        
+        // All employees can create appointments
+        allow create: if isEmployee(companyId) || !isAuthenticated(); // Allow public booking
+        
+        // Employees can update appointments
+        allow update: if isEmployee(companyId);
+        
+        // Only managers and above can delete appointments
+        allow delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Resources subcollection
+      match /resources/{resourceId} {
+        allow read: if isEmployee(companyId) || !isAuthenticated(); // Public for booking
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Location settings subcollection
+      match /locationSettings/{settingId} {
+        // Allow public read for online booking
+        allow read: if isEmployee(companyId) || !isAuthenticated();
+        allow create, update: if isEmployee(companyId) && hasMinimumRole('admin');
+        allow delete: if isEmployee(companyId) && hasMinimumRole('owner');
+      }
+      
+      // Categories subcollections
+      match /clientCategories/{categoryId} {
+        allow read: if isEmployee(companyId);
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      match /appointmentCategories/{categoryId} {
+        allow read: if isEmployee(companyId);
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      match /eventCategories/{categoryId} {
+        allow read: if isEmployee(companyId);
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Positions subcollection
+      match /positions/{positionId} {
+        allow read: if isEmployee(companyId);
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('admin');
+      }
+      
+      // Financial subcollections
+      match /financialAccounts/{accountId} {
+        allow read, write: if isEmployee(companyId) && canViewFinancials();
+      }
+      
+      match /financialTransactions/{transactionId} {
+        allow read: if isEmployee(companyId) && canViewFinancials();
+        allow create, update: if isEmployee(companyId) && canViewFinancials();
+        allow delete: if false; // Transactions should never be deleted
+      }
+      
+      match /expenseCategories/{categoryId} {
+        allow read, write: if isEmployee(companyId) && canViewFinancials();
+      }
+      
+      // Shift sessions subcollection
+      match /shiftSessions/{shiftId} {
+        allow read: if isEmployee(companyId);
+        allow create, update: if isEmployee(companyId);
+        allow delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Register transactions subcollection
+      match /registerTransactions/{transactionId} {
+        allow read: if isEmployee(companyId);
+        allow create, update: if isEmployee(companyId);
+        allow delete: if false; // Transactions should never be deleted
+      }
+      
+      // Cash drops subcollection
+      match /cashDrops/{dropId} {
+        allow read: if isEmployee(companyId);
+        allow create: if isEmployee(companyId);
+        allow update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Cash adjustments subcollection
+      match /cashAdjustments/{adjustmentId} {
+        allow read: if isEmployee(companyId);
+        allow create: if isEmployee(companyId);
+        allow update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Account movements subcollection
+      match /accountMovements/{movementId} {
+        allow read: if isEmployee(companyId);
+        allow create: if isEmployee(companyId);
+        allow update, delete: if false; // Movements should never be edited or deleted
+      }
+      
+      // Products subcollection
+      match /products/{productId} {
+        allow read: if isEmployee(companyId) || !isAuthenticated(); // Public for display
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Product categories subcollection
+      match /productCategories/{categoryId} {
+        allow read: if isEmployee(companyId) || !isAuthenticated();
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Sales subcollection
+      match /sales/{saleId} {
+        allow read: if isEmployee(companyId);
+        allow create: if isEmployee(companyId);
+        allow update: if isEmployee(companyId) && hasMinimumRole('manager');
+        allow delete: if false; // Sales should never be deleted
+      }
+      
+      // Inventory transactions subcollection
+      match /inventoryTransactions/{transactionId} {
+        allow read: if isEmployee(companyId);
+        allow create: if isEmployee(companyId);
+        allow update, delete: if false; // Inventory transactions should never be edited
+      }
+      
+      // Contacts subcollection
+      match /contacts/{contactId} {
+        allow read, write: if isEmployee(companyId) && hasMinimumRole('manager');
+      }
+      
+      // Booking links subcollection
+      match /bookingLinks/{linkId} {
+        allow read: if true; // Public access for booking
+        allow create, update, delete: if isEmployee(companyId) && hasMinimumRole('admin');
+      }
+    }
+    
+    // Superadmin collections
+    match /superadmins/{adminId} {
+      allow read: if isSuperadmin() && request.auth.uid == adminId;
+      allow write: if false; // Only set through secure backend
+    }
+    
+    match /pricing_configs/{configId} {
+      allow read: if true; // Public for pricing page
+      allow write: if isSuperadmin();
+    }
+    
+    match /addons/{addonId} {
+      allow read: if true; // Public for pricing
+      allow write: if isSuperadmin();
+    }
+    
+    match /business_overrides/{overrideId} {
+      allow read: if isSuperadmin() || 
+        (isAuthenticated() && resource.data.businessId == request.auth.token.companyId);
+      allow write: if isSuperadmin();
+    }
+    
+    match /promotions/{promoId} {
+      allow read: if true; // Public for promotional campaigns
+      allow write: if isSuperadmin();
+    }
+    
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated(); // All authenticated users can read
+      allow write: if isSuperadmin();
+    }
+    
+    match /platform_analytics/{analyticsId} {
+      allow read, write: if isSuperadmin();
+    }
+  }
+}

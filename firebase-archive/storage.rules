@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user has a company ID in their token
+    function hasCompanyId() {
+      return request.auth.token.companyId != null;
+    }
+    
+    // Check if user belongs to the company
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && 
+        request.auth.token.companyId == companyId;
+    }
+    
+    // Company files (services, staff, etc.)
+    match /companies/{companyId}/{allPaths=**} {
+      allow read: if belongsToCompany(companyId);
+      allow write: if belongsToCompany(companyId) && 
+        request.resource.size < 5 * 1024 * 1024 && // Max 5MB
+        request.resource.contentType.matches('image/.*'); // Only images
+      allow delete: if belongsToCompany(companyId);
+    }
+    
+    // User profile pictures
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId &&
+        request.resource.size < 5 * 1024 * 1024 && // Max 5MB
+        request.resource.contentType.matches('image/.*'); // Only images
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}
